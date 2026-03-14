@@ -13,11 +13,20 @@ export default async function ProviderDashboardPage({ searchParams }: Props) {
 
   const { data: nurse } = await supabase
     .from('nurses')
-    .select('status')
+    .select('status, city, hourly_rate, daily_rate, final_hourly_price')
     .eq('user_id', user.id)
     .single()
 
   const status = nurse?.status ?? null
+
+  // Pending bookings in nurse's city
+  const { count: pendingCount } = nurse?.status === 'approved'
+    ? await supabase.from('bookings').select('*', { count: 'exact', head: true }).eq('status', 'pending').eq('city', nurse.city ?? '')
+    : { count: 0 }
+
+  const { count: acceptedCount } = await supabase
+    .from('bookings').select('*', { count: 'exact', head: true })
+    .eq('nurse_id', user.id).eq('status', 'accepted')
 
   return (
     <div className="dash-shell">
@@ -36,14 +45,14 @@ export default async function ProviderDashboardPage({ searchParams }: Props) {
 
       <div className="dash-kpi-row">
         <div className="dash-kpi">
-          <div className="dash-kpi-icon" style={{ background: '#E8F9F0' }}>💰</div>
-          <div className="dash-kpi-num">SAR 0</div>
-          <div className="dash-kpi-label">Earned This Month</div>
+          <div className="dash-kpi-icon" style={{ background: '#FFF3E0' }}>📥</div>
+          <div className="dash-kpi-num">{pendingCount ?? 0}</div>
+          <div className="dash-kpi-label">New Requests</div>
         </div>
         <div className="dash-kpi">
-          <div className="dash-kpi-icon" style={{ background: '#EBF5FF' }}>📅</div>
-          <div className="dash-kpi-num">0</div>
-          <div className="dash-kpi-label">Bookings This Month</div>
+          <div className="dash-kpi-icon" style={{ background: '#E8F9F0' }}>✅</div>
+          <div className="dash-kpi-num">{acceptedCount ?? 0}</div>
+          <div className="dash-kpi-label">Accepted Bookings</div>
         </div>
         <div className="dash-kpi">
           <div className="dash-kpi-icon" style={{ background: '#FFF3E0' }}>⭐</div>
@@ -117,6 +126,25 @@ export default async function ProviderDashboardPage({ searchParams }: Props) {
               <p style={{ color: 'var(--muted)', fontSize: '0.9rem' }}>
                 Your profile is approved. You can now receive booking requests from patients.
               </p>
+            </div>
+          </>
+        )}
+
+        {status === 'update_pending' && (
+          <>
+            <div className="dash-card-header">
+              <span className="dash-card-title">Profile Update Pending</span>
+              <span style={{ background: 'rgba(184,94,0,0.1)', color: '#b85e00', fontSize: '0.75rem', fontWeight: 700, padding: '3px 10px', borderRadius: '50px' }}>
+                ⏳ Awaiting Approval
+              </span>
+            </div>
+            <div className="dash-card-body">
+              <p style={{ color: 'var(--muted)', fontSize: '0.9rem', marginBottom: '1rem' }}>
+                Your profile update request has been submitted and is under admin review. Your current approved profile remains active.
+              </p>
+              <Link href="/provider/profile" style={{ fontSize: '0.85rem', color: 'var(--teal)', fontWeight: 600 }}>
+                View Profile →
+              </Link>
             </div>
           </>
         )}

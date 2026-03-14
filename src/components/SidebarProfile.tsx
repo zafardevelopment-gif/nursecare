@@ -3,7 +3,9 @@ import Link from 'next/link'
 
 interface NurseData {
   specialties?: string | null
+  specialization?: string | null
   status?: string
+  photoUrl?: string | null
 }
 
 interface SidebarProfileProps {
@@ -41,7 +43,7 @@ export default function SidebarProfile({
       }}>
         {/* Avatar + Name Row */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: '0.7rem' }}>
-          <UserAvatar name={name} avatarUrl={avatarUrl} size={44} online={true} />
+          <UserAvatar name={name} avatarUrl={nurseData?.photoUrl ?? avatarUrl} size={44} online={true} />
           <div style={{ minWidth: 0 }}>
             <div style={{
               fontWeight: 700,
@@ -104,7 +106,7 @@ export default function SidebarProfile({
           gap: '0.4rem',
           flexWrap: 'wrap',
         }}>
-          <ProfileLink href={`/${role === 'provider' ? 'provider/onboarding' : role + '/dashboard'}`} label="Profile" />
+          <ProfileLink href={`/${role === 'provider' ? (nurseData?.status ? 'provider/profile' : 'provider/onboarding') : role + '/dashboard'}`} label="Profile" />
           <SignOutInline />
         </div>
       </div>
@@ -115,9 +117,10 @@ export default function SidebarProfile({
 function StatusChip({ status }: { status?: string }) {
   if (!status) return null
   const map: Record<string, { bg: string; color: string; label: string }> = {
-    pending:  { bg: 'rgba(245,132,42,0.15)', color: '#F5842A', label: '⏳ Pending' },
-    approved: { bg: 'rgba(39,168,105,0.15)', color: '#27A869', label: '✓ Approved' },
-    rejected: { bg: 'rgba(224,74,74,0.15)',  color: '#E04A4A', label: '✕ Rejected' },
+    pending:        { bg: 'rgba(245,132,42,0.15)', color: '#F5842A', label: '⏳ Pending' },
+    approved:       { bg: 'rgba(39,168,105,0.15)', color: '#27A869', label: '✓ Approved' },
+    rejected:       { bg: 'rgba(224,74,74,0.15)',  color: '#E04A4A', label: '✕ Rejected' },
+    update_pending: { bg: 'rgba(184,94,0,0.15)',   color: '#e07b00', label: '🔄 Update Pending' },
   }
   const s = map[status]
   if (!s) return null

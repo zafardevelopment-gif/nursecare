@@ -1,222 +1,173 @@
 import { requireRole } from '@/lib/auth'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
-import { approveNurse, rejectNurse } from './actions'
 import Link from 'next/link'
+import NurseFilters from './NurseFilters'
+import { Suspense } from 'react'
 
-export default async function NurseApprovalsPage() {
+interface Props {
+  searchParams: Promise<{
+    q?: string
+    status?: string
+    city?: string
+    spec?: string
+  }>
+}
+
+const STATUS_STYLE: Record<string, { color: string; bg: string }> = {
+  pending:        { color: '#F5842A', bg: 'rgba(245,132,42,0.1)' },
+  approved:       { color: '#27A869', bg: 'rgba(39,168,105,0.1)' },
+  rejected:       { color: '#E04A4A', bg: 'rgba(224,74,74,0.1)'  },
+  update_pending: { color: '#b85e00', bg: 'rgba(184,94,0,0.1)'   },
+}
+
+export default async function AdminNursesPage({ searchParams }: Props) {
   await requireRole('admin')
   const supabase = await createSupabaseServerClient()
+  const params   = await searchParams
 
-  const { data: nurses } = await supabase
+  const q      = params.q?.trim()      ?? ''
+  const status = params.status         ?? ''
+  const city   = params.city           ?? ''
+  const spec   = params.spec           ?? ''
+
+  // Build query
+  let query = supabase
     .from('nurses')
-    .select('*')
+    .select('id, full_name, email, phone, city, specialization, experience_years, hourly_rate, daily_rate, status, license_no, created_at')
     .order('created_at', { ascending: false })
 
-  const pending  = nurses?.filter(n => n.status === 'pending')  ?? []
-  const approved = nurses?.filter(n => n.status === 'approved') ?? []
-  const rejected = nurses?.filter(n => n.status === 'rejected') ?? []
+  if (status) query = query.eq('status', status)
+  if (city)   query = query.eq('city', city)
+  if (spec)   query = query.eq('specialization', spec)
+  if (q) {
+    query = query.or(
+      `full_name.ilike.%${q}%,email.ilike.%${q}%,phone.ilike.%${q}%,city.ilike.%${q}%,license_no.ilike.%${q}%`
+    )
+  }
+
+  const { data: nurses } = await query
+
+  // Unique specializations for filter dropdown
+  const { data: allNurses } = await supabase
+    .from('nurses')
+    .select('specialization')
+    .not('specialization', 'is', null)
+
+  const specializations = [...new Set(
+    (allNurses ?? []).map(n => n.specialization).filter(Boolean)
+  )].sort() as string[]
+
+  // Status counts for badges
+  const counts = (nurses ?? []).reduce<Record<string, number>>((acc, n) => {
+    acc[n.status] = (acc[n.status] ?? 0) + 1
+    return acc
+  }, {})
 
   return (
     <div className="dash-shell">
       <div className="dash-header">
         <div>
-          <div style={{ marginBottom: '0.4rem' }}>
-            <Link href="/admin/dashboard" style={{ fontSize: '0.8rem', color: 'var(--teal)', textDecoration: 'none' }}>
-              ← Admin Dashboard
-            </Link>
-          </div>
-          <h1 className="dash-title">Nurse Approvals</h1>
-          <p className="dash-sub">Review and approve healthcare provider applications</p>
+          <h1 className="dash-title">Nurses</h1>
+          <p className="dash-sub">{nurses?.length ?? 0} nurse{nurses?.length !== 1 ? 's' : ''} found</p>
         </div>
+        <Link href="/admin/nurse-updates" style={{
+          fontSize: '0.82rem', fontWeight: 600, color: '#b85e00',
+          background: 'rgba(184,94,0,0.08)', border: '1px solid rgba(184,94,0,0.2)',
+          padding: '7px 14px', borderRadius: '8px', textDecoration: 'none',
+        }}>
+          🔄 Profile Updates
+        </Link>
       </div>
 
-      {/* Stats */}
-      <div className="dash-kpi-row" style={{ marginBottom: '1.5rem' }}>
-        <div className="dash-kpi">
-          <div className="dash-kpi-icon" style={{ background: '#FFF3E0' }}>⏳</div>
-          <div className="dash-kpi-num">{pending.length}</div>
-          <div className="dash-kpi-label">Pending Review</div>
-        </div>
-        <div className="dash-kpi">
-          <div className="dash-kpi-icon" style={{ background: '#E8F9F0' }}>✅</div>
-          <div className="dash-kpi-num">{approved.length}</div>
-          <div className="dash-kpi-label">Approved</div>
-        </div>
-        <div className="dash-kpi">
-          <div className="dash-kpi-icon" style={{ background: '#FEE8E8' }}>❌</div>
-          <div className="dash-kpi-num">{rejected.length}</div>
-          <div className="dash-kpi-label">Rejected</div>
-        </div>
-        <div className="dash-kpi">
-          <div className="dash-kpi-icon" style={{ background: '#EBF5FF' }}>👩‍⚕️</div>
-          <div className="dash-kpi-num">{nurses?.length ?? 0}</div>
-          <div className="dash-kpi-label">Total Applications</div>
-        </div>
-      </div>
-
-      {/* Pending */}
-      {pending.length > 0 && (
-        <div className="dash-card" style={{ marginBottom: '1.5rem' }}>
-          <div className="dash-card-header">
-            <span className="dash-card-title">Pending Applications ({pending.length})</span>
-            <span style={{ background: 'rgba(245,132,42,0.1)', color: '#F5842A', fontSize: '0.75rem', fontWeight: 700, padding: '3px 10px', borderRadius: '50px' }}>
-              Needs Review
-            </span>
-          </div>
-          <div className="dash-card-body" style={{ padding: 0 }}>
-            {pending.map(nurse => (
-              <NurseRow key={nurse.id} nurse={nurse} showActions />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {pending.length === 0 && (
-        <div className="dash-card" style={{ marginBottom: '1.5rem' }}>
-          <div className="dash-card-body" style={{ textAlign: 'center', padding: '2rem', color: 'var(--muted)' }}>
-            No pending applications
-          </div>
-        </div>
-      )}
-
-      {/* Approved */}
-      {approved.length > 0 && (
-        <div className="dash-card" style={{ marginBottom: '1.5rem' }}>
-          <div className="dash-card-header">
-            <span className="dash-card-title">Approved Nurses ({approved.length})</span>
-          </div>
-          <div className="dash-card-body" style={{ padding: 0 }}>
-            {approved.map(nurse => (
-              <NurseRow key={nurse.id} nurse={nurse} />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Rejected */}
-      {rejected.length > 0 && (
-        <div className="dash-card">
-          <div className="dash-card-header">
-            <span className="dash-card-title">Rejected ({rejected.length})</span>
-          </div>
-          <div className="dash-card-body" style={{ padding: 0 }}>
-            {rejected.map(nurse => (
-              <NurseRow key={nurse.id} nurse={nurse} />
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-function NurseRow({ nurse, showActions }: { nurse: any; showActions?: boolean }) {
-  const statusColor: Record<string, string> = {
-    pending:  '#F5842A',
-    approved: '#27A869',
-    rejected: '#E04A4A',
-  }
-  const statusBg: Record<string, string> = {
-    pending:  'rgba(245,132,42,0.1)',
-    approved: 'rgba(39,168,105,0.1)',
-    rejected: 'rgba(224,74,74,0.1)',
-  }
-
-  return (
-    <div style={{
-      display: 'flex',
-      alignItems: 'flex-start',
-      gap: '1rem',
-      padding: '1.2rem 1.5rem',
-      borderBottom: '1px solid var(--border)',
-      flexWrap: 'wrap',
-    }}>
-      {/* Info */}
-      <div style={{ flex: 1, minWidth: '200px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.4rem' }}>
-          <div style={{ fontWeight: 700, fontSize: '0.95rem' }}>{nurse.full_name}</div>
-          <span style={{
-            background: statusBg[nurse.status],
-            color: statusColor[nurse.status],
-            fontSize: '0.68rem',
-            fontWeight: 700,
-            padding: '2px 8px',
-            borderRadius: '50px',
-            textTransform: 'capitalize',
+      {/* Status summary chips */}
+      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '1.2rem' }}>
+        {Object.entries(STATUS_STYLE).map(([st, s]) => (
+          <Link key={st} href={`/admin/nurses?status=${st}`} style={{
+            fontSize: '0.75rem', fontWeight: 700, padding: '4px 12px', borderRadius: '50px',
+            background: s.bg, color: s.color, textDecoration: 'none', border: `1px solid ${s.color}22`,
           }}>
-            {nurse.status}
-          </span>
-        </div>
-        <div style={{ fontSize: '0.78rem', color: 'var(--muted)', marginBottom: '0.5rem' }}>
-          {nurse.email} · {nurse.city} · License: {nurse.license_no}
-        </div>
-        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-          {nurse.specialties && (
-            <span style={{ background: 'rgba(14,123,140,0.08)', color: 'var(--teal)', fontSize: '0.72rem', fontWeight: 600, padding: '3px 9px', borderRadius: '50px', border: '1px solid rgba(14,123,140,0.15)' }}>
-              {nurse.specialties}
-            </span>
-          )}
-          <span style={{ background: 'var(--cream)', fontSize: '0.72rem', color: 'var(--muted)', padding: '3px 9px', borderRadius: '50px', border: '1px solid var(--border)' }}>
-            {nurse.experience_years} yrs exp
-          </span>
-          <span style={{ background: 'var(--cream)', fontSize: '0.72rem', color: 'var(--muted)', padding: '3px 9px', borderRadius: '50px', border: '1px solid var(--border)' }}>
-            SAR {nurse.shift_rate}/shift
-          </span>
-        </div>
-        {nurse.bio && (
-          <div style={{ fontSize: '0.78rem', color: 'var(--muted)', marginTop: '0.5rem', fontStyle: 'italic' }}>
-            "{nurse.bio.slice(0, 120)}{nurse.bio.length > 120 ? '...' : ''}"
-          </div>
+            {st.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase())} {counts[st] ? `(${counts[st]})` : ''}
+          </Link>
+        ))}
+        {(status || city || spec || q) && (
+          <Link href="/admin/nurses" style={{ fontSize: '0.75rem', fontWeight: 600, padding: '4px 12px', borderRadius: '50px', background: 'var(--cream)', color: 'var(--muted)', border: '1px solid var(--border)', textDecoration: 'none' }}>
+            ✕ Clear filters
+          </Link>
         )}
       </div>
 
-      {/* Actions */}
-      {showActions && (
-        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-          <form action={approveNurse.bind(null, nurse.id)}>
-            <button
-              type="submit"
-              style={{
-                background: '#27A869',
-                color: '#fff',
-                border: 'none',
-                padding: '8px 16px',
-                borderRadius: '8px',
-                fontSize: '0.82rem',
-                fontWeight: 700,
-                cursor: 'pointer',
-                fontFamily: 'inherit',
-              }}
-            >
-              ✓ Approve
-            </button>
-          </form>
-          <form action={rejectNurse.bind(null, nurse.id)}>
-            <button
-              type="submit"
-              style={{
-                background: 'rgba(224,74,74,0.1)',
-                color: '#E04A4A',
-                border: '1px solid rgba(224,74,74,0.25)',
-                padding: '8px 16px',
-                borderRadius: '8px',
-                fontSize: '0.82rem',
-                fontWeight: 700,
-                cursor: 'pointer',
-                fontFamily: 'inherit',
-              }}
-            >
-              ✕ Reject
-            </button>
-          </form>
-        </div>
-      )}
+      {/* Filters */}
+      <Suspense>
+        <NurseFilters specializations={specializations} />
+      </Suspense>
 
-      {!showActions && (
-        <div style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>
-          {nurse.reviewed_at ? `Reviewed: ${new Date(nurse.reviewed_at).toLocaleDateString()}` : ''}
+      {/* Table */}
+      <div className="dash-card">
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.84rem' }}>
+            <thead>
+              <tr style={{ borderBottom: '2px solid var(--border)', background: 'var(--cream)' }}>
+                {['Name', 'City', 'Specialization', 'Experience', 'Hourly', 'Daily', 'Status', ''].map(h => (
+                  <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--muted)', whiteSpace: 'nowrap' }}>
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {!nurses || nurses.length === 0 ? (
+                <tr>
+                  <td colSpan={8} style={{ padding: '2.5rem', textAlign: 'center', color: 'var(--muted)', fontStyle: 'italic' }}>
+                    No nurses found matching your filters.
+                  </td>
+                </tr>
+              ) : nurses.map(nurse => {
+                const s = STATUS_STYLE[nurse.status] ?? { color: 'var(--muted)', bg: 'var(--cream)' }
+                return (
+                  <tr key={nurse.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                    <td style={{ padding: '12px 14px' }}>
+                      <div style={{ fontWeight: 700 }}>{nurse.full_name}</div>
+                      <div style={{ fontSize: '0.74rem', color: 'var(--muted)', marginTop: '2px' }}>{nurse.email}</div>
+                      {nurse.phone && <div style={{ fontSize: '0.74rem', color: 'var(--muted)' }}>{nurse.phone}</div>}
+                    </td>
+                    <td style={{ padding: '12px 14px', color: 'var(--muted)' }}>{nurse.city ?? '—'}</td>
+                    <td style={{ padding: '12px 14px' }}>
+                      {nurse.specialization
+                        ? <span style={{ background: 'rgba(14,123,140,0.08)', color: 'var(--teal)', fontSize: '0.74rem', fontWeight: 600, padding: '3px 8px', borderRadius: '50px', border: '1px solid rgba(14,123,140,0.15)' }}>{nurse.specialization}</span>
+                        : <span style={{ color: 'var(--muted)' }}>—</span>
+                      }
+                    </td>
+                    <td style={{ padding: '12px 14px', color: 'var(--muted)' }}>
+                      {nurse.experience_years != null ? `${nurse.experience_years} yrs` : '—'}
+                    </td>
+                    <td style={{ padding: '12px 14px', fontWeight: 600 }}>
+                      {nurse.hourly_rate ? `SAR ${nurse.hourly_rate}` : '—'}
+                    </td>
+                    <td style={{ padding: '12px 14px', fontWeight: 600 }}>
+                      {nurse.daily_rate ? `SAR ${nurse.daily_rate}` : '—'}
+                    </td>
+                    <td style={{ padding: '12px 14px' }}>
+                      <span style={{ background: s.bg, color: s.color, fontSize: '0.7rem', fontWeight: 700, padding: '3px 9px', borderRadius: '50px', textTransform: 'capitalize', whiteSpace: 'nowrap' }}>
+                        {nurse.status.replace('_', ' ')}
+                      </span>
+                    </td>
+                    <td style={{ padding: '12px 14px' }}>
+                      <Link href={`/admin/nurses/${nurse.id}`} style={{
+                        fontSize: '0.78rem', fontWeight: 700, color: 'var(--teal)',
+                        background: 'rgba(14,123,140,0.07)', border: '1px solid rgba(14,123,140,0.2)',
+                        padding: '5px 12px', borderRadius: '7px', textDecoration: 'none',
+                        whiteSpace: 'nowrap',
+                      }}>
+                        View →
+                      </Link>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
         </div>
-      )}
+      </div>
     </div>
   )
 }

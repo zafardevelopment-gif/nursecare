@@ -5,11 +5,11 @@ import SidebarMenu from '@/components/SidebarMenu'
 import Link from 'next/link'
 
 const patientMenu = [
-  { icon: '🏠', label: 'Dashboard',     href: '/patient/dashboard' },
-  { icon: '🔍', label: 'Find a Nurse',  href: '/patient/search' },
-  { icon: '📅', label: 'My Bookings',   href: '/patient/bookings' },
-  { icon: '💬', label: 'Messages',      href: '/patient/messages' },
-  { icon: '👤', label: 'My Profile',    href: '/patient/profile' },
+  { icon: '🏠', label: 'Dashboard',   href: '/patient/dashboard' },
+  { icon: '🏥', label: 'Book a Nurse', href: '/patient/request' },
+  { icon: '📅', label: 'My Bookings',  href: '/patient/bookings' },
+  { icon: '💬', label: 'Messages',     href: '/patient/messages' },
+  { icon: '👤', label: 'My Profile',   href: '/patient/profile' },
 ]
 
 export default async function PatientLayout({ children }: { children: React.ReactNode }) {

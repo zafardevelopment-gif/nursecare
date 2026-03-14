@@ -6,10 +6,16 @@ export default async function AdminDashboardPage() {
   const user = await requireRole('admin')
   const supabase = await createSupabaseServerClient()
 
-  const { count: pendingCount } = await supabase
-    .from('nurses')
-    .select('*', { count: 'exact', head: true })
-    .eq('status', 'pending')
+  const [
+    { count: pendingNurses },
+    { count: totalBookings },
+    { count: pendingBookings },
+  ] = await Promise.all([
+    supabase.from('nurses').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
+    supabase.from('bookings').select('*', { count: 'exact', head: true }),
+    supabase.from('bookings').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
+  ])
+  const pendingCount = pendingNurses
 
   return (
     <div className="dash-shell">
@@ -23,13 +29,13 @@ export default async function AdminDashboardPage() {
       <div className="dash-kpi-row">
         <div className="dash-kpi">
           <div className="dash-kpi-icon" style={{ background: '#E8F9F0' }}>📋</div>
-          <div className="dash-kpi-num">0</div>
-          <div className="dash-kpi-label">Bookings Today</div>
+          <div className="dash-kpi-num">{totalBookings ?? 0}</div>
+          <div className="dash-kpi-label">Total Bookings</div>
         </div>
         <div className="dash-kpi">
-          <div className="dash-kpi-icon" style={{ background: '#EBF5FF' }}>💰</div>
-          <div className="dash-kpi-num">SAR 0</div>
-          <div className="dash-kpi-label">Revenue Today</div>
+          <div className="dash-kpi-icon" style={{ background: '#FFF3E0' }}>⏳</div>
+          <div className="dash-kpi-num">{pendingBookings ?? 0}</div>
+          <div className="dash-kpi-label">Pending Bookings</div>
         </div>
         <div className="dash-kpi">
           <div className="dash-kpi-icon" style={{ background: '#FFF3E0' }}>✅</div>
@@ -65,6 +71,26 @@ export default async function AdminDashboardPage() {
             {(pendingCount ?? 0) > 0 && (
               <span style={{ background: '#F5842A', color: '#fff', fontSize: '0.7rem', padding: '2px 7px', borderRadius: '50px' }}>
                 {pendingCount} pending
+              </span>
+            )}
+          </Link>
+          <Link href="/admin/bookings" style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            background: 'var(--cream)',
+            border: '1px solid var(--border)',
+            color: 'var(--ink)',
+            padding: '12px 20px',
+            borderRadius: '10px',
+            fontWeight: 700,
+            fontSize: '0.88rem',
+            textDecoration: 'none',
+          }}>
+            📋 All Bookings
+            {(pendingBookings ?? 0) > 0 && (
+              <span style={{ background: '#0E7B8C', color: '#fff', fontSize: '0.7rem', padding: '2px 7px', borderRadius: '50px' }}>
+                {pendingBookings} pending
               </span>
             )}
           </Link>

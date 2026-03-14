@@ -5,7 +5,7 @@ import { onboardingAction } from './actions'
 import Link from 'next/link'
 
 interface Props {
-  searchParams: Promise<{ error?: string; }>
+  searchParams: Promise<{ error?: string }>
 }
 
 export default async function ProviderOnboardingPage({ searchParams }: Props) {
@@ -13,7 +13,6 @@ export default async function ProviderOnboardingPage({ searchParams }: Props) {
   const supabase = await createSupabaseServerClient()
   const params = await searchParams
 
-  // Check if already submitted
   const { data: existing } = await supabase
     .from('nurses')
     .select('status')
@@ -26,7 +25,7 @@ export default async function ProviderOnboardingPage({ searchParams }: Props) {
 
   return (
     <div className="auth-bg" style={{ alignItems: 'flex-start', padding: '2rem 1rem' }}>
-      <div className="auth-card" style={{ maxWidth: '600px', width: '100%' }}>
+      <div className="auth-card" style={{ maxWidth: '680px', width: '100%' }}>
 
         <div className="auth-logo">
           <div className="auth-logo-icon">🏥</div>
@@ -48,94 +47,113 @@ export default async function ProviderOnboardingPage({ searchParams }: Props) {
           </div>
         )}
 
-        <form action={onboardingAction} className="auth-form">
+        <form action={onboardingAction} className="auth-form" encType="multipart/form-data">
 
-          <div className="form-group">
-            <label className="form-label">City</label>
-            <select name="city" required className="form-input">
-              <option value="">Select your city</option>
-              <option value="Riyadh">Riyadh</option>
-              <option value="Jeddah">Jeddah</option>
-              <option value="Dammam">Dammam</option>
-              <option value="Mecca">Mecca</option>
-              <option value="Medina">Medina</option>
-              <option value="Khobar">Khobar</option>
-              <option value="Tabuk">Tabuk</option>
-              <option value="Abha">Abha</option>
-            </select>
+          {/* ── Personal Info ── */}
+          <div style={{ fontWeight: 700, fontSize: '0.85rem', color: 'var(--teal)', marginBottom: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            Personal Information
           </div>
 
-          <div className="form-group">
-            <label className="form-label">Phone Number</label>
-            <input
-              type="tel"
-              name="phone"
-              required
-              className="form-input"
-              placeholder="+966 5X XXX XXXX"
-            />
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+            <div className="form-group">
+              <label className="form-label">Gender</label>
+              <select name="gender" required className="form-input">
+                <option value="">Select gender</option>
+                <option value="male">Male</option>
+                <option value="female">Female</option>
+              </select>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Nationality</label>
+              <input type="text" name="nationality" required className="form-input" placeholder="e.g. Saudi, Pakistani" />
+            </div>
           </div>
 
-          <div className="form-group">
-            <label className="form-label">SCHS License Number</label>
-            <input
-              type="text"
-              name="license_no"
-              required
-              className="form-input"
-              placeholder="SCHS-1234567"
-            />
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+            <div className="form-group">
+              <label className="form-label">Phone Number</label>
+              <input type="tel" name="phone" required className="form-input" placeholder="+966 5X XXX XXXX" />
+            </div>
+            <div className="form-group">
+              <label className="form-label">City</label>
+              <select name="city" required className="form-input">
+                <option value="">Select city</option>
+                {['Riyadh','Jeddah','Dammam','Mecca','Medina','Khobar','Tabuk','Abha'].map(c => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+            </div>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
             <div className="form-group">
               <label className="form-label">Years of Experience</label>
-              <input
-                type="number"
-                name="experience"
-                required
-                min="0"
-                max="50"
-                className="form-input"
-                placeholder="e.g. 5"
-              />
+              <input type="number" name="experience" required min="0" max="50" className="form-input" placeholder="e.g. 5" />
             </div>
             <div className="form-group">
-              <label className="form-label">Shift Rate (SAR)</label>
-              <input
-                type="number"
-                name="shift_rate"
-                required
-                min="0"
-                className="form-input"
-                placeholder="e.g. 280"
-              />
+              <label className="form-label">Specialization</label>
+              <input type="text" name="specialization" className="form-input" placeholder="e.g. ICU Care, Elderly Care" />
             </div>
           </div>
 
           <div className="form-group">
-            <label className="form-label">Specialties</label>
-            <input
-              type="text"
-              name="specialties"
-              className="form-input"
-              placeholder="e.g. ICU Care, Elderly Care, Post-Surgery"
-            />
+            <label className="form-label">SCHS License Number</label>
+            <input type="text" name="license_no" required className="form-input" placeholder="SCHS-1234567" />
           </div>
 
           <div className="form-group">
             <label className="form-label">Bio</label>
-            <textarea
-              name="bio"
-              required
-              className="form-input"
-              rows={4}
-              placeholder="Tell patients about your experience and how you can help..."
-              style={{ resize: 'vertical' }}
-            />
+            <textarea name="bio" className="form-input" rows={3} placeholder="Tell patients about your experience..." style={{ resize: 'vertical' }} />
           </div>
 
-          <button type="submit" className="btn-primary">
+          {/* ── Pricing ── */}
+          <div style={{ fontWeight: 700, fontSize: '0.85rem', color: 'var(--teal)', margin: '1.2rem 0 0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            Your Pricing (SAR)
+          </div>
+          <p style={{ fontSize: '0.78rem', color: 'var(--muted)', marginBottom: '0.8rem' }}>
+            Set your rates. Admin will review and add platform commission before publishing.
+          </p>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+            <div className="form-group">
+              <label className="form-label">Hourly Rate (SAR)</label>
+              <input type="number" name="hourly_rate" min="0" step="0.01" className="form-input" placeholder="e.g. 100" />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Daily Rate (SAR)</label>
+              <input type="number" name="daily_rate" min="0" step="0.01" className="form-input" placeholder="e.g. 700" />
+            </div>
+          </div>
+
+          {/* ── Documents ── */}
+          <div style={{ fontWeight: 700, fontSize: '0.85rem', color: 'var(--teal)', margin: '1.2rem 0 0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            Document Uploads
+          </div>
+          <p style={{ fontSize: '0.78rem', color: 'var(--muted)', marginBottom: '0.8rem' }}>
+            Upload clear copies. Accepted formats: PDF, JPG, PNG (max 5 MB each).
+          </p>
+
+          {[
+            { name: 'doc_biodata',             label: 'Biodata / Resume',     accept: '.pdf,.doc,.docx' },
+            { name: 'doc_national_id',         label: 'National ID / Iqama',  accept: '.pdf,.jpg,.jpeg,.png' },
+            { name: 'doc_passport',            label: 'Passport',             accept: '.pdf,.jpg,.jpeg,.png' },
+            { name: 'doc_photo',               label: 'Passport Size Photo',  accept: '.jpg,.jpeg,.png' },
+            { name: 'doc_nursing_certificate', label: 'Nursing Certificate',  accept: '.pdf,.jpg,.jpeg,.png' },
+            { name: 'doc_nursing_license',     label: 'Nursing License',      accept: '.pdf,.jpg,.jpeg,.png' },
+          ].map(({ name, label, accept }) => (
+            <div key={name} className="form-group">
+              <label className="form-label">{label}</label>
+              <input
+                type="file"
+                name={name}
+                accept={accept}
+                className="form-input"
+                style={{ paddingTop: '0.5rem', paddingBottom: '0.5rem' }}
+              />
+            </div>
+          ))}
+
+          <button type="submit" className="btn-primary" style={{ marginTop: '0.5rem' }}>
             Submit for Review →
           </button>
         </form>

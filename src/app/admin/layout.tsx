@@ -5,11 +5,12 @@ import SidebarMenu from '@/components/SidebarMenu'
 import Link from 'next/link'
 
 const adminMenu = [
-  { icon: '🏠', label: 'Dashboard',       href: '/admin/dashboard' },
-  { icon: '👩‍⚕️', label: 'Nurse Approvals', href: '/admin/nurses' },
-  { icon: '📋', label: 'Bookings',         href: '/admin/bookings' },
-  { icon: '👥', label: 'Users',            href: '/admin/users' },
-  { icon: '⚙️', label: 'Settings',         href: '/admin/settings' },
+  { icon: '🏠', label: 'Dashboard',        href: '/admin/dashboard' },
+  { icon: '👩‍⚕️', label: 'Nurse Approvals',  href: '/admin/nurses' },
+  { icon: '🔄', label: 'Profile Updates',  href: '/admin/nurse-updates' },
+  { icon: '📋', label: 'Bookings',          href: '/admin/bookings' },
+  { icon: '👥', label: 'Users',             href: '/admin/users' },
+  { icon: '⚙️', label: 'Settings',          href: '/admin/settings' },
 ]
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {

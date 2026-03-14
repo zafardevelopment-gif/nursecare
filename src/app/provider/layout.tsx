@@ -22,9 +22,25 @@ export default async function ProviderLayout({ children }: { children: React.Rea
 
   const { data: nurse } = await supabase
     .from('nurses')
-    .select('specialties, status')
+    .select('specialization, status, city, nurse_documents(doc_type, file_url)')
     .eq('user_id', user.id)
     .single()
+
+  const photoUrl = (nurse?.nurse_documents as any[])?.find(d => d.doc_type === 'photo')?.file_url ?? null
+
+  const { count: pendingBookings } = nurse?.status === 'approved'
+    ? await supabase.from('bookings').select('*', { count: 'exact', head: true }).eq('status', 'pending').eq('city', nurse.city ?? '')
+    : { count: 0 }
+
+  const providerMenuWithBadge = [
+    { icon: '🏠', label: 'Dashboard',    href: '/provider/dashboard' },
+    { icon: '📝', label: 'My Profile',   href: nurse?.status ? '/provider/profile' : '/provider/onboarding' },
+    { icon: '📅', label: 'Bookings',     href: '/provider/bookings', badge: pendingBookings ?? 0 },
+    { icon: '🕐', label: 'Availability', href: '/provider/availability' },
+    { icon: '💰', label: 'Earnings',     href: '/provider/earnings' },
+    { icon: '💬', label: 'Messages',     href: '/provider/messages' },
+    { icon: '📄', label: 'Documents',    href: '/provider/documents' },
+  ]
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh' }}>
@@ -71,11 +87,11 @@ export default async function ProviderLayout({ children }: { children: React.Rea
           email={user.email}
           role="provider"
           avatarUrl={user.avatar_url}
-          nurseData={nurse}
+          nurseData={nurse ? { ...nurse, photoUrl } : null}
         />
 
         {/* Menu */}
-        <SidebarMenu items={providerMenu} activePath={pathname} />
+        <SidebarMenu items={providerMenuWithBadge} activePath={pathname} />
       </aside>
 
       {/* Main content */}
