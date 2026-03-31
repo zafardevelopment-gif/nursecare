@@ -71,6 +71,11 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
         </form>
 
         <p className="auth-footer">
+          <Link href="/auth/forgot-password" className="auth-link">
+            Forgot password?
+          </Link>
+        </p>
+        <p className="auth-footer">
           Don&apos;t have an account?{' '}
           <Link href="/auth/signup" className="auth-link">
             Create one

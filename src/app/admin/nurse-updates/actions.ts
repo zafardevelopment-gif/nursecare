@@ -19,11 +19,34 @@ export async function approveUpdateRequest(formData: FormData) {
 
   if (error || !req) throw new Error('Update request not found')
 
-  // Apply new values to nurses table
+  // Fetch nurse's current commission_percent
+  const { data: nurse } = await supabase
+    .from('nurses')
+    .select('commission_percent')
+    .eq('id', req.nurse_id)
+    .single()
+
+  const commission = nurse?.commission_percent ?? 10
+  const newValues = req.new_values as Record<string, any>
+
+  // Recalculate final prices if rates are changing
+  const hourly_rate = newValues.hourly_rate != null ? parseFloat(newValues.hourly_rate) : null
+  const daily_rate  = newValues.daily_rate  != null ? parseFloat(newValues.daily_rate)  : null
+
+  const priceUpdates: Record<string, any> = {}
+  if (hourly_rate != null) {
+    priceUpdates.final_hourly_price = parseFloat((hourly_rate + (hourly_rate * commission / 100)).toFixed(2))
+  }
+  if (daily_rate != null) {
+    priceUpdates.final_daily_price = parseFloat((daily_rate + (daily_rate * commission / 100)).toFixed(2))
+  }
+
+  // Apply new values + recalculated final prices to nurses table
   await supabase
     .from('nurses')
     .update({
-      ...req.new_values,
+      ...newValues,
+      ...priceUpdates,
       status: 'approved',
     })
     .eq('id', req.nurse_id)

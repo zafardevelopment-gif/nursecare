@@ -3,9 +3,6 @@
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { requireRole } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
-import { writeFile, mkdir } from 'fs/promises'
-import { existsSync } from 'fs'
-import path from 'path'
 
 export async function approveNurse(formData: FormData) {
   const admin = await requireRole('admin')
@@ -111,16 +108,19 @@ export async function uploadAgreement(formData: FormData) {
   if (file.type !== 'application/pdf') throw new Error('Only PDF files allowed')
   if (file.size > 10 * 1024 * 1024) throw new Error('File exceeds 10MB limit')
 
-  const dir       = path.join(process.cwd(), 'public', 'uploads', 'nurse-agreements', nurseId)
-  const filePath  = path.join(dir, 'agreement.pdf')
-  const publicUrl = `/uploads/nurse-agreements/${nurseId}/agreement.pdf`
+  const storagePath = `${nurseId}/agreement.pdf`
 
-  if (!existsSync(dir)) {
-    await mkdir(dir, { recursive: true })
-  }
+  const { error: storageError } = await supabase.storage
+    .from('nurse-documents')
+    .upload(storagePath, file, { upsert: true, contentType: 'application/pdf' })
 
-  const buffer = Buffer.from(await file.arrayBuffer())
-  await writeFile(filePath, buffer)
+  if (storageError) throw new Error(`Storage upload failed: ${storageError.message}`)
+
+  const { data: urlData } = supabase.storage
+    .from('nurse-documents')
+    .getPublicUrl(storagePath)
+
+  const publicUrl = urlData.publicUrl
 
   // Replace any existing agreement for this nurse
   await supabase.from('nurse_agreements').delete().eq('nurse_id', nurseId)

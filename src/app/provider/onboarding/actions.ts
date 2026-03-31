@@ -3,9 +3,6 @@
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { requireRole } from '@/lib/auth'
 import { redirect } from 'next/navigation'
-import { writeFile, mkdir, unlink } from 'fs/promises'
-import { existsSync } from 'fs'
-import path from 'path'
 
 const DOC_FIELDS: Record<string, string> = {
   doc_biodata:             'biodata',
@@ -83,41 +80,32 @@ export async function onboardingAction(formData: FormData) {
     redirect(`/provider/onboarding?error=${encodeURIComponent(nurseError?.message ?? 'Failed to save profile')}`)
   }
 
-  // Ensure nurse upload folder exists
-  const nurseDir = path.join(process.cwd(), 'public', 'uploads', 'nurses', nurse.id)
-  if (!existsSync(nurseDir)) {
-    await mkdir(nurseDir, { recursive: true })
-  }
-
-  // Save files to disk and record URLs in DB
+  // Upload files to Supabase Storage and record in DB
   const uploadErrors: string[] = []
 
   for (const [fieldName, docType] of Object.entries(DOC_FIELDS)) {
     const file = formData.get(fieldName) as File | null
     if (!file || file.size === 0) continue
 
-    const ext      = file.name.split('.').pop()?.toLowerCase() ?? 'bin'
-    const fileName = `${docType}.${ext}`
-    const filePath = path.join(nurseDir, fileName)
-    const publicUrl = `/uploads/nurses/${nurse.id}/${fileName}`
+    const ext        = file.name.split('.').pop()?.toLowerCase() ?? 'bin'
+    const storagePath = `${nurse.id}/${docType}.${ext}`
 
-    try {
-      // Delete old file with any extension for this doc type (replace)
-      for (const oldExt of ['pdf', 'jpg', 'jpeg', 'png']) {
-        const oldPath = path.join(nurseDir, `${docType}.${oldExt}`)
-        if (existsSync(oldPath) && oldPath !== filePath) {
-          await unlink(oldPath)
-        }
-      }
+    const { error: storageError } = await supabase.storage
+      .from('nurse-documents')
+      .upload(storagePath, file, { upsert: true, contentType: file.type })
 
-      const buffer = Buffer.from(await file.arrayBuffer())
-      await writeFile(filePath, buffer)
-    } catch {
+    if (storageError) {
       uploadErrors.push(docType)
       continue
     }
 
-    // Update DB record
+    const { data: urlData } = supabase.storage
+      .from('nurse-documents')
+      .getPublicUrl(storagePath)
+
+    const publicUrl = urlData.publicUrl
+
+    // Replace any existing DB record for this doc type
     await supabase
       .from('nurse_documents')
       .delete()

@@ -1,6 +1,7 @@
 import { requireRole } from '@/lib/auth'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import Link from 'next/link'
+import DocumentRow from './DocumentRow'
 
 const DOC_LABELS: Record<string, string> = {
   biodata:             'Biodata / Resume',
@@ -21,7 +22,7 @@ const DOC_ICONS: Record<string, string> = {
 }
 
 export default async function ProviderDocumentsPage() {
-  const user = await requireRole('provider')
+  const user     = await requireRole('provider')
   const supabase = await createSupabaseServerClient()
 
   const { data: nurse } = await supabase
@@ -46,21 +47,12 @@ export default async function ProviderDocumentsPage() {
   }
 
   const [{ data: nurseDocs }, { data: agreements }] = await Promise.all([
-    supabase
-      .from('nurse_documents')
-      .select('*')
-      .eq('nurse_id', nurse.id),
-    supabase
-      .from('nurse_agreements')
-      .select('*')
-      .eq('nurse_id', nurse.id)
-      .order('uploaded_at', { ascending: false }),
+    supabase.from('nurse_documents').select('*').eq('nurse_id', nurse.id),
+    supabase.from('nurse_agreements').select('*').eq('nurse_id', nurse.id).order('uploaded_at', { ascending: false }),
   ])
 
   const docMap: Record<string, any> = {}
-  for (const doc of nurseDocs ?? []) {
-    docMap[doc.doc_type] = doc
-  }
+  for (const doc of nurseDocs ?? []) docMap[doc.doc_type] = doc
 
   return (
     <div className="dash-shell">
@@ -87,55 +79,19 @@ export default async function ProviderDocumentsPage() {
           </span>
         </div>
         <div className="dash-card-body" style={{ padding: 0 }}>
-          {Object.entries(DOC_LABELS).map(([key, label]) => {
-            const doc = docMap[key]
-            return (
-              <div key={key} style={{
-                display: 'flex', alignItems: 'center', gap: '1rem',
-                padding: '0.9rem 1.5rem', borderBottom: '1px solid var(--border)',
-              }}>
-                <div style={{ fontSize: '1.3rem', width: 32, textAlign: 'center' }}>
-                  {DOC_ICONS[key]}
-                </div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 600, fontSize: '0.88rem' }}>{label}</div>
-                  {doc ? (
-                    <div style={{ fontSize: '0.74rem', color: 'var(--muted)', marginTop: '2px' }}>
-                      {doc.file_name} · {new Date(doc.uploaded_at).toLocaleDateString()}
-                    </div>
-                  ) : (
-                    <div style={{ fontSize: '0.74rem', color: '#E04A4A', marginTop: '2px' }}>Not uploaded</div>
-                  )}
-                </div>
-                {doc ? (
-                  <a
-                    href={doc.file_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{
-                      fontSize: '0.78rem', fontWeight: 600, color: 'var(--teal)',
-                      background: 'rgba(14,123,140,0.07)', border: '1px solid rgba(14,123,140,0.2)',
-                      padding: '5px 12px', borderRadius: '7px', textDecoration: 'none',
-                    }}
-                  >
-                    View
-                  </a>
-                ) : (
-                  <span style={{
-                    fontSize: '0.75rem', color: 'var(--muted)',
-                    background: 'var(--cream)', border: '1px solid var(--border)',
-                    padding: '5px 12px', borderRadius: '7px',
-                  }}>
-                    Missing
-                  </span>
-                )}
-              </div>
-            )
-          })}
+          {Object.entries(DOC_LABELS).map(([key, label]) => (
+            <DocumentRow
+              key={key}
+              docType={key}
+              label={label}
+              icon={DOC_ICONS[key]}
+              doc={docMap[key] ?? null}
+            />
+          ))}
         </div>
       </div>
 
-      {/* Admin agreements */}
+      {/* Admin agreements — view only */}
       <div className="dash-card">
         <div className="dash-card-header">
           <span className="dash-card-title">Admin Documents</span>
