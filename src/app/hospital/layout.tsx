@@ -6,25 +6,21 @@ import MobileSidebar from '@/components/MobileSidebar'
 import ThemeToggle from '@/components/ThemeToggle'
 import Link from 'next/link'
 
-const adminMenu = [
-  { icon: '🏠', label: 'Dashboard',        href: '/admin/dashboard' },
-  { icon: '👩‍⚕️', label: 'Nurse Approvals',  href: '/admin/nurses' },
-  { icon: '🔄', label: 'Profile Updates',  href: '/admin/nurse-updates' },
-  { icon: '📋', label: 'Bookings',          href: '/admin/bookings' },
-  { icon: '📄', label: 'Agreements',        href: '/admin/agreements' },
-  { icon: '🪪', label: 'ID Cards',          href: '/admin/nurses/id-cards' },
-  { icon: '👥', label: 'Users',             href: '/admin/users' },
-  { icon: '⚙️', label: 'Settings',          href: '/admin/settings' },
+const hospitalMenu = [
+  { icon: '🏠', label: 'Dashboard',   href: '/hospital/dashboard' },
+  { icon: '📄', label: 'Agreements',  href: '/hospital/agreements' },
+  { icon: '💬', label: 'Messages',    href: '/hospital/messages' },
+  { icon: '👤', label: 'My Profile',  href: '/hospital/profile' },
 ]
 
-export default async function AdminLayout({ children }: { children: React.ReactNode }) {
-  const user = await requireRole('admin')
+export default async function HospitalLayout({ children }: { children: React.ReactNode }) {
+  const user = await requireRole('hospital')
   const headersList = await headers()
-  const pathname = headersList.get('x-pathname') ?? '/admin/dashboard'
+  const pathname = headersList.get('x-pathname') ?? '/hospital/dashboard'
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh' }}>
-      <MobileSidebar logoHref="/admin/dashboard">
+      <MobileSidebar logoHref="/hospital/dashboard">
         {/* Logo */}
         <div style={{
           padding: '1.2rem 1rem',
@@ -40,7 +36,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             fontSize: 16,
           }}>🏥</div>
-          <Link href="/admin/dashboard" style={{ textDecoration: 'none' }}>
+          <Link href="/hospital/dashboard" style={{ textDecoration: 'none' }}>
             <span style={{ fontFamily: 'Georgia,serif', fontSize: '1.1rem', color: '#fff', fontWeight: 700 }}>
               Nurse<span style={{ color: '#0ABFCC' }}>Care+</span>
             </span>
@@ -50,11 +46,11 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         <SidebarProfile
           name={user.full_name}
           email={user.email}
-          role="admin"
+          role="hospital"
           avatarUrl={user.avatar_url}
         />
 
-        <SidebarMenu items={adminMenu} activePath={pathname} />
+        <SidebarMenu items={hospitalMenu} activePath={pathname} />
 
         <div style={{ padding: '0.75rem', marginTop: 'auto', borderTop: '1px solid rgba(255,255,255,0.07)' }}>
           <ThemeToggle />

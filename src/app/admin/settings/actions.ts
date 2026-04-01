@@ -53,6 +53,7 @@ export async function savePlatformSettings(formData: FormData) {
     free_cancellation_hours:  parseInt(formData.get('free_cancellation_hours') as string) || 24,
     auto_complete_hours:      parseInt(formData.get('auto_complete_hours') as string) || 24,
     allow_emergency_bookings: formData.get('allow_emergency_bookings') === 'true',
+    chat_enabled:             formData.get('chat_enabled') === 'true',
     email_notifications:      formData.get('email_notifications') === 'true',
     whatsapp_notifications:   formData.get('whatsapp_notifications') === 'true',
     sms_notifications:        formData.get('sms_notifications') === 'true',

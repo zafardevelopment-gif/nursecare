@@ -8,14 +8,25 @@ export default async function AdminDashboardPage() {
 
   const [
     { count: pendingNurses },
+    { count: updatePendingNurses },
+    { count: totalNurses },
+    { count: approvedNurses },
     { count: totalBookings },
     { count: pendingBookings },
+    { count: totalUsers },
+    { count: pendingUpdateRequests },
   ] = await Promise.all([
     supabase.from('nurses').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
+    supabase.from('nurses').select('*', { count: 'exact', head: true }).eq('status', 'update_pending'),
+    supabase.from('nurses').select('*', { count: 'exact', head: true }),
+    supabase.from('nurses').select('*', { count: 'exact', head: true }).eq('status', 'approved'),
     supabase.from('bookings').select('*', { count: 'exact', head: true }),
     supabase.from('bookings').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
+    supabase.from('users').select('*', { count: 'exact', head: true }),
+    supabase.from('nurse_update_requests').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
   ])
-  const pendingCount = pendingNurses
+
+  const totalPendingActions = (pendingNurses ?? 0) + (updatePendingNurses ?? 0) + (pendingUpdateRequests ?? 0)
 
   return (
     <div className="dash-shell">
@@ -24,9 +35,19 @@ export default async function AdminDashboardPage() {
           <h1 className="dash-title">Admin Dashboard</h1>
           <p className="dash-sub">Platform overview · Signed in as {user.email}</p>
         </div>
+        {totalPendingActions > 0 && (
+          <Link href="/admin/nurse-updates" style={{
+            background: 'rgba(245,132,42,0.1)', border: '1px solid rgba(245,132,42,0.3)',
+            color: '#b85e00', padding: '8px 16px', borderRadius: 10,
+            fontSize: '0.85rem', fontWeight: 700, textDecoration: 'none',
+          }}>
+            ⚠️ {totalPendingActions} action{totalPendingActions !== 1 ? 's' : ''} required
+          </Link>
+        )}
       </div>
 
-      <div className="dash-kpi-row">
+      {/* KPI Row 1 — Bookings & Users */}
+      <div className="dash-kpi-row" style={{ marginBottom: '1rem' }}>
         <div className="dash-kpi">
           <div className="dash-kpi-icon" style={{ background: '#E8F9F0' }}>📋</div>
           <div className="dash-kpi-num">{totalBookings ?? 0}</div>
@@ -38,10 +59,40 @@ export default async function AdminDashboardPage() {
           <div className="dash-kpi-label">Pending Bookings</div>
         </div>
         <div className="dash-kpi">
-          <div className="dash-kpi-icon" style={{ background: '#FFF3E0' }}>✅</div>
-          <div className="dash-kpi-num">{pendingCount ?? 0}</div>
-          <div className="dash-kpi-label">Pending Approvals</div>
+          <div className="dash-kpi-icon" style={{ background: '#EEF2FF' }}>👥</div>
+          <div className="dash-kpi-num">{totalUsers ?? 0}</div>
+          <div className="dash-kpi-label">Total Users</div>
         </div>
+        <div className="dash-kpi">
+          <div className="dash-kpi-icon" style={{ background: '#E8F4FD' }}>👩‍⚕️</div>
+          <div className="dash-kpi-num">{approvedNurses ?? 0}<span style={{ fontSize: '0.85rem', color: 'var(--muted)', fontFamily: 'inherit' }}> / {totalNurses ?? 0}</span></div>
+          <div className="dash-kpi-label">Approved Nurses</div>
+        </div>
+      </div>
+
+      {/* KPI Row 2 — Pending Actions */}
+      <div className="dash-kpi-row" style={{ marginBottom: '2rem' }}>
+        <Link href="/admin/nurses?status=pending" style={{ textDecoration: 'none' }}>
+          <div className="dash-kpi" style={{ border: (pendingNurses ?? 0) > 0 ? '1px solid rgba(245,132,42,0.3)' : '1px solid var(--border)', cursor: 'pointer' }}>
+            <div className="dash-kpi-icon" style={{ background: 'rgba(245,132,42,0.1)' }}>🆕</div>
+            <div className="dash-kpi-num" style={{ color: (pendingNurses ?? 0) > 0 ? '#F5842A' : 'var(--ink)' }}>{pendingNurses ?? 0}</div>
+            <div className="dash-kpi-label">New Nurse Approvals</div>
+          </div>
+        </Link>
+        <Link href="/admin/nurses?status=update_pending" style={{ textDecoration: 'none' }}>
+          <div className="dash-kpi" style={{ border: (updatePendingNurses ?? 0) > 0 ? '1px solid rgba(184,94,0,0.3)' : '1px solid var(--border)', cursor: 'pointer' }}>
+            <div className="dash-kpi-icon" style={{ background: 'rgba(184,94,0,0.1)' }}>🔄</div>
+            <div className="dash-kpi-num" style={{ color: (updatePendingNurses ?? 0) > 0 ? '#b85e00' : 'var(--ink)' }}>{updatePendingNurses ?? 0}</div>
+            <div className="dash-kpi-label">Profile Update Requests</div>
+          </div>
+        </Link>
+        <Link href="/admin/nurse-updates" style={{ textDecoration: 'none' }}>
+          <div className="dash-kpi" style={{ border: (pendingUpdateRequests ?? 0) > 0 ? '1px solid rgba(14,123,140,0.3)' : '1px solid var(--border)', cursor: 'pointer' }}>
+            <div className="dash-kpi-icon" style={{ background: 'rgba(14,123,140,0.08)' }}>📝</div>
+            <div className="dash-kpi-num" style={{ color: (pendingUpdateRequests ?? 0) > 0 ? 'var(--teal)' : 'var(--ink)' }}>{pendingUpdateRequests ?? 0}</div>
+            <div className="dash-kpi-label">Update Reviews</div>
+          </div>
+        </Link>
         <div className="dash-kpi">
           <div className="dash-kpi-icon" style={{ background: '#FEE8E8' }}>⚖️</div>
           <div className="dash-kpi-num">0</div>
@@ -49,53 +100,55 @@ export default async function AdminDashboardPage() {
         </div>
       </div>
 
+      {/* Quick Links */}
       <div className="dash-card">
         <div className="dash-card-header">
           <span className="dash-card-title">Quick Links</span>
         </div>
         <div className="dash-card-body" style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
-          <Link href="/admin/nurses" style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.5rem',
-            background: pendingCount ? 'rgba(245,132,42,0.1)' : 'var(--cream)',
-            border: `1px solid ${pendingCount ? 'rgba(245,132,42,0.3)' : 'var(--border)'}`,
-            color: pendingCount ? '#F5842A' : 'var(--ink)',
-            padding: '12px 20px',
-            borderRadius: '10px',
-            fontWeight: 700,
-            fontSize: '0.88rem',
-            textDecoration: 'none',
-          }}>
+          <QuickLink href="/admin/nurses?status=pending" color={pendingNurses ? '#F5842A' : undefined} badge={pendingNurses ?? 0} badgeColor="#F5842A">
             👩‍⚕️ Nurse Approvals
-            {(pendingCount ?? 0) > 0 && (
-              <span style={{ background: '#F5842A', color: '#fff', fontSize: '0.7rem', padding: '2px 7px', borderRadius: '50px' }}>
-                {pendingCount} pending
-              </span>
-            )}
-          </Link>
-          <Link href="/admin/bookings" style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.5rem',
-            background: 'var(--cream)',
-            border: '1px solid var(--border)',
-            color: 'var(--ink)',
-            padding: '12px 20px',
-            borderRadius: '10px',
-            fontWeight: 700,
-            fontSize: '0.88rem',
-            textDecoration: 'none',
-          }}>
+          </QuickLink>
+          <QuickLink href="/admin/nurse-updates" color={(updatePendingNurses ?? 0) + (pendingUpdateRequests ?? 0) > 0 ? '#b85e00' : undefined} badge={(updatePendingNurses ?? 0) + (pendingUpdateRequests ?? 0)} badgeColor="#b85e00">
+            🔄 Profile Updates
+          </QuickLink>
+          <QuickLink href="/admin/bookings" color={pendingBookings ? '#0E7B8C' : undefined} badge={pendingBookings ?? 0} badgeColor="#0E7B8C">
             📋 All Bookings
-            {(pendingBookings ?? 0) > 0 && (
-              <span style={{ background: '#0E7B8C', color: '#fff', fontSize: '0.7rem', padding: '2px 7px', borderRadius: '50px' }}>
-                {pendingBookings} pending
-              </span>
-            )}
-          </Link>
+          </QuickLink>
+          <QuickLink href="/admin/users">
+            👥 Users
+          </QuickLink>
+          <QuickLink href="/admin/settings">
+            ⚙️ Settings
+          </QuickLink>
         </div>
       </div>
     </div>
+  )
+}
+
+function QuickLink({ href, children, color, badge, badgeColor }: {
+  href: string
+  children: React.ReactNode
+  color?: string
+  badge?: number
+  badgeColor?: string
+}) {
+  return (
+    <Link href={href} style={{
+      display: 'flex', alignItems: 'center', gap: '0.5rem',
+      background: color ? `${color}18` : 'var(--cream)',
+      border: `1px solid ${color ? `${color}44` : 'var(--border)'}`,
+      color: color ?? 'var(--ink)',
+      padding: '11px 18px', borderRadius: '10px',
+      fontWeight: 700, fontSize: '0.88rem', textDecoration: 'none',
+    }}>
+      {children}
+      {(badge ?? 0) > 0 && (
+        <span style={{ background: badgeColor, color: '#fff', fontSize: '0.7rem', padding: '2px 7px', borderRadius: '50px' }}>
+          {badge}
+        </span>
+      )}
+    </Link>
   )
 }

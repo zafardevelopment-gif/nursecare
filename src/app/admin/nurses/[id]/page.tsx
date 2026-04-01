@@ -1,6 +1,8 @@
 import { requireRole } from '@/lib/auth'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { approveNurse, rejectNurse, updateNursePrice, uploadAgreement } from '../actions'
+import { approveUpdateRequest, rejectUpdateRequest } from '../../nurse-updates/actions'
+import IdCardSection from './IdCardSection'
 import Link from 'next/link'
 
 interface Props {
@@ -28,7 +30,7 @@ export default async function AdminNurseDetailPage({ params }: Props) {
   const supabase = await createSupabaseServerClient()
   const { id }   = await params
 
-  const [{ data: nurse }, { data: settings }] = await Promise.all([
+  const [{ data: nurse }, { data: settings }, { data: pendingUpdate }, { data: idCard }] = await Promise.all([
     supabase
       .from('nurses')
       .select('*, nurse_documents(*), nurse_agreements(*)')
@@ -37,6 +39,21 @@ export default async function AdminNurseDetailPage({ params }: Props) {
     supabase
       .from('platform_settings')
       .select('commission_percent')
+      .limit(1)
+      .single(),
+    supabase
+      .from('nurse_update_requests')
+      .select('*')
+      .eq('nurse_id', id)
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single(),
+    supabase
+      .from('nurse_id_cards')
+      .select('*')
+      .eq('nurse_id', id)
+      .order('created_at', { ascending: false })
       .limit(1)
       .single(),
   ])
@@ -54,14 +71,16 @@ export default async function AdminNurseDetailPage({ params }: Props) {
   const docs: any[]   = nurse.nurse_documents ?? []
   const agreements: any[] = nurse.nurse_agreements ?? []
   const agreement     = agreements[0] ?? null
+  const photoUrl      = docs.find((d: any) => d.doc_type === 'photo')?.file_url ?? null
 
   const previewHourly = nurse.hourly_rate ? (nurse.hourly_rate + (nurse.hourly_rate * commission / 100)).toFixed(2) : null
   const previewDaily  = nurse.daily_rate  ? (nurse.daily_rate  + (nurse.daily_rate  * commission / 100)).toFixed(2) : null
 
   const s = STATUS_STYLE[nurse.status] ?? { color: 'var(--muted)', bg: 'var(--cream)' }
 
-  const isPending  = nurse.status === 'pending'
-  const isApproved = nurse.status === 'approved' || nurse.status === 'update_pending'
+  const isPending       = nurse.status === 'pending'
+  const isUpdatePending = nurse.status === 'update_pending'
+  const isApproved      = nurse.status === 'approved'
 
   return (
     <div className="dash-shell">
@@ -165,7 +184,7 @@ export default async function AdminNurseDetailPage({ params }: Props) {
                   </div>
                 </div>
               )}
-              <form action={uploadAgreement} encType="multipart/form-data" style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+              <form action={uploadAgreement} style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-end', flexWrap: 'wrap' }}>
                 <input type="hidden" name="nurseId" value={nurse.id} />
                 <div style={{ flex: 1 }}>
                   <div style={smallLabel}>Upload PDF Agreement (replaces existing)</div>
@@ -221,10 +240,79 @@ export default async function AdminNurseDetailPage({ params }: Props) {
             </div>
           )}
 
+          {isUpdatePending && pendingUpdate && (
+            <div className="dash-card">
+              <div className="dash-card-header">
+                <span className="dash-card-title">Profile Update Request</span>
+                <span style={{ background: 'rgba(184,94,0,0.1)', color: '#b85e00', fontSize: '0.72rem', fontWeight: 700, padding: '3px 9px', borderRadius: 50 }}>
+                  Pending Review
+                </span>
+              </div>
+              <div className="dash-card-body">
+                <p style={{ fontSize: '0.82rem', color: 'var(--muted)', marginBottom: '0.9rem' }}>
+                  This nurse has requested changes to their profile. Review and approve or reject below.
+                </p>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '0.6rem', marginBottom: '1rem' }}>
+                  {((pendingUpdate.changed_fields ?? []) as string[]).map((field: string) => {
+                    const LABELS: Record<string, string> = {
+                      hourly_rate: 'Hourly Rate (SAR)', daily_rate: 'Daily Rate (SAR)',
+                      specialization: 'Specialization', experience_years: 'Years of Experience', license_no: 'License No',
+                    }
+                    const old = (pendingUpdate.old_values as any)?.[field]
+                    const next = (pendingUpdate.new_values as any)?.[field]
+                    return (
+                      <div key={field} style={{ background: 'var(--cream)', border: '1px solid var(--border)', borderRadius: 8, padding: '0.6rem 0.8rem', fontSize: '0.78rem' }}>
+                        <div style={{ fontWeight: 700, color: 'var(--muted)', fontSize: '0.68rem', textTransform: 'uppercase', marginBottom: 4 }}>
+                          {LABELS[field] ?? field}
+                        </div>
+                        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                          <span style={{ color: '#E04A4A', textDecoration: 'line-through' }}>{old ?? '—'}</span>
+                          <span style={{ color: 'var(--muted)' }}>→</span>
+                          <span style={{ color: '#27A869', fontWeight: 700 }}>{next ?? '—'}</span>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+                <div style={{ fontSize: '0.72rem', color: 'var(--muted)', marginBottom: '0.8rem' }}>
+                  Requested: {new Date(pendingUpdate.created_at).toLocaleString()}
+                </div>
+                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                  <form action={approveUpdateRequest}>
+                    <input type="hidden" name="requestId" value={pendingUpdate.id} />
+                    <button type="submit" style={btnStyle('green')}>✓ Approve Update</button>
+                  </form>
+                  <form action={rejectUpdateRequest}>
+                    <input type="hidden" name="requestId" value={pendingUpdate.id} />
+                    <button type="submit" style={btnStyle('red')}>✕ Reject</button>
+                  </form>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {isUpdatePending && !pendingUpdate && (
+            <div style={{ background: 'rgba(184,94,0,0.06)', border: '1px solid rgba(184,94,0,0.2)', borderRadius: '10px', padding: '0.8rem 1rem', fontSize: '0.85rem', color: '#b85e00', fontWeight: 600 }}>
+              🔄 Update pending — <Link href="/admin/nurse-updates" style={{ color: '#b85e00' }}>View in Profile Updates →</Link>
+            </div>
+          )}
+
           {nurse.status === 'rejected' && (
             <div style={{ background: 'rgba(224,74,74,0.06)', border: '1px solid rgba(224,74,74,0.2)', borderRadius: '10px', padding: '0.8rem 1rem', fontSize: '0.85rem', color: '#E04A4A' }}>
               <strong>Rejected.</strong>{nurse.rejection_reason ? ` Reason: ${nurse.rejection_reason}` : ''}
             </div>
+          )}
+
+          {/* ID Card */}
+          {isApproved && (
+            <IdCardSection
+              nurseId={nurse.id}
+              nurseName={nurse.full_name}
+              nurseSpecialization={nurse.specialization}
+              nurseCity={nurse.city}
+              photoUrl={photoUrl}
+              idCard={idCard ?? null}
+            />
           )}
 
           {/* Documents */}

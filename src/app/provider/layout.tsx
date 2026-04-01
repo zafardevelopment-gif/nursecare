@@ -5,6 +5,7 @@ import SidebarProfile from '@/components/SidebarProfile'
 import SidebarMenu from '@/components/SidebarMenu'
 import MobileSidebar from '@/components/MobileSidebar'
 import AvailabilityToggle from '@/components/AvailabilityToggle'
+import ThemeToggle from '@/components/ThemeToggle'
 import Link from 'next/link'
 
 export default async function ProviderLayout({ children }: { children: React.ReactNode }) {
@@ -33,6 +34,8 @@ export default async function ProviderLayout({ children }: { children: React.Rea
     { icon: '💰', label: 'Earnings',     href: '/provider/earnings' },
     { icon: '💬', label: 'Messages',     href: '/provider/messages' },
     { icon: '📄', label: 'Documents',    href: '/provider/documents' },
+    { icon: '📋', label: 'Agreements',   href: '/provider/agreements' },
+    { icon: '🪪', label: 'ID Card',      href: '/provider/id-card' },
   ]
 
   return (
@@ -70,8 +73,13 @@ export default async function ProviderLayout({ children }: { children: React.Rea
 
         <SidebarMenu items={providerMenuWithBadge} activePath={pathname} />
 
-        <div style={{ marginTop: 'auto', paddingTop: 8, borderTop: '1px solid rgba(255,255,255,0.07)' }}>
-          <AvailabilityToggle initialValue={nurse?.is_available ?? true} />
+        <div style={{ marginTop: 'auto', borderTop: '1px solid rgba(255,255,255,0.07)' }}>
+          <div style={{ padding: '0.5rem 0.75rem 0' }}>
+            <AvailabilityToggle initialValue={nurse?.is_available ?? true} />
+          </div>
+          <div style={{ padding: '0.5rem 0.75rem' }}>
+            <ThemeToggle />
+          </div>
         </div>
       </MobileSidebar>
 

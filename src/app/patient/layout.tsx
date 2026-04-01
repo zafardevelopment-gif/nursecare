@@ -3,6 +3,7 @@ import { headers } from 'next/headers'
 import SidebarProfile from '@/components/SidebarProfile'
 import SidebarMenu from '@/components/SidebarMenu'
 import MobileSidebar from '@/components/MobileSidebar'
+import ThemeToggle from '@/components/ThemeToggle'
 import Link from 'next/link'
 
 const patientMenu = [
@@ -51,6 +52,10 @@ export default async function PatientLayout({ children }: { children: React.Reac
         />
 
         <SidebarMenu items={patientMenu} activePath={pathname} />
+
+        <div style={{ padding: '0.75rem', marginTop: 'auto', borderTop: '1px solid rgba(255,255,255,0.07)' }}>
+          <ThemeToggle />
+        </div>
       </MobileSidebar>
 
       <main className="app-main" style={{ marginLeft: 260, flex: 1 }}>

@@ -1,23 +1,54 @@
 @import "tailwindcss";
 
 /* ============================================================
-   NurseCare+ Design Tokens
+   NurseCare+ Design Tokens — Light Mode (default)
    ============================================================ */
 :root {
-  --ink:    #0B1E2D;
   --teal:   #0E7B8C;
   --teal2:  #0ABFCC;
   --gold:   #C9A84C;
-  --cream:  #F7F4EF;
-  --white:  #FFFFFF;
-  --muted:  #8A9BAA;
   --green:  #27A869;
   --red:    #E04A4A;
   --orange: #F5842A;
-  --border: #E5EDF0;
+
+  /* Light theme surfaces */
+  --ink:        #0B1E2D;
+  --muted:      #8A9BAA;
+  --cream:      #F7F4EF;
+  --white:      #FFFFFF;
+  --border:     #E5EDF0;
+  --card:       #FFFFFF;
+  --shell-bg:   #F0F5F8;
+  --input-bg:   #F7F4EF;
+  --sidebar-bg: #05111A;
 
   --background: var(--cream);
   --foreground: var(--ink);
+}
+
+/* ============================================================
+   Dark Mode Tokens
+   ============================================================ */
+[data-theme="dark"] {
+  --ink:        #E8F0F5;
+  --muted:      #7A8FA0;
+  --cream:      #1E2A35;
+  --white:      #253341;
+  --border:     #2E3F4F;
+  --card:       #253341;
+  --shell-bg:   #161F28;
+  --input-bg:   #1E2A35;
+  --sidebar-bg: #0A1520;
+
+  --background: #161F28;
+  --foreground: #E8F0F5;
+
+  /* Keep accent colors same */
+  --teal:   #0ABFCC;
+  --teal2:  #16D4E0;
+  --green:  #2DBF75;
+  --red:    #F06060;
+  --orange: #F5942A;
 }
 
 @theme inline {
@@ -34,6 +65,7 @@ body {
   background: var(--background);
   color: var(--foreground);
   -webkit-font-smoothing: antialiased;
+  transition: background 0.2s, color 0.2s;
 }
 
 /* ============================================================
@@ -52,7 +84,7 @@ body {
 }
 
 .auth-card {
-  background: var(--white);
+  background: var(--card);
   border-radius: 20px;
   padding: 2.5rem 2rem;
   width: 100%;
@@ -149,12 +181,12 @@ body {
   font-size: 0.9rem;
   font-family: inherit;
   color: var(--ink);
-  background: var(--cream);
+  background: var(--input-bg);
   outline: none;
   transition: border-color 0.2s;
   width: 100%;
 }
-.form-input:focus { border-color: var(--teal); background: #fff; }
+.form-input:focus { border-color: var(--teal); background: var(--card); }
 
 .btn-primary {
   background: linear-gradient(135deg, var(--teal), var(--teal2));
@@ -212,7 +244,7 @@ body {
   text-align: center;
   cursor: pointer;
   transition: all 0.2s;
-  background: var(--cream);
+  background: var(--input-bg);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -232,7 +264,7 @@ body {
    ============================================================ */
 .dash-shell {
   min-height: 100vh;
-  background: #F0F5F8;
+  background: var(--shell-bg);
   padding: 2rem;
 }
 
@@ -259,7 +291,7 @@ body {
   margin-bottom: 2rem;
 }
 .dash-kpi {
-  background: var(--white);
+  background: var(--card);
   border-radius: 16px;
   padding: 1.4rem;
   border: 1px solid var(--border);
@@ -289,7 +321,7 @@ body {
 }
 
 .dash-card {
-  background: var(--white);
+  background: var(--card);
   border-radius: 16px;
   border: 1px solid var(--border);
   overflow: hidden;

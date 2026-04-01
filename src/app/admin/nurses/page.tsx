@@ -2,6 +2,7 @@ import { requireRole } from '@/lib/auth'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import Link from 'next/link'
 import NurseFilters from './NurseFilters'
+import NursesPagination from './NursesPagination'
 import { Suspense } from 'react'
 
 interface Props {
@@ -10,6 +11,8 @@ interface Props {
     status?: string
     city?: string
     spec?: string
+    page?: string
+    pageSize?: string
   }>
 }
 
@@ -25,16 +28,30 @@ export default async function AdminNursesPage({ searchParams }: Props) {
   const supabase = await createSupabaseServerClient()
   const params   = await searchParams
 
-  const q      = params.q?.trim()      ?? ''
-  const status = params.status         ?? ''
-  const city   = params.city           ?? ''
-  const spec   = params.spec           ?? ''
+  const q        = params.q?.trim()         ?? ''
+  const status   = params.status            ?? ''
+  const city     = params.city              ?? ''
+  const spec     = params.spec              ?? ''
+  const pageSize = Math.max(1, parseInt(params.pageSize ?? '10') || 10)
+  const page     = Math.max(1, parseInt(params.page     ?? '1')  || 1)
+  const from     = (page - 1) * pageSize
+  const to       = from + pageSize - 1
 
-  // Build query
+  // Count query (no range) for pagination total
+  let countQuery = supabase
+    .from('nurses')
+    .select('*', { count: 'exact', head: true })
+  if (status) countQuery = countQuery.eq('status', status)
+  if (city)   countQuery = countQuery.eq('city', city)
+  if (spec)   countQuery = countQuery.eq('specialization', spec)
+  if (q)      countQuery = countQuery.or(`full_name.ilike.%${q}%,email.ilike.%${q}%,phone.ilike.%${q}%,city.ilike.%${q}%,license_no.ilike.%${q}%`)
+
+  // Data query with range
   let query = supabase
     .from('nurses')
     .select('id, full_name, email, phone, city, specialization, experience_years, hourly_rate, daily_rate, status, license_no, created_at')
     .order('created_at', { ascending: false })
+    .range(from, to)
 
   if (status) query = query.eq('status', status)
   if (city)   query = query.eq('city', city)
@@ -45,7 +62,8 @@ export default async function AdminNursesPage({ searchParams }: Props) {
     )
   }
 
-  const { data: nurses } = await query
+  const [{ data: nurses }, { count: totalCount }] = await Promise.all([query, countQuery])
+  const total = totalCount ?? 0
 
   // Unique specializations for filter dropdown
   const { data: allNurses } = await supabase
@@ -57,8 +75,11 @@ export default async function AdminNursesPage({ searchParams }: Props) {
     (allNurses ?? []).map(n => n.specialization).filter(Boolean)
   )].sort() as string[]
 
-  // Status counts for badges
-  const counts = (nurses ?? []).reduce<Record<string, number>>((acc, n) => {
+  // Status counts — fetch all (not paged) for badge accuracy
+  const { data: allForCounts } = await supabase
+    .from('nurses')
+    .select('status')
+  const counts = (allForCounts ?? []).reduce<Record<string, number>>((acc, n) => {
     acc[n.status] = (acc[n.status] ?? 0) + 1
     return acc
   }, {})
@@ -68,7 +89,7 @@ export default async function AdminNursesPage({ searchParams }: Props) {
       <div className="dash-header">
         <div>
           <h1 className="dash-title">Nurses</h1>
-          <p className="dash-sub">{nurses?.length ?? 0} nurse{nurses?.length !== 1 ? 's' : ''} found</p>
+          <p className="dash-sub">{total} nurse{total !== 1 ? 's' : ''} found · page {page}</p>
         </div>
         <Link href="/admin/nurse-updates" style={{
           fontSize: '0.82rem', fontWeight: 600, color: '#b85e00',
@@ -167,6 +188,9 @@ export default async function AdminNursesPage({ searchParams }: Props) {
             </tbody>
           </table>
         </div>
+        <Suspense>
+          <NursesPagination total={total} pageSize={pageSize} currentPage={page} />
+        </Suspense>
       </div>
     </div>
   )

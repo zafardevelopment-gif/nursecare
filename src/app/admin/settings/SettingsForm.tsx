@@ -14,6 +14,7 @@ interface Settings {
   email_notifications?: boolean
   whatsapp_notifications?: boolean
   sms_notifications?: boolean
+  chat_enabled?: boolean
 }
 
 export default function SettingsForm({ settings }: { settings: Settings | null }) {
@@ -21,6 +22,7 @@ export default function SettingsForm({ settings }: { settings: Settings | null }
   const [saved, setSaved] = useState(false)
 
   const [emergencyBookings, setEmergencyBookings] = useState(settings?.allow_emergency_bookings ?? true)
+  const [chatEnabled, setChatEnabled] = useState(settings?.chat_enabled ?? true)
   const [email, setEmail]       = useState(settings?.email_notifications ?? true)
   const [whatsapp, setWhatsapp] = useState(settings?.whatsapp_notifications ?? false)
   const [sms, setSms]           = useState(settings?.sms_notifications ?? true)
@@ -35,6 +37,7 @@ export default function SettingsForm({ settings }: { settings: Settings | null }
     e.preventDefault()
     const fd = new FormData(e.currentTarget)
     fd.set('allow_emergency_bookings', String(emergencyBookings))
+    fd.set('chat_enabled',             String(chatEnabled))
     fd.set('email_notifications',      String(email))
     fd.set('whatsapp_notifications',   String(whatsapp))
     fd.set('sms_notifications',        String(sms))
@@ -156,6 +159,25 @@ export default function SettingsForm({ settings }: { settings: Settings | null }
 
           <SettingRow label="Allow Emergency Bookings" description="Patients can request same-day urgent bookings">
             <Toggle checked={emergencyBookings} onChange={setEmergencyBookings} />
+          </SettingRow>
+
+          <div style={{ marginTop: '1rem', marginBottom: '0.4rem', fontSize: '0.72rem', fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            Chat &amp; Messaging
+          </div>
+
+          <SettingRow
+            label="Enable Chat Feature"
+            description={
+              <>
+                Allow nurses, patients, and hospitals to message each other.
+                <br />
+                <span style={{ color: chatEnabled ? 'var(--teal)' : '#E04A4A', fontWeight: 600 }}>
+                  {chatEnabled ? '✓ Chat is currently ON for all users' : '✕ Chat is currently DISABLED for all users'}
+                </span>
+              </>
+            }
+          >
+            <Toggle checked={chatEnabled} onChange={setChatEnabled} />
           </SettingRow>
 
           <div style={{ marginTop: '1rem', marginBottom: '0.4rem', fontSize: '0.72rem', fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
