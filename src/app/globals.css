@@ -314,3 +314,144 @@ body {
   transition: all 0.2s;
 }
 .signout-btn:hover { background: rgba(224,74,74,0.15); }
+
+/* ============================================================
+   Mobile / Responsive
+   ============================================================ */
+
+/* Hamburger button — visible only on mobile */
+.mobile-menu-btn {
+  display: none;
+  position: fixed;
+  top: 14px;
+  left: 14px;
+  z-index: 200;
+  width: 42px;
+  height: 42px;
+  background: #05111A;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 10px;
+  cursor: pointer;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0;
+}
+.mobile-menu-btn span {
+  display: block;
+  width: 20px;
+  height: 2px;
+  background: #fff;
+  border-radius: 2px;
+  transition: all 0.25s;
+}
+.mobile-menu-btn.open span:nth-child(1) {
+  transform: translateY(7px) rotate(45deg);
+}
+.mobile-menu-btn.open span:nth-child(2) {
+  opacity: 0;
+  transform: scaleX(0);
+}
+.mobile-menu-btn.open span:nth-child(3) {
+  transform: translateY(-7px) rotate(-45deg);
+}
+
+/* Sidebar overlay backdrop */
+.sidebar-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  z-index: 99;
+  backdrop-filter: blur(2px);
+}
+.sidebar-backdrop.open { display: block; }
+
+/* Mobile top bar (logo strip shown when sidebar is hidden) */
+.mobile-topbar {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 60px;
+  background: #05111A;
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+  align-items: center;
+  justify-content: center;
+  z-index: 90;
+  padding: 0 1rem;
+}
+
+@media (max-width: 768px) {
+  /* Show hamburger + topbar */
+  .mobile-menu-btn { display: flex; }
+  .mobile-topbar   { display: flex; }
+
+  /* Sidebar: hidden off-screen by default, slides in when open */
+  .app-sidebar {
+    transform: translateX(-100%);
+    transition: transform 0.28s cubic-bezier(0.4,0,0.2,1);
+    z-index: 150 !important;
+  }
+  .app-sidebar.open {
+    transform: translateX(0);
+  }
+
+  /* Main content: full width, with top padding for topbar */
+  .app-main {
+    margin-left: 0 !important;
+    padding-top: 60px;
+  }
+
+  /* Dashboard shell padding */
+  .dash-shell {
+    padding: 1.2rem 1rem;
+  }
+
+  /* KPI row: 2 columns on mobile */
+  .dash-kpi-row {
+    grid-template-columns: 1fr 1fr;
+    gap: 0.8rem;
+  }
+
+  /* Header: stack vertically */
+  .dash-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.6rem;
+    margin-bottom: 1.2rem;
+  }
+
+  /* Tables: horizontal scroll */
+  .dash-card table {
+    min-width: 600px;
+  }
+  .dash-card {
+    overflow-x: auto;
+  }
+
+  /* Auth card: tighter on very small screens */
+  .auth-card {
+    padding: 2rem 1.4rem;
+    border-radius: 16px;
+  }
+
+  /* Role grid: single column on very small */
+  .role-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .dash-kpi-row {
+    grid-template-columns: 1fr 1fr;
+  }
+  .role-grid {
+    grid-template-columns: 1fr;
+  }
+  .dash-shell {
+    padding: 1rem 0.8rem;
+  }
+}

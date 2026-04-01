@@ -2,10 +2,11 @@ import { requireRole } from '@/lib/auth'
 import { headers } from 'next/headers'
 import SidebarProfile from '@/components/SidebarProfile'
 import SidebarMenu from '@/components/SidebarMenu'
+import MobileSidebar from '@/components/MobileSidebar'
 import Link from 'next/link'
 
 const patientMenu = [
-  { icon: '🏠', label: 'Dashboard',   href: '/patient/dashboard' },
+  { icon: '🏠', label: 'Dashboard',    href: '/patient/dashboard' },
   { icon: '🏥', label: 'Book a Nurse', href: '/patient/request' },
   { icon: '📅', label: 'My Bookings',  href: '/patient/bookings' },
   { icon: '💬', label: 'Messages',     href: '/patient/messages' },
@@ -19,18 +20,7 @@ export default async function PatientLayout({ children }: { children: React.Reac
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh' }}>
-      {/* Sidebar */}
-      <aside style={{
-        width: 260,
-        background: '#05111A',
-        minHeight: '100vh',
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        display: 'flex',
-        flexDirection: 'column',
-        zIndex: 50,
-      }}>
+      <MobileSidebar logoHref="/patient/dashboard">
         {/* Logo */}
         <div style={{
           padding: '1.2rem 1rem',
@@ -40,13 +30,10 @@ export default async function PatientLayout({ children }: { children: React.Reac
           gap: 10,
         }}>
           <div style={{
-            width: 34,
-            height: 34,
+            width: 34, height: 34,
             background: 'linear-gradient(135deg,#0E7B8C,#0ABFCC)',
             borderRadius: 9,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
             fontSize: 16,
           }}>🏥</div>
           <Link href="/patient/dashboard" style={{ textDecoration: 'none' }}>
@@ -56,7 +43,6 @@ export default async function PatientLayout({ children }: { children: React.Reac
           </Link>
         </div>
 
-        {/* Profile */}
         <SidebarProfile
           name={user.full_name}
           email={user.email}
@@ -64,12 +50,10 @@ export default async function PatientLayout({ children }: { children: React.Reac
           avatarUrl={user.avatar_url}
         />
 
-        {/* Menu */}
         <SidebarMenu items={patientMenu} activePath={pathname} />
-      </aside>
+      </MobileSidebar>
 
-      {/* Main content */}
-      <main style={{ marginLeft: 260, flex: 1 }}>
+      <main className="app-main" style={{ marginLeft: 260, flex: 1 }}>
         {children}
       </main>
     </div>

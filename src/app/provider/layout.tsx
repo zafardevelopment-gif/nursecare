@@ -3,17 +3,9 @@ import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { headers } from 'next/headers'
 import SidebarProfile from '@/components/SidebarProfile'
 import SidebarMenu from '@/components/SidebarMenu'
+import MobileSidebar from '@/components/MobileSidebar'
 import AvailabilityToggle from '@/components/AvailabilityToggle'
 import Link from 'next/link'
-
-const providerMenu = [
-  { icon: '🏠', label: 'Dashboard',        href: '/provider/dashboard' },
-  { icon: '📝', label: 'My Profile',        href: '/provider/onboarding' },
-  { icon: '📅', label: 'Bookings',          href: '/provider/bookings' },
-  { icon: '💰', label: 'Earnings',          href: '/provider/earnings' },
-  { icon: '💬', label: 'Messages',          href: '/provider/messages' },
-  { icon: '📄', label: 'Documents',         href: '/provider/documents' },
-]
 
 export default async function ProviderLayout({ children }: { children: React.ReactNode }) {
   const user = await requireRole('provider')
@@ -45,18 +37,7 @@ export default async function ProviderLayout({ children }: { children: React.Rea
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh' }}>
-      {/* Sidebar */}
-      <aside style={{
-        width: 260,
-        background: '#05111A',
-        minHeight: '100vh',
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        display: 'flex',
-        flexDirection: 'column',
-        zIndex: 50,
-      }}>
+      <MobileSidebar logoHref="/provider/dashboard">
         {/* Logo */}
         <div style={{
           padding: '1.2rem 1rem',
@@ -66,13 +47,10 @@ export default async function ProviderLayout({ children }: { children: React.Rea
           gap: 10,
         }}>
           <div style={{
-            width: 34,
-            height: 34,
+            width: 34, height: 34,
             background: 'linear-gradient(135deg,#0E7B8C,#0ABFCC)',
             borderRadius: 9,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
             fontSize: 16,
           }}>🏥</div>
           <Link href="/provider/dashboard" style={{ textDecoration: 'none' }}>
@@ -82,7 +60,6 @@ export default async function ProviderLayout({ children }: { children: React.Rea
           </Link>
         </div>
 
-        {/* Profile */}
         <SidebarProfile
           name={user.full_name}
           email={user.email}
@@ -91,17 +68,14 @@ export default async function ProviderLayout({ children }: { children: React.Rea
           nurseData={nurse ? { ...nurse, photoUrl } : null}
         />
 
-        {/* Menu */}
         <SidebarMenu items={providerMenuWithBadge} activePath={pathname} />
 
-        {/* Available for Bookings toggle */}
         <div style={{ marginTop: 'auto', paddingTop: 8, borderTop: '1px solid rgba(255,255,255,0.07)' }}>
           <AvailabilityToggle initialValue={nurse?.is_available ?? true} />
         </div>
-      </aside>
+      </MobileSidebar>
 
-      {/* Main content */}
-      <main style={{ marginLeft: 260, flex: 1 }}>
+      <main className="app-main" style={{ marginLeft: 260, flex: 1 }}>
         {children}
       </main>
     </div>
