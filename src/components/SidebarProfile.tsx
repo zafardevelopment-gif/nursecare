@@ -11,7 +11,7 @@ interface NurseData {
 interface SidebarProfileProps {
   name: string
   email: string
-  role: 'admin' | 'provider' | 'patient'
+  role: 'admin' | 'provider' | 'patient' | 'hospital'
   avatarUrl?: string | null
   nurseData?: NurseData | null
 }
@@ -20,12 +20,14 @@ const roleLabel: Record<string, string> = {
   admin:    'Administrator',
   provider: 'Healthcare Provider',
   patient:  'Patient',
+  hospital: 'Hospital',
 }
 
 const roleColor: Record<string, string> = {
   admin:    '#C9A84C',
   provider: '#0ABFCC',
   patient:  '#27A869',
+  hospital: '#9B59B6',
 }
 
 export default function SidebarProfile({

@@ -50,7 +50,7 @@ export async function approveAgreementAsNurse(formData: FormData) {
   }
 
   const rendered_html = renderAgreementHtml({
-    templateContent:     templateContent,
+    templateContent:     templateContent ?? '',
     title:               agreement.title,
     logoUrl:             agreement.logo_url,
     nurseName:           nurse.full_name ?? user.email ?? 'Nurse',
