@@ -1,16 +1,17 @@
 import { createClient } from '@supabase/supabase-js'
 import VerifyClient from './VerifyClient'
+import type { VerifyResult } from './types'
 
 export const dynamic = 'force-dynamic'
+export { type VerifyResult }
 
-// This is a PUBLIC page — no auth required
 export default async function VerifyPage({
   searchParams,
 }: {
   searchParams: Promise<{ id?: string }>
 }) {
-  const params = await searchParams
-  const idCode = params.id?.trim().toUpperCase() ?? ''
+  const params  = await searchParams
+  const idCode  = params.id?.trim().toUpperCase() ?? ''
 
   let result: VerifyResult | null = null
 
@@ -44,9 +45,9 @@ export default async function VerifyPage({
         result = {
           found:        true,
           effectiveStatus,
-          nurseName:    nurse?.full_name   ?? 'Unknown',
+          nurseName:    nurse?.full_name      ?? 'Unknown',
           nurseSpec:    nurse?.specialization ?? null,
-          nurseCity:    nurse?.city        ?? null,
+          nurseCity:    nurse?.city           ?? null,
           photoUrl:     photoDocs?.[0]?.file_url ?? null,
           uniqueIdCode: card.unique_id_code,
           issueDate:    card.issue_date,
@@ -59,13 +60,8 @@ export default async function VerifyPage({
       result = { found: false, effectiveStatus: 'invalid' }
     }
   } else if (idCode) {
-    // env vars missing — treat as not found rather than crash
     result = { found: false, effectiveStatus: 'invalid' }
   }
 
   return <VerifyClient initialCode={idCode} result={result} />
 }
-
-export type VerifyResult =
-  | { found: true;  effectiveStatus: string; nurseName: string; nurseSpec: string | null; nurseCity: string | null; photoUrl: string | null; uniqueIdCode: string; issueDate: string; expiryDate: string }
-  | { found: false; effectiveStatus: string }

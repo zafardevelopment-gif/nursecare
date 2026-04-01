@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import type { VerifyResult } from './page'
+import type { VerifyResult } from './types'
 
 const STATUS_CONFIG = {
   active:   { color: '#27A869', bg: '#E8F9F0', border: '#27A86933', icon: '✅', label: 'VERIFIED — Active & Valid' },
