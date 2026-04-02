@@ -6,14 +6,15 @@ import AgreementDetailClient from './AgreementDetailClient'
 
 export const dynamic = 'force-dynamic'
 
-export default async function AdminAgreementDetailPage({ params }: { params: { id: string } }) {
+export default async function AdminAgreementDetailPage({ params }: { params: Promise<{ id: string }> }) {
   await requireRole('admin')
+  const { id } = await params
   const supabase = await createSupabaseServerClient()
 
   const { data: agreement } = await supabase
     .from('agreements')
     .select('*')
-    .eq('id', params.id)
+    .eq('id', id)
     .single()
 
   if (!agreement) notFound()

@@ -6,14 +6,15 @@ import HospitalAgreementApproveClient from './HospitalAgreementApproveClient'
 
 export const dynamic = 'force-dynamic'
 
-export default async function HospitalAgreementDetailPage({ params }: { params: { id: string } }) {
+export default async function HospitalAgreementDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await requireRole('hospital')
+  const { id } = await params
   const supabase = await createSupabaseServerClient()
 
   const { data: agreement } = await supabase
     .from('agreements')
     .select('*')
-    .eq('id', params.id)
+    .eq('id', id)
     .eq('hospital_id', user.id)
     .single()
 

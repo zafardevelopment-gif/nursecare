@@ -152,7 +152,7 @@ export default function TemplatesClient({
                 <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
                   <button onClick={() => { setEditing(tpl); setShowNew(false); setSelectedLogo(tpl.logo_url ?? '') }} style={btnSecondary}>Edit</button>
                   {deleteConfirm === tpl.id
-                    ? <button onClick={() => handleDelete(tpl.id)} style={{ ...btnSecondary, color: '#E04A4A', borderColor: '#E04A4A' }}>Confirm?</button>
+                    ? <button onClick={() => handleDelete(tpl.id)} style={{ ...btnSecondary, color: '#E04A4A', borderWidth: '1px', borderStyle: 'solid', borderColor: '#E04A4A' }}>Confirm?</button>
                     : <button onClick={() => setDeleteConfirm(tpl.id)} style={btnSecondary}>Delete</button>
                   }
                 </div>
@@ -221,8 +221,8 @@ const btnTeal: React.CSSProperties = {
 }
 const btnSecondary: React.CSSProperties = {
   background: 'var(--cream)', color: 'var(--ink)',
-  border: '1px solid var(--border)', padding: '7px 14px',
-  borderRadius: 8, fontSize: '0.82rem', fontWeight: 600,
+  borderWidth: '1px', borderStyle: 'solid', borderColor: 'var(--border)',
+  padding: '7px 14px', borderRadius: 8, fontSize: '0.82rem', fontWeight: 600,
   cursor: 'pointer', fontFamily: 'inherit',
 }
 const logoPill: React.CSSProperties = {

@@ -6,8 +6,9 @@ import NurseAgreementApproveClient from './NurseAgreementApproveClient'
 
 export const dynamic = 'force-dynamic'
 
-export default async function NurseAgreementDetailPage({ params }: { params: { id: string } }) {
+export default async function NurseAgreementDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await requireRole('provider')
+  const { id } = await params
   const supabase = await createSupabaseServerClient()
 
   const { data: nurse } = await supabase
@@ -21,7 +22,7 @@ export default async function NurseAgreementDetailPage({ params }: { params: { i
   const { data: agreement } = await supabase
     .from('agreements')
     .select('*')
-    .eq('id', params.id)
+    .eq('id', id)
     .eq('nurse_id', nurse.id)
     .single()
 

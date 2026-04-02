@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js'
+import { createSupabaseServiceRoleClient } from '@/lib/supabase-server'
 import VerifyClient from './VerifyClient'
 import type { VerifyResult } from './types'
 
@@ -15,14 +15,9 @@ export default async function VerifyPage({
 
   let result: VerifyResult | null = null
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const serviceKey  = process.env.SUPABASE_SERVICE_ROLE_KEY
-
-  if (idCode && supabaseUrl && serviceKey) {
+  if (idCode) {
     try {
-      const supabase = createClient(supabaseUrl, serviceKey, {
-        auth: { autoRefreshToken: false, persistSession: false },
-      })
+      const supabase = createSupabaseServiceRoleClient()
 
       const { data: card } = await supabase
         .from('nurse_id_cards')
@@ -59,8 +54,6 @@ export default async function VerifyPage({
     } catch {
       result = { found: false, effectiveStatus: 'invalid' }
     }
-  } else if (idCode) {
-    result = { found: false, effectiveStatus: 'invalid' }
   }
 
   return <VerifyClient initialCode={idCode} result={result} />

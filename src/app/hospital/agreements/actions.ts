@@ -1,6 +1,6 @@
 'use server'
 
-import { createSupabaseServerClient } from '@/lib/supabase-server'
+import { createSupabaseServerClient, createSupabaseServiceRoleClient } from '@/lib/supabase-server'
 import { requireRole } from '@/lib/auth'
 import { renderAgreementHtml } from '@/lib/agreement-renderer'
 import { revalidatePath } from 'next/cache'
@@ -61,7 +61,8 @@ export async function approveAgreementAsHospital(formData: FormData) {
     status:              newStatus,
   })
 
-  const { error } = await supabase
+  const serviceClient = createSupabaseServiceRoleClient()
+  const { error } = await serviceClient
     .from('agreements')
     .update({
       hospital_approved_at: now,

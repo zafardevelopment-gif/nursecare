@@ -1,7 +1,6 @@
 'use server'
 
-import { createSupabaseServerClient } from '@/lib/supabase-server'
-import { createClient } from '@supabase/supabase-js'
+import { createSupabaseServerClient, createSupabaseServiceRoleClient } from '@/lib/supabase-server'
 import { requireRole } from '@/lib/auth'
 import { renderAgreementHtml } from '@/lib/agreement-renderer'
 import { revalidatePath } from 'next/cache'
@@ -66,7 +65,7 @@ export async function deleteTemplate(formData: FormData) {
 
 export async function uploadLogo(formData: FormData): Promise<{ url?: string; error?: string }> {
   const admin = await requireRole('admin')
-  const supabase = await createSupabaseServerClient()
+  const supabase = createSupabaseServiceRoleClient()
 
   const file = formData.get('logo') as File
   const name = (formData.get('name') as string)?.trim() || 'Logo'
@@ -108,87 +107,86 @@ export async function generateAgreement(formData: FormData) {
   const supabase = await createSupabaseServerClient()
 
   const template_id = formData.get('template_id') as string
-  const nurse_id    = formData.get('nurse_id') as string
-  const hospital_id = formData.get('hospital_id') as string
+  const nurse_id    = (formData.get('nurse_id') as string)?.trim() || null
+  const hospital_id = (formData.get('hospital_id') as string)?.trim() || null
 
-  if (!template_id || !nurse_id || !hospital_id)
-    return { error: 'Template, nurse, and hospital are required' }
+  if (!template_id) return { error: 'Template is required' }
 
   // Fetch template
   const { data: tpl } = await supabase
     .from('agreement_templates').select('*').eq('id', template_id).single()
   if (!tpl) return { error: 'Template not found' }
 
-  // Fetch nurse
-  const { data: nurse } = await supabase
-    .from('nurses').select('*, users(email, full_name, phone, city)')
-    .eq('id', nurse_id).single()
-  if (!nurse) return { error: 'Nurse not found' }
+  // Fetch nurse (optional)
+  let nurse: any = null
+  if (nurse_id) {
+    const { data } = await supabase
+      .from('nurses').select('*, users(email, full_name, phone, city)')
+      .eq('id', nurse_id).single()
+    nurse = data
+  }
 
-  // Fetch hospital user
-  const adminClient = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } }
-  )
-  const { data: hospital } = await adminClient
-    .from('users').select('*').eq('id', hospital_id).single()
-  if (!hospital) return { error: 'Hospital not found' }
+  // Fetch hospital (optional)
+  let hospital: any = null
+  if (hospital_id) {
+    const adminClient = createSupabaseServiceRoleClient()
+    const { data } = await adminClient
+      .from('users').select('*').eq('id', hospital_id).single()
+    hospital = data
+  }
 
-  const nurseUser = (nurse as any).users as any
+  const nurseUser = (nurse as any)?.users as any
+  const now = new Date().toISOString()
   const agreementDate = new Date().toLocaleDateString('en-GB', {
     day: '2-digit', month: 'long', year: 'numeric'
   })
 
-  // Pre-render HTML (snapshot — frozen at generation time)
-  const rendered_html = renderAgreementHtml({
+  // Fetch admin's own profile for display
+  const serviceClient = createSupabaseServiceRoleClient()
+  const { data: adminProfile } = await serviceClient
+    .from('users').select('full_name, email').eq('id', admin.id).single()
+
+  const sharedData = {
     templateContent:     tpl.content,
     title:               tpl.title,
     logoUrl:             tpl.logo_url,
-    nurseName:           nurse.full_name ?? nurseUser?.full_name ?? 'Nurse',
-    nurseEmail:          nurse.email ?? nurseUser?.email ?? '',
-    nursePhone:          nurse.phone ?? nurseUser?.phone,
-    nurseCity:           nurse.city ?? nurseUser?.city,
-    nurseSpecialization: nurse.specialization,
-    hospitalName:        hospital.full_name ?? hospital.email,
-    hospitalEmail:       hospital.email,
+    nurseName:           nurse?.full_name ?? nurseUser?.full_name ?? null,
+    nurseEmail:          nurse?.email ?? nurseUser?.email ?? null,
+    nursePhone:          nurse?.phone ?? nurseUser?.phone ?? null,
+    nurseCity:           nurse?.city ?? nurseUser?.city ?? null,
+    nurseSpecialization: nurse?.specialization ?? null,
+    adminName:           adminProfile?.full_name ?? adminProfile?.email ?? 'NurseCare+ Admin',
+    adminEmail:          adminProfile?.email ?? null,
+    hospitalName:        hospital?.full_name ?? hospital?.email ?? null,
+    hospitalEmail:       hospital?.email ?? null,
     agreementDate,
-    agreementId:         'PENDING',
-    status:              'pending',
-  })
+    // Admin auto-approved at generation time
+    adminApprovedAt:     now,
+  }
+
+  // Pre-render with PENDING id
+  const rendered_html = renderAgreementHtml({ ...sharedData, agreementId: 'PENDING', status: 'admin_approved' })
 
   const { data: created, error } = await supabase.from('agreements').insert({
     template_id,
-    template_version: tpl.version,
+    template_version:  tpl.version,
     nurse_id,
     hospital_id,
-    title:            tpl.title,
-    template_content: tpl.content,
+    title:             tpl.title,
+    template_content:  tpl.content,
     rendered_html,
-    logo_url:         tpl.logo_url,
-    generated_by:     admin.id,
-    generated_at:     new Date().toISOString(),
+    logo_url:          tpl.logo_url,
+    generated_by:      admin.id,
+    generated_at:      now,
+    status:            'admin_approved',
+    admin_approved_at: now,
+    admin_approved_by: admin.id,
   }).select('id').single()
 
   if (error) return { error: error.message }
 
-  // Update rendered HTML with real ID
-  const finalHtml = renderAgreementHtml({
-    templateContent:     tpl.content,
-    title:               tpl.title,
-    logoUrl:             tpl.logo_url,
-    nurseName:           nurse.full_name ?? nurseUser?.full_name ?? 'Nurse',
-    nurseEmail:          nurse.email ?? nurseUser?.email ?? '',
-    nursePhone:          nurse.phone ?? nurseUser?.phone,
-    nurseCity:           nurse.city ?? nurseUser?.city,
-    nurseSpecialization: nurse.specialization,
-    hospitalName:        hospital.full_name ?? hospital.email,
-    hospitalEmail:       hospital.email,
-    agreementDate,
-    agreementId:         created.id,
-    status:              'pending',
-  })
-
+  // Re-render with real ID
+  const finalHtml = renderAgreementHtml({ ...sharedData, agreementId: created.id, status: 'admin_approved' })
   await supabase.from('agreements').update({ rendered_html: finalHtml }).eq('id', created.id)
 
   revalidatePath('/admin/agreements')

@@ -62,16 +62,16 @@ export default function GenerateClient({ templates, nurses, hospitals }: {
                 </select>
               </div>
               <div>
-                <label style={lbl}>Nurse (Provider)</label>
-                <select name="nurse_id" required style={inputStyle}>
-                  <option value="">Select nurse…</option>
+                <label style={lbl}>Nurse (Provider) <span style={{ color: 'var(--muted)', fontWeight: 400, textTransform: 'none' }}>— optional</span></label>
+                <select name="nurse_id" style={inputStyle}>
+                  <option value="">None</option>
                   {nurses.map(n => <option key={n.id} value={n.id}>{n.full_name} — {n.email}</option>)}
                 </select>
               </div>
               <div>
-                <label style={lbl}>Hospital</label>
-                <select name="hospital_id" required style={inputStyle}>
-                  <option value="">Select hospital…</option>
+                <label style={lbl}>Hospital <span style={{ color: 'var(--muted)', fontWeight: 400, textTransform: 'none' }}>— optional</span></label>
+                <select name="hospital_id" style={inputStyle}>
+                  <option value="">None</option>
                   {hospitals.map(h => <option key={h.id} value={h.id}>{h.full_name || h.email}</option>)}
                 </select>
               </div>
