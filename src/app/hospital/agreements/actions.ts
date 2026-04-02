@@ -57,7 +57,6 @@ export async function approveAgreementAsHospital(formData: FormData) {
     agreementId:         agreement.id,
     nurseApprovedAt:     agreement.nurse_approved_at,
     hospitalApprovedAt:  now,
-    hospitalApprovedBy:  user.id,
     status:              newStatus,
   })
 
