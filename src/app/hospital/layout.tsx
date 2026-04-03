@@ -57,7 +57,7 @@ export default async function HospitalLayout({ children }: { children: React.Rea
         </div>
       </MobileSidebar>
 
-      <main className="app-main" style={{ marginLeft: 260, flex: 1 }}>
+      <main className="app-main" style={{ marginLeft: 260, flex: 1, background: 'var(--shell-bg)', minHeight: '100vh' }}>
         {children}
       </main>
     </div>
