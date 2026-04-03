@@ -22,7 +22,7 @@ const ALLOWED_TYPES = new Set([
 
 const MAX_SIZE = 5 * 1024 * 1024 // 5 MB
 
-export async function onboardingAction(formData: FormData) {
+export async function onboardingAction(formData: FormData): Promise<{ error?: string }> {
   const user = await requireRole('provider')
   const supabase = await createSupabaseServerClient()
 
@@ -38,19 +38,18 @@ export async function onboardingAction(formData: FormData) {
   const daily_rate     = parseFloat(formData.get('daily_rate') as string) || null
 
   if (!hourly_rate && !daily_rate) {
-    redirect('/provider/onboarding?error=Please+enter+at+least+one+pricing+option+(hourly+or+daily)')
+    return { error: 'Please enter at least one pricing option (hourly or daily)' }
   }
 
   // Validate file types and sizes before saving anything
   for (const [fieldName] of Object.entries(DOC_FIELDS)) {
     const file = formData.get(fieldName) as File | null
     if (!file || file.size === 0) continue
-
     if (!ALLOWED_TYPES.has(file.type)) {
-      redirect(`/provider/onboarding?error=Invalid+file+type+for+${fieldName}.+Only+PDF,+JPG,+PNG+allowed.`)
+      return { error: `Invalid file type for ${fieldName}. Only PDF, JPG, PNG allowed.` }
     }
     if (file.size > MAX_SIZE) {
-      redirect(`/provider/onboarding?error=File+${fieldName}+exceeds+5MB+limit.`)
+      return { error: `File ${fieldName} exceeds 5MB limit.` }
     }
   }
 
@@ -77,51 +76,42 @@ export async function onboardingAction(formData: FormData) {
     .single()
 
   if (nurseError || !nurse) {
-    redirect(`/provider/onboarding?error=${encodeURIComponent(nurseError?.message ?? 'Failed to save profile')}`)
+    return { error: nurseError?.message ?? 'Failed to save profile' }
   }
 
-  // Upload files to Supabase Storage and record in DB
+  // Upload files
   const uploadErrors: string[] = []
 
   for (const [fieldName, docType] of Object.entries(DOC_FIELDS)) {
     const file = formData.get(fieldName) as File | null
     if (!file || file.size === 0) continue
 
-    const ext        = file.name.split('.').pop()?.toLowerCase() ?? 'bin'
+    const ext         = file.name.split('.').pop()?.toLowerCase() ?? 'bin'
     const storagePath = `${nurse.id}/${docType}.${ext}`
 
     const { error: storageError } = await supabase.storage
       .from('nurse-documents')
       .upload(storagePath, file, { upsert: true, contentType: file.type })
 
-    if (storageError) {
-      uploadErrors.push(docType)
-      continue
-    }
+    if (storageError) { uploadErrors.push(docType); continue }
 
     const { data: urlData } = supabase.storage
       .from('nurse-documents')
       .getPublicUrl(storagePath)
 
-    const publicUrl = urlData.publicUrl
-
-    // Replace any existing DB record for this doc type
-    await supabase
-      .from('nurse_documents')
-      .delete()
-      .eq('nurse_id', nurse.id)
-      .eq('doc_type', docType)
+    await supabase.from('nurse_documents').delete()
+      .eq('nurse_id', nurse.id).eq('doc_type', docType)
 
     await supabase.from('nurse_documents').insert({
       nurse_id:  nurse.id,
       doc_type:  docType,
-      file_url:  publicUrl,
+      file_url:  urlData.publicUrl,
       file_name: file.name,
     })
   }
 
   if (uploadErrors.length > 0) {
-    redirect(`/provider/onboarding?error=Profile+saved+but+some+files+failed:+${uploadErrors.join(', ')}`)
+    return { error: `Profile saved but some files failed: ${uploadErrors.join(', ')}` }
   }
 
   redirect('/provider/dashboard?message=Profile+submitted+for+review')
