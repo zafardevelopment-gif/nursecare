@@ -37,7 +37,7 @@ export default async function SignupPage({ searchParams }: SignupPageProps) {
           {/* Role */}
           <div className="form-group">
             <label className="form-label">I am a</label>
-            <div className="role-grid">
+            <div className="role-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
               <label className="role-option">
                 <input type="radio" name="role" value="patient" defaultChecked required />
                 <div className="role-card">
@@ -52,6 +52,14 @@ export default async function SignupPage({ searchParams }: SignupPageProps) {
                   <span className="role-icon">👩‍⚕️</span>
                   <span className="role-name">Healthcare Provider</span>
                   <span className="role-desc">I am a nurse, doctor, or caregiver</span>
+                </div>
+              </label>
+              <label className="role-option">
+                <input type="radio" name="role" value="hospital" required />
+                <div className="role-card">
+                  <span className="role-icon">🏥</span>
+                  <span className="role-name">Hospital / Clinic</span>
+                  <span className="role-desc">We hire nurses and manage healthcare staff</span>
                 </div>
               </label>
             </div>

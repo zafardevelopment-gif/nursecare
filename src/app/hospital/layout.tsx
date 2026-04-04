@@ -7,10 +7,12 @@ import ThemeToggle from '@/components/ThemeToggle'
 import Link from 'next/link'
 
 const hospitalMenu = [
-  { icon: '🏠', label: 'Dashboard',   href: '/hospital/dashboard' },
-  { icon: '📄', label: 'Agreements',  href: '/hospital/agreements' },
-  { icon: '💬', label: 'Messages',    href: '/hospital/messages' },
-  { icon: '👤', label: 'My Profile',  href: '/hospital/profile' },
+  { icon: '🏠', label: 'Dashboard',       href: '/hospital/dashboard' },
+  { icon: '📄', label: 'Agreements',      href: '/hospital/agreements' },
+  { icon: '🏢', label: 'Departments',     href: '/hospital/departments' },
+  { icon: '🗓️', label: 'Shift Schedule',  href: '/hospital/schedule' },
+  { icon: '💬', label: 'Messages',        href: '/hospital/messages' },
+  { icon: '👤', label: 'My Profile',      href: '/hospital/profile' },
 ]
 
 export default async function HospitalLayout({ children }: { children: React.ReactNode }) {

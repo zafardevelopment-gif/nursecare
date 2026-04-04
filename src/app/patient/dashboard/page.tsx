@@ -22,7 +22,7 @@ export default async function PatientDashboardPage() {
           <h1 className="dash-title">Patient Dashboard</h1>
           <p className="dash-sub">Welcome back, {user.full_name}!</p>
         </div>
-        <Link href="/patient/request" className="btn-primary" style={{
+        <Link href="/patient/booking" className="btn-primary" style={{
           width: 'auto',
           display: 'inline-block',
           padding: '10px 20px',
@@ -60,7 +60,7 @@ export default async function PatientDashboardPage() {
           <span className="dash-card-title">Quick Actions</span>
         </div>
         <div className="dash-card-body" style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
-          <Link href="/patient/request" style={{
+          <Link href="/patient/booking" style={{
             display: 'flex',
             alignItems: 'center',
             gap: '0.5rem',

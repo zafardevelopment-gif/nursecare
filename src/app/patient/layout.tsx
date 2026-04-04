@@ -8,7 +8,7 @@ import Link from 'next/link'
 
 const patientMenu = [
   { icon: '🏠', label: 'Dashboard',    href: '/patient/dashboard' },
-  { icon: '🏥', label: 'Book a Nurse', href: '/patient/request' },
+  { icon: '🏥', label: 'Book a Nurse', href: '/patient/booking' },
   { icon: '📅', label: 'My Bookings',  href: '/patient/bookings' },
   { icon: '💬', label: 'Messages',     href: '/patient/messages' },
   { icon: '👤', label: 'My Profile',   href: '/patient/profile' },

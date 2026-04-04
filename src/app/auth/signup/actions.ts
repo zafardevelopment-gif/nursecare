@@ -7,12 +7,12 @@ export async function signupAction(formData: FormData) {
   const full_name = (formData.get('full_name') as string).trim()
   const email     = (formData.get('email') as string).trim()
   const password  = formData.get('password') as string
-  const role      = formData.get('role') as 'patient' | 'provider'
+  const role      = formData.get('role') as 'patient' | 'provider' | 'hospital'
 
   if (password.length < 8) {
     redirect('/auth/signup?error=Password+must+be+at+least+8+characters')
   }
-  if (!['patient', 'provider'].includes(role)) {
+  if (!['patient', 'provider', 'hospital'].includes(role)) {
     redirect('/auth/signup?error=Invalid+role+selected')
   }
 
