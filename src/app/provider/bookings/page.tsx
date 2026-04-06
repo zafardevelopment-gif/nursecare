@@ -1,6 +1,7 @@
 import { requireRole } from '@/lib/auth'
 import { createSupabaseServerClient, createSupabaseServiceRoleClient } from '@/lib/supabase-server'
 import { acceptBooking, declineBooking } from './actions'
+import { WorkStartedBtn, WorkDoneBtn } from './WorkActions'
 
 export const dynamic = 'force-dynamic'
 
@@ -9,6 +10,8 @@ const statusStyle: Record<string, { bg: string; color: string; label: string }> 
   accepted:    { bg: 'rgba(39,168,105,0.1)',  color: '#27A869', label: '✓ Accepted' },
   confirmed:   { bg: 'rgba(39,168,105,0.1)',  color: '#27A869', label: '✓ Confirmed' },
   declined:    { bg: 'rgba(224,74,74,0.1)',   color: '#E04A4A', label: '✕ Declined' },
+  in_progress: { bg: 'rgba(14,123,140,0.12)', color: '#0E7B8C', label: '🔄 In Progress' },
+  work_done:   { bg: 'rgba(107,63,160,0.1)',  color: '#6B3FA0', label: '✅ Work Done' },
   completed:   { bg: 'rgba(14,123,140,0.1)',  color: '#0E7B8C', label: '✓ Completed' },
   cancelled:   { bg: 'rgba(138,155,170,0.1)', color: '#8A9BAA', label: 'Cancelled' },
 }
@@ -17,6 +20,15 @@ export default async function ProviderBookingsPage() {
   const user = await requireRole('provider')
   const supabase = await createSupabaseServerClient()
   const serviceSupabase = createSupabaseServiceRoleClient()
+
+  const { data: settings } = await serviceSupabase
+    .from('platform_settings')
+    .select('require_work_start_confirmation, require_work_completion_confirmation')
+    .limit(1)
+    .single()
+
+  const requireWorkStart = settings?.require_work_start_confirmation ?? true
+  const requireWorkDone  = settings?.require_work_completion_confirmation ?? true
 
   const { data: nurse } = await supabase
     .from('nurses')
@@ -172,22 +184,39 @@ export default async function ProviderBookingsPage() {
           <div style={{ padding: 0 }}>
             {(myRequests ?? []).map((req: any) => {
               const s = statusStyle[req.status] ?? statusStyle.pending
+              const canMarkStarted = requireWorkStart && (req.status === 'accepted' || req.status === 'confirmed')
+              const canMarkDone    = req.status === 'in_progress'
+              const isWorkDone     = req.status === 'work_done'
               return (
                 <div key={req.id} style={{
-                  display: 'flex', alignItems: 'center', gap: '1rem',
-                  padding: '1rem 1.5rem', borderBottom: '1px solid var(--border)', flexWrap: 'wrap',
+                  padding: '1rem 1.5rem', borderBottom: '1px solid var(--border)',
                 }}>
-                  <div style={{ flex: 1, minWidth: 180 }}>
-                    <div style={{ fontWeight: 700, fontSize: '0.88rem', marginBottom: 2 }}>
-                      {req.patient_name} · {req.service_type}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+                    <div style={{ flex: 1, minWidth: 180 }}>
+                      <div style={{ fontWeight: 700, fontSize: '0.88rem', marginBottom: 2 }}>
+                        {req.patient_name} · {req.service_type}
+                      </div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>
+                        {req.start_date} · {req.shift} · {req.city}
+                      </div>
                     </div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>
-                      {req.start_date} · {req.shift} · {req.city}
-                    </div>
+                    <span style={{ background: s.bg, color: s.color, fontSize: '0.68rem', fontWeight: 700, padding: '3px 9px', borderRadius: 50 }}>
+                      {s.label}
+                    </span>
                   </div>
-                  <span style={{ background: s.bg, color: s.color, fontSize: '0.68rem', fontWeight: 700, padding: '3px 9px', borderRadius: 50 }}>
-                    {s.label}
-                  </span>
+
+                  {/* Work action buttons */}
+                  {(canMarkStarted || canMarkDone || isWorkDone) && (
+                    <div style={{ marginTop: '0.75rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                      {canMarkStarted && <WorkStartedBtn requestId={req.id} />}
+                      {canMarkDone    && <WorkDoneBtn requestId={req.id} />}
+                      {isWorkDone && (
+                        <div style={{ fontSize: '0.75rem', color: '#6B3FA0', fontStyle: 'italic', padding: '7px 0' }}>
+                          ⏳ Awaiting patient confirmation…
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )
             })}

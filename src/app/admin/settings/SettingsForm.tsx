@@ -12,6 +12,8 @@ interface Settings {
   auto_complete_hours?: number
   min_booking_hours?: number
   allow_emergency_bookings?: boolean
+  require_work_start_confirmation?: boolean
+  require_work_completion_confirmation?: boolean
   email_notifications?: boolean
   whatsapp_notifications?: boolean
   sms_notifications?: boolean
@@ -23,6 +25,8 @@ export default function SettingsForm({ settings }: { settings: Settings | null }
   const [saved, setSaved] = useState(false)
 
   const [emergencyBookings, setEmergencyBookings] = useState(settings?.allow_emergency_bookings ?? true)
+  const [requireWorkStart, setRequireWorkStart]   = useState(settings?.require_work_start_confirmation ?? true)
+  const [requireWorkDone, setRequireWorkDone]     = useState(settings?.require_work_completion_confirmation ?? true)
   const [chatEnabled, setChatEnabled] = useState(settings?.chat_enabled ?? true)
   const [email, setEmail]       = useState(settings?.email_notifications ?? true)
   const [whatsapp, setWhatsapp] = useState(settings?.whatsapp_notifications ?? false)
@@ -37,8 +41,10 @@ export default function SettingsForm({ settings }: { settings: Settings | null }
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     const fd = new FormData(e.currentTarget)
-    fd.set('allow_emergency_bookings', String(emergencyBookings))
-    fd.set('chat_enabled',             String(chatEnabled))
+    fd.set('allow_emergency_bookings',             String(emergencyBookings))
+    fd.set('require_work_start_confirmation',       String(requireWorkStart))
+    fd.set('require_work_completion_confirmation',  String(requireWorkDone))
+    fd.set('chat_enabled',                          String(chatEnabled))
     fd.set('email_notifications',      String(email))
     fd.set('whatsapp_notifications',   String(whatsapp))
     fd.set('sms_notifications',        String(sms))
@@ -173,6 +179,40 @@ export default function SettingsForm({ settings }: { settings: Settings | null }
 
           <SettingRow label="Allow Emergency Bookings" description="Patients can request same-day urgent bookings">
             <Toggle checked={emergencyBookings} onChange={setEmergencyBookings} />
+          </SettingRow>
+
+          <div style={{ marginTop: '1rem', marginBottom: '0.4rem', fontSize: '0.72rem', fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            Work Confirmation Flow
+          </div>
+
+          <SettingRow
+            label="Require Work Started Confirmation"
+            description={
+              <>
+                Nurse must tap <strong>"Mark Work Started"</strong> when they arrive at patient location.
+                <br />
+                <span style={{ color: 'var(--teal)' }}>Booking status changes to <strong>In Progress</strong> — only nurse can trigger this.</span>
+              </>
+            }
+          >
+            <Toggle checked={requireWorkStart} onChange={setRequireWorkStart} />
+          </SettingRow>
+
+          <SettingRow
+            label="Require Work Completion Confirmation"
+            description={
+              <>
+                Nurse marks <strong>"Work Done"</strong>, then patient must tap <strong>"Confirm Completion"</strong> to release payment.
+                <br />
+                <span style={{ color: requireWorkDone ? 'var(--teal)' : '#E04A4A', fontWeight: 600 }}>
+                  {requireWorkDone
+                    ? '✓ Both parties must confirm — payment releases after patient confirms'
+                    : '✕ Only nurse confirmation needed — payment releases automatically'}
+                </span>
+              </>
+            }
+          >
+            <Toggle checked={requireWorkDone} onChange={setRequireWorkDone} />
           </SettingRow>
 
           <div style={{ marginTop: '1rem', marginBottom: '0.4rem', fontSize: '0.72rem', fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>

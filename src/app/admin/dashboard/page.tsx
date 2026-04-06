@@ -1,10 +1,11 @@
 import { requireRole } from '@/lib/auth'
-import { createSupabaseServerClient } from '@/lib/supabase-server'
+import { createSupabaseServerClient, createSupabaseServiceRoleClient } from '@/lib/supabase-server'
 import Link from 'next/link'
 
 export default async function AdminDashboardPage() {
   const user = await requireRole('admin')
   const supabase = await createSupabaseServerClient()
+  const serviceSupabase = createSupabaseServiceRoleClient()
 
   const [
     { count: pendingNurses },
@@ -13,6 +14,10 @@ export default async function AdminDashboardPage() {
     { count: approvedNurses },
     { count: totalBookings },
     { count: pendingBookings },
+    { count: activeBookings },
+    { count: inProgressBookings },
+    { count: workDoneBookings },
+    { count: completedBookings },
     { count: totalUsers },
     { count: pendingUpdateRequests },
   ] = await Promise.all([
@@ -20,8 +25,12 @@ export default async function AdminDashboardPage() {
     supabase.from('nurses').select('*', { count: 'exact', head: true }).eq('status', 'update_pending'),
     supabase.from('nurses').select('*', { count: 'exact', head: true }),
     supabase.from('nurses').select('*', { count: 'exact', head: true }).eq('status', 'approved'),
-    supabase.from('bookings').select('*', { count: 'exact', head: true }),
-    supabase.from('bookings').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
+    serviceSupabase.from('booking_requests').select('*', { count: 'exact', head: true }),
+    serviceSupabase.from('booking_requests').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
+    serviceSupabase.from('booking_requests').select('*', { count: 'exact', head: true }).in('status', ['accepted', 'confirmed']),
+    serviceSupabase.from('booking_requests').select('*', { count: 'exact', head: true }).eq('status', 'in_progress'),
+    serviceSupabase.from('booking_requests').select('*', { count: 'exact', head: true }).eq('status', 'work_done'),
+    serviceSupabase.from('booking_requests').select('*', { count: 'exact', head: true }).eq('status', 'completed'),
     supabase.from('users').select('*', { count: 'exact', head: true }),
     supabase.from('nurse_update_requests').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
   ])
@@ -46,7 +55,7 @@ export default async function AdminDashboardPage() {
         )}
       </div>
 
-      {/* KPI Row 1 — Bookings & Users */}
+      {/* KPI Row 1 — Bookings */}
       <div className="dash-kpi-row" style={{ marginBottom: '1rem' }}>
         <div className="dash-kpi">
           <div className="dash-kpi-icon" style={{ background: '#E8F9F0' }}>📋</div>
@@ -55,9 +64,33 @@ export default async function AdminDashboardPage() {
         </div>
         <div className="dash-kpi">
           <div className="dash-kpi-icon" style={{ background: '#FFF3E0' }}>⏳</div>
-          <div className="dash-kpi-num">{pendingBookings ?? 0}</div>
-          <div className="dash-kpi-label">Pending Bookings</div>
+          <div className="dash-kpi-num" style={{ color: (pendingBookings ?? 0) > 0 ? '#F5842A' : 'var(--ink)' }}>{pendingBookings ?? 0}</div>
+          <div className="dash-kpi-label">Awaiting Nurse</div>
         </div>
+        <div className="dash-kpi">
+          <div className="dash-kpi-icon" style={{ background: 'rgba(39,168,105,0.1)' }}>✅</div>
+          <div className="dash-kpi-num">{activeBookings ?? 0}</div>
+          <div className="dash-kpi-label">Active / Accepted</div>
+        </div>
+        <div className="dash-kpi">
+          <div className="dash-kpi-icon" style={{ background: 'rgba(14,123,140,0.1)' }}>🔄</div>
+          <div className="dash-kpi-num" style={{ color: (inProgressBookings ?? 0) > 0 ? '#0E7B8C' : 'var(--ink)' }}>{inProgressBookings ?? 0}</div>
+          <div className="dash-kpi-label">In Progress</div>
+        </div>
+        <div className="dash-kpi">
+          <div className="dash-kpi-icon" style={{ background: 'rgba(107,63,160,0.1)' }}>🎉</div>
+          <div className="dash-kpi-num" style={{ color: (workDoneBookings ?? 0) > 0 ? '#6B3FA0' : 'var(--ink)' }}>{workDoneBookings ?? 0}</div>
+          <div className="dash-kpi-label">Awaiting Confirmation</div>
+        </div>
+        <div className="dash-kpi">
+          <div className="dash-kpi-icon" style={{ background: '#F0FFF4' }}>🏁</div>
+          <div className="dash-kpi-num">{completedBookings ?? 0}</div>
+          <div className="dash-kpi-label">Completed</div>
+        </div>
+      </div>
+
+      {/* KPI Row 1b — Users & Nurses */}
+      <div className="dash-kpi-row" style={{ marginBottom: '1rem' }}>
         <div className="dash-kpi">
           <div className="dash-kpi-icon" style={{ background: '#EEF2FF' }}>👥</div>
           <div className="dash-kpi-num">{totalUsers ?? 0}</div>
