@@ -16,9 +16,12 @@ export default async function PatientDashboardPage() {
     .order('created_at', { ascending: false })
 
   const allItems = requests ?? []
-  const active  = allItems.filter(b => b.status === 'accepted' || b.status === 'confirmed').length
-  const pending = allItems.filter(b => b.status === 'pending').length
+  const active  = allItems.filter((b: any) => b.status === 'accepted' || b.status === 'confirmed').length
+  const pending = allItems.filter((b: any) => b.status === 'pending').length
   const total   = allItems.length
+  const unpaid  = allItems.filter((b: any) =>
+    ['accepted','confirmed','in_progress','work_done','completed'].includes(b.status) && b.payment_status !== 'paid'
+  ).length
   const recentBookings = allItems.slice(0, 5)
 
   const statusStyle: Record<string, { bg: string; color: string; label: string }> = {
@@ -26,6 +29,8 @@ export default async function PatientDashboardPage() {
     accepted:    { bg: 'rgba(39,168,105,0.1)',  color: '#27A869', label: '✓ Confirmed' },
     confirmed:   { bg: 'rgba(39,168,105,0.1)',  color: '#27A869', label: '✓ Confirmed' },
     declined:    { bg: 'rgba(224,74,74,0.1)',   color: '#E04A4A', label: '✕ Declined' },
+    in_progress: { bg: 'rgba(14,123,140,0.12)', color: '#0E7B8C', label: '🔄 In Progress' },
+    work_done:   { bg: 'rgba(107,63,160,0.1)',  color: '#6B3FA0', label: '✅ Work Done' },
     completed:   { bg: 'rgba(14,123,140,0.1)',  color: '#0E7B8C', label: '✓ Completed' },
     cancelled:   { bg: 'rgba(138,155,170,0.1)', color: '#8A9BAA', label: 'Cancelled' },
   }
@@ -87,53 +92,76 @@ export default async function PatientDashboardPage() {
           <div className="dash-kpi-label">Total Bookings</div>
         </div>
         <div className="dash-kpi">
-          <div className="dash-kpi-icon" style={{ background: '#F3E8FF' }}>💰</div>
-          <div className="dash-kpi-num">SAR 0</div>
-          <div className="dash-kpi-label">Total Spent</div>
+          <div className="dash-kpi-icon" style={{ background: unpaid > 0 ? 'rgba(245,132,42,0.1)' : '#F3E8FF' }}>💳</div>
+          <div className="dash-kpi-num" style={{ color: unpaid > 0 ? '#F5842A' : 'var(--ink)' }}>{unpaid}</div>
+          <div className="dash-kpi-label">Payment Pending</div>
         </div>
       </div>
 
       {recentBookings.length > 0 && (
         <div className="dash-card" style={{ marginBottom: '1.5rem' }}>
-          <div className="dash-card-header">
-            <span className="dash-card-title">My Recent Bookings</span>
+          <div style={{ padding: '0.85rem 1.2rem', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ fontWeight: 700, fontSize: '0.92rem' }}>My Recent Bookings</span>
             <Link href="/patient/bookings" style={{ fontSize: '0.78rem', color: 'var(--teal)', textDecoration: 'none', fontWeight: 600 }}>View all →</Link>
           </div>
-          <div className="dash-card-body" style={{ padding: 0 }}>
-            {recentBookings.map((b: any, i: number) => {
-              const s = statusStyle[b.status] ?? statusStyle.pending
-              const typeLabel = b.booking_type === 'weekly' ? '🔁' : b.booking_type === 'monthly' ? '📆' : '📅'
-              return (
-                <div key={b.id} style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  padding: '12px 20px',
-                  borderBottom: i < recentBookings.length - 1 ? '1px solid var(--border)' : 'none',
-                }}>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 600, fontSize: '0.88rem', color: 'var(--ink)' }}>
-                      {b.service_type ?? 'Booking'}{b.nurse_name ? ` · ${b.nurse_name}` : ''}
-                    </div>
-                    <div style={{ fontSize: '0.72rem', color: 'var(--muted)', marginTop: 2 }}>
-                      {typeLabel} {b.start_date} · {b.shift} · {b.city ?? ''}
-                      {b.total_sessions > 1 && ` · ${b.total_sessions} sessions`}
-                    </div>
-                  </div>
-                  <span style={{
-                    background: s.bg, color: s.color,
-                    fontSize: '0.68rem', fontWeight: 700,
-                    padding: '3px 9px', borderRadius: 50, whiteSpace: 'nowrap', marginLeft: 12,
-                  }}>
-                    {s.label}
-                  </span>
-                </div>
-              )
-            })}
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+              <thead>
+                <tr style={{ background: 'var(--cream)', borderBottom: '1px solid var(--border)' }}>
+                  <DTh>#</DTh>
+                  <DTh>Service</DTh>
+                  <DTh>Nurse</DTh>
+                  <DTh>Date / Shift</DTh>
+                  <DTh>City</DTh>
+                  <DTh>Status</DTh>
+                  <DTh>Payment</DTh>
+                  <DTh>Action</DTh>
+                </tr>
+              </thead>
+              <tbody>
+                {recentBookings.map((b: any, i: number) => {
+                  const s = statusStyle[b.status] ?? statusStyle.pending
+                  const showPayment = ['accepted','confirmed','in_progress','work_done','completed'].includes(b.status)
+                  const isPaid = b.payment_status === 'paid'
+                  return (
+                    <tr key={b.id} style={{ borderBottom: i < recentBookings.length - 1 ? '1px solid var(--border)' : 'none', background: i % 2 === 0 ? '#fff' : 'rgba(14,123,140,0.015)' }}>
+                      <DTd>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 24, height: 24, borderRadius: 6, background: 'var(--cream)', border: '1px solid var(--border)', fontSize: '0.68rem', fontWeight: 700, color: 'var(--muted)' }}>{i + 1}</span>
+                      </DTd>
+                      <DTd><div style={{ fontWeight: 700 }}>{b.service_type ?? 'Booking'}</div></DTd>
+                      <DTd>{b.nurse_name ? <span style={{ color: '#0E7B8C', fontWeight: 600 }}>👩‍⚕️ {b.nurse_name}</span> : <span style={{ color: 'var(--muted)' }}>—</span>}</DTd>
+                      <DTd>
+                        {b.start_date && <div>{b.start_date}</div>}
+                        <div style={{ color: 'var(--muted)', fontSize: '0.7rem' }}>{b.shift}</div>
+                      </DTd>
+                      <DTd>{b.city ?? '—'}</DTd>
+                      <DTd>
+                        <span style={{ background: s.bg, color: s.color, fontSize: '0.65rem', fontWeight: 700, padding: '3px 9px', borderRadius: 50, whiteSpace: 'nowrap' }}>{s.label}</span>
+                      </DTd>
+                      <DTd>
+                        {showPayment
+                          ? isPaid
+                            ? <span style={{ background: 'rgba(39,168,105,0.1)', color: '#27A869', fontSize: '0.65rem', fontWeight: 700, padding: '3px 9px', borderRadius: 50 }}>✅ Paid</span>
+                            : <span style={{ background: 'rgba(245,132,42,0.1)', color: '#F5842A', fontSize: '0.65rem', fontWeight: 700, padding: '3px 9px', borderRadius: 50 }}>⚠️ Unpaid</span>
+                          : <span style={{ color: 'var(--muted)', fontSize: '0.7rem' }}>—</span>
+                        }
+                      </DTd>
+                      <DTd>
+                        <Link href={`/patient/bookings/${b.id}`} style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--cream)', color: 'var(--teal)', fontSize: '0.72rem', fontWeight: 700, textDecoration: 'none' }}>
+                          View →
+                        </Link>
+                      </DTd>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
           </div>
         </div>
       )}
 
       <div className="dash-card">
-        <div className="dash-card-header">
+        <div className="dash-card-header" style={{ padding: '0.85rem 1.2rem', borderBottom: '1px solid var(--border)' }}>
           <span className="dash-card-title">Quick Actions</span>
         </div>
         <div className="dash-card-body" style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
@@ -160,5 +188,21 @@ export default async function PatientDashboardPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+function DTh({ children }: { children: React.ReactNode }) {
+  return (
+    <th style={{ padding: '7px 12px', textAlign: 'left', fontWeight: 700, fontSize: '0.67rem', color: 'var(--muted)', whiteSpace: 'nowrap', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+      {children}
+    </th>
+  )
+}
+
+function DTd({ children }: { children: React.ReactNode }) {
+  return (
+    <td style={{ padding: '9px 12px', verticalAlign: 'middle', color: 'var(--ink)' }}>
+      {children}
+    </td>
   )
 }

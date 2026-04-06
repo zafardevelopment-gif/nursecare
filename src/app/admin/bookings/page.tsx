@@ -77,6 +77,8 @@ export default async function AdminBookingsPage({ searchParams }: Props) {
     work_done:   allRows.filter(b => b.status === 'work_done').length,
     completed:   allRows.filter(b => b.status === 'completed').length,
     declined:    allRows.filter(b => b.status === 'declined').length,
+    paid:        allRows.filter(b => (b as any).payment_status === 'paid').length,
+    unpaid:      allRows.filter(b => (b as any).payment_status !== 'paid' && b.status !== 'pending' && b.status !== 'declined' && b.status !== 'cancelled').length,
   }
 
   function pageUrl(p: number) {
@@ -106,20 +108,28 @@ export default async function AdminBookingsPage({ searchParams }: Props) {
       {/* KPI row */}
       <div className="dash-kpi-row" style={{ marginBottom: '1.5rem' }}>
         {[
-          { label: 'Total',             count: counts.total,       bg: '#EBF5FF', color: 'var(--ink)', icon: '📋', key: '' },
-          { label: 'Awaiting Nurse',    count: counts.pending,     bg: '#FFF3E0', color: '#F5842A',    icon: '⏳', key: 'pending' },
-          { label: 'Active / Accepted', count: counts.active,      bg: '#E8F9F0', color: '#27A869',    icon: '✅', key: 'accepted' },
-          { label: 'In Progress',       count: counts.in_progress, bg: 'rgba(14,123,140,0.08)', color: '#0E7B8C', icon: '🔄', key: 'in_progress' },
-          { label: 'Awaiting Confirm',  count: counts.work_done,   bg: 'rgba(107,63,160,0.08)', color: '#6B3FA0', icon: '🎉', key: 'work_done' },
-          { label: 'Completed',         count: counts.completed,   bg: '#F0FFF4', color: '#27A869',    icon: '🏁', key: 'completed' },
+          { label: 'Total',             count: counts.total,       bg: '#EBF5FF', color: 'var(--ink)', icon: '📋', key: '',            isStatus: true },
+          { label: 'Awaiting Nurse',    count: counts.pending,     bg: '#FFF3E0', color: '#F5842A',    icon: '⏳', key: 'pending',     isStatus: true },
+          { label: 'Active / Accepted', count: counts.active,      bg: '#E8F9F0', color: '#27A869',    icon: '✅', key: 'accepted',    isStatus: true },
+          { label: 'In Progress',       count: counts.in_progress, bg: 'rgba(14,123,140,0.08)', color: '#0E7B8C', icon: '🔄', key: 'in_progress', isStatus: true },
+          { label: 'Awaiting Confirm',  count: counts.work_done,   bg: 'rgba(107,63,160,0.08)', color: '#6B3FA0', icon: '🎉', key: 'work_done',   isStatus: true },
+          { label: 'Completed',         count: counts.completed,   bg: '#F0FFF4', color: '#27A869',    icon: '🏁', key: 'completed',   isStatus: true },
+          { label: '💳 Paid',           count: counts.paid,        bg: 'rgba(39,168,105,0.08)', color: '#27A869', icon: '✅', key: 'paid',        isStatus: false },
+          { label: '💳 Unpaid',         count: counts.unpaid,      bg: 'rgba(245,132,42,0.08)', color: '#F5842A', icon: '⚠️', key: 'unpaid',      isStatus: false },
         ].map(k => (
-          <Link key={k.key} href={filterUrl(k.key)} style={{ textDecoration: 'none' }}>
-            <div className="dash-kpi" style={{ border: filterStatus === k.key ? `1.5px solid ${k.color}` : '1px solid var(--border)', cursor: 'pointer' }}>
-              <div className="dash-kpi-icon" style={{ background: k.bg }}>{k.icon}</div>
-              <div className="dash-kpi-num" style={{ color: k.count > 0 ? k.color : 'var(--ink)' }}>{k.count}</div>
-              <div className="dash-kpi-label">{k.label}</div>
-            </div>
-          </Link>
+          k.isStatus
+            ? <Link key={k.key} href={filterUrl(k.key)} style={{ textDecoration: 'none' }}>
+                <div className="dash-kpi" style={{ border: filterStatus === k.key ? `1.5px solid ${k.color}` : '1px solid var(--border)', cursor: 'pointer' }}>
+                  <div className="dash-kpi-icon" style={{ background: k.bg }}>{k.icon}</div>
+                  <div className="dash-kpi-num" style={{ color: k.count > 0 ? k.color : 'var(--ink)' }}>{k.count}</div>
+                  <div className="dash-kpi-label">{k.label}</div>
+                </div>
+              </Link>
+            : <div key={k.key} className="dash-kpi" style={{ border: '1px solid var(--border)' }}>
+                <div className="dash-kpi-icon" style={{ background: k.bg }}>{k.icon}</div>
+                <div className="dash-kpi-num" style={{ color: k.count > 0 ? k.color : 'var(--ink)' }}>{k.count}</div>
+                <div className="dash-kpi-label">{k.label}</div>
+              </div>
         ))}
       </div>
 
@@ -186,66 +196,86 @@ export default async function AdminBookingsPage({ searchParams }: Props) {
             No bookings found
           </div>
         ) : (
-          <div style={{ padding: 0 }}>
-            {all.map((b: any, i: number) => {
-              const s = STATUS_MAP[b.status] ?? STATUS_MAP.pending
-              return (
-                <div key={b.id} style={{
-                  padding: '1.1rem 1.5rem',
-                  borderBottom: i < all.length - 1 ? '1px solid var(--border)' : 'none',
-                  display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'flex-start',
-                }}>
-                  {/* Icon */}
-                  <div style={{
-                    width: 42, height: 42, borderRadius: 11, flexShrink: 0,
-                    background: 'linear-gradient(135deg,rgba(14,123,140,0.1),rgba(10,191,204,0.08))',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem',
-                  }}>🏥</div>
-
-                  {/* Main info */}
-                  <div style={{ flex: 1, minWidth: 200 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap', marginBottom: '0.3rem' }}>
-                      <span style={{ fontWeight: 700, fontSize: '0.9rem' }}>{b.patient_name ?? '—'}</span>
-                      <span style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>{b.service_type}</span>
-                      <span style={{ background: s.bg, color: s.color, fontSize: '0.65rem', fontWeight: 700, padding: '2px 8px', borderRadius: 50 }}>{s.label}</span>
-                    </div>
-
-                    <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', marginBottom: '0.35rem' }}>
-                      {b.start_date && <Chip>📅 {b.start_date}{b.end_date && b.end_date !== b.start_date ? ` → ${b.end_date}` : ''}</Chip>}
-                      {b.shift && <Chip>🕐 {b.shift}</Chip>}
-                      {b.duration_hours && <Chip>⏱ {b.duration_hours}h</Chip>}
-                      {b.city && <Chip>📍 {b.city}</Chip>}
-                      {b.booking_type && <Chip>{b.booking_type === 'weekly' ? '🔁 Weekly' : b.booking_type === 'monthly' ? '📆 Monthly' : '📅 One-Time'}</Chip>}
-                    </div>
-
-                    <div style={{ fontSize: '0.75rem', display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
-                      {b.nurse_name
-                        ? <span style={{ color: 'var(--muted)' }}>👩‍⚕️ Nurse: <strong style={{ color: '#0E7B8C' }}>{b.nurse_name}</strong></span>
-                        : <span style={{ color: '#F5842A', fontWeight: 600 }}>⚠️ No nurse assigned</span>
-                      }
-                      {b.patient_email && <span style={{ color: 'var(--muted)' }}>✉️ {b.patient_email}</span>}
-                    </div>
-
-                    {b.address && (
-                      <div style={{ fontSize: '0.72rem', color: 'var(--muted)', marginTop: '0.3rem' }}>
-                        📌 {b.address}
-                      </div>
-                    )}
-                    {b.notes && (
-                      <div style={{ fontSize: '0.72rem', color: 'var(--muted)', marginTop: '0.25rem', fontStyle: 'italic' }}>
-                        📝 {b.notes}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Right: date */}
-                  <div style={{ fontSize: '0.72rem', color: 'var(--muted)', flexShrink: 0, textAlign: 'right', paddingTop: 2 }}>
-                    {new Date(b.created_at).toLocaleDateString('en-SA', { day: '2-digit', month: 'short', year: 'numeric' })}
-                    <div style={{ marginTop: 2 }}>{new Date(b.created_at).toLocaleTimeString('en-SA', { hour: '2-digit', minute: '2-digit' })}</div>
-                  </div>
-                </div>
-              )
-            })}
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+              <thead>
+                <tr style={{ background: 'var(--cream)', borderBottom: '1px solid var(--border)' }}>
+                  <Th>#</Th>
+                  <Th>Patient</Th>
+                  <Th>Service</Th>
+                  <Th>Nurse</Th>
+                  <Th>Date / Shift</Th>
+                  <Th>Type</Th>
+                  <Th>City</Th>
+                  <Th>Status</Th>
+                  <Th>Payment</Th>
+                  <Th>Created</Th>
+                  <Th>Action</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {all.map((b: any, i: number) => {
+                  const s = STATUS_MAP[b.status] ?? STATUS_MAP.pending
+                  const isPaid = b.payment_status === 'paid'
+                  const showPayment = b.status !== 'pending' && b.status !== 'declined' && b.status !== 'cancelled'
+                  const serial = offset + i + 1
+                  return (
+                    <tr key={b.id} style={{ borderBottom: i < all.length - 1 ? '1px solid var(--border)' : 'none', background: i % 2 === 0 ? '#fff' : 'rgba(14,123,140,0.015)' }}>
+                      <Td>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 26, height: 26, borderRadius: 7, background: 'var(--cream)', border: '1px solid var(--border)', fontSize: '0.7rem', fontWeight: 700, color: 'var(--muted)' }}>
+                          {serial}
+                        </span>
+                      </Td>
+                      <Td>
+                        <div style={{ fontWeight: 700, color: 'var(--ink)' }}>{b.patient_name ?? '—'}</div>
+                        {b.patient_email && <div style={{ color: 'var(--muted)', fontSize: '0.7rem', marginTop: 1 }}>{b.patient_email}</div>}
+                      </Td>
+                      <Td>{b.service_type ?? '—'}</Td>
+                      <Td>
+                        {b.nurse_name
+                          ? <span style={{ color: '#0E7B8C', fontWeight: 600 }}>{b.nurse_name}</span>
+                          : <span style={{ color: '#F5842A', fontSize: '0.7rem' }}>⚠️ Unassigned</span>
+                        }
+                      </Td>
+                      <Td>
+                        {b.start_date && <div>{b.start_date}{b.end_date && b.end_date !== b.start_date ? ` → ${b.end_date}` : ''}</div>}
+                        <div style={{ color: 'var(--muted)', fontSize: '0.7rem' }}>
+                          {[b.shift, b.duration_hours ? `${b.duration_hours}h` : null].filter(Boolean).join(' · ')}
+                        </div>
+                      </Td>
+                      <Td>
+                        {b.booking_type === 'weekly' ? '🔁 Weekly' : b.booking_type === 'monthly' ? '📆 Monthly' : '📅 One-Time'}
+                      </Td>
+                      <Td>{b.city ?? '—'}</Td>
+                      <Td>
+                        <span style={{ background: s.bg, color: s.color, fontSize: '0.65rem', fontWeight: 700, padding: '3px 9px', borderRadius: 50, whiteSpace: 'nowrap' }}>{s.label}</span>
+                      </Td>
+                      <Td>
+                        {showPayment
+                          ? isPaid
+                            ? <span style={{ background:'rgba(39,168,105,0.1)', color:'#27A869', fontSize:'0.65rem', fontWeight:700, padding:'3px 9px', borderRadius:50 }}>💳 Paid</span>
+                            : <span style={{ background:'rgba(245,132,42,0.1)', color:'#F5842A', fontSize:'0.65rem', fontWeight:700, padding:'3px 9px', borderRadius:50 }}>⚠️ Unpaid</span>
+                          : <span style={{ color: 'var(--muted)', fontSize: '0.7rem' }}>—</span>
+                        }
+                      </Td>
+                      <Td>
+                        <div>{new Date(b.created_at).toLocaleDateString('en-SA', { day: '2-digit', month: 'short', year: 'numeric' })}</div>
+                        <div style={{ color: 'var(--muted)', fontSize: '0.7rem' }}>{new Date(b.created_at).toLocaleTimeString('en-SA', { hour: '2-digit', minute: '2-digit' })}</div>
+                      </Td>
+                      <Td>
+                        <Link href={`/admin/bookings/${b.id}`} style={{
+                          padding: '5px 12px', borderRadius: 7, border: '1px solid var(--border)',
+                          background: 'var(--cream)', color: 'var(--teal)', fontSize: '0.72rem',
+                          fontWeight: 700, textDecoration: 'none', whiteSpace: 'nowrap',
+                        }}>
+                          View →
+                        </Link>
+                      </Td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
           </div>
         )}
 
@@ -276,14 +306,19 @@ export default async function AdminBookingsPage({ searchParams }: Props) {
   )
 }
 
-function Chip({ children }: { children: React.ReactNode }) {
+function Th({ children }: { children: React.ReactNode }) {
   return (
-    <span style={{
-      background: 'var(--cream)', border: '1px solid var(--border)',
-      borderRadius: 7, padding: '2px 8px', fontSize: '0.7rem', color: 'var(--ink)', fontWeight: 500,
-    }}>
+    <th style={{ padding: '8px 14px', textAlign: 'left', fontWeight: 700, fontSize: '0.72rem', color: 'var(--muted)', whiteSpace: 'nowrap', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
       {children}
-    </span>
+    </th>
+  )
+}
+
+function Td({ children }: { children: React.ReactNode }) {
+  return (
+    <td style={{ padding: '10px 14px', verticalAlign: 'middle', color: 'var(--ink)' }}>
+      {children}
+    </td>
   )
 }
 

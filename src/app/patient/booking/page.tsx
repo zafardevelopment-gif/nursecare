@@ -18,6 +18,7 @@ export default async function PatientBookingPage() {
 
   const vatRate         = settings?.vat_rate ?? 15
   const minBookingHours = settings?.min_booking_hours ?? 2
+  const commission      = settings?.default_commission ?? 10
 
   // ── 2. Fetch nurses with photo ────────────────────────────────────────────
   const { data: nursesRaw } = await serviceSupabase
@@ -90,6 +91,7 @@ export default async function PatientBookingPage() {
       userEmail={user.email}
       nurses={nurseList}
       vatRate={vatRate}
+      commission={commission}
       minBookingHours={minBookingHours}
       availableGenders={genders}
       availableNationalities={nationalities}

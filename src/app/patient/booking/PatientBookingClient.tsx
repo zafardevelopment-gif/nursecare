@@ -98,7 +98,7 @@ const AI_FALLBACK = "I'm here to help! Tell me what kind of care you need, your 
 
 // ── Main Component ────────────────────────────────────────────────────────────
 export default function PatientBookingClient({
-  userId, userName, userEmail, nurses, vatRate, minBookingHours = 2,
+  userId, userName, userEmail, nurses, vatRate, commission = 10, minBookingHours = 2,
   availableGenders, availableNationalities, availableLanguages,
 }: {
   userId: string
@@ -106,11 +106,15 @@ export default function PatientBookingClient({
   userEmail: string
   nurses: Nurse[]
   vatRate: number
+  commission?: number
   minBookingHours?: number
   availableGenders: string[]
   availableNationalities: string[]
   availableLanguages: string[]
 }) {
+  // Apply commission to nurse base rate → patient-facing rate
+  const patientRate = (nurseRate: number) => Math.ceil(nurseRate * (1 + commission / 100))
+
   const allNurses = nurses.length > 0 ? nurses : DEMO_NURSES
 
   // Build filter options from DB data
@@ -222,7 +226,18 @@ export default function PatientBookingClient({
   function showToast(msg: string) { setToast(msg); setTimeout(() => setToast(''), 3000) }
 
   // ── Smart Match logic ────────────────────────────────────────────────────
-  function handleSmartMatch() {
+  const [smartMatchLoading, setSmartMatchLoading] = useState(false)
+
+  async function handleSmartMatch() {
+    // Validate minimum booking hours
+    const selectedHours = calcHours(smartStartTime, smartEndTime, smartShift)
+    if (selectedHours < minBookingHours) {
+      setError(`Minimum booking duration is ${minBookingHours} hours. You selected ${selectedHours}h — please adjust the time slot.`)
+      return
+    }
+    setError('')
+    setSmartMatchLoading(true)
+
     let pool = [...allNurses]
     const cityPool = pool.filter(n => n.city === smartCity)
     if (cityPool.length > 0) pool = cityPool
@@ -235,8 +250,25 @@ export default function PatientBookingClient({
       const natPool = pool.filter(n => n.nationality.toLowerCase() === nationality.toLowerCase())
       if (natPool.length > 0) pool = natPool
     }
-    setMatchedList(pool)
-    setMatchedNurse(pool[0] ?? null)
+
+    // Filter by availability on selected date + shift
+    const availablePool: Nurse[] = []
+    await Promise.all(pool.map(async (n) => {
+      try {
+        const data = await getShiftAvailability(n.id, smartStart, smartStart)
+        const dayData = data[smartStart]
+        if (!dayData) return // no availability data — exclude
+        const shiftData = dayData[smartShift as ShiftKey]
+        // Include nurse only if status is 'available' or 'partial' with enough remaining hours
+        if (shiftData?.status === 'available' || (shiftData?.status === 'partial' && (shiftData.remainingHours ?? 0) >= selectedHours)) {
+          availablePool.push(n)
+        }
+      } catch { /* exclude on error */ }
+    }))
+
+    setSmartMatchLoading(false)
+    setMatchedList(availablePool)
+    setMatchedNurse(availablePool[0] ?? null)
     setStep(2)
   }
 
@@ -296,11 +328,11 @@ export default function PatientBookingClient({
     return (
       <div style={{ textAlign:'center', padding:'5rem 2rem' }}>
         <div style={{ width:90,height:90,borderRadius:'50%',background:'#E6F7F1',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'2.5rem',margin:'0 auto 1.5rem',boxShadow:'0 0 0 14px rgba(26,122,74,0.08)' }}>✅</div>
-        <h2 style={{ fontFamily:'Georgia,serif',fontSize:'1.9rem',color:'var(--ink)',fontWeight:400,marginBottom:'0.5rem' }}>Booking Confirmed!</h2>
-        <p style={{ color:'var(--muted)',fontSize:'0.9rem',maxWidth:400,margin:'0 auto 1.5rem',lineHeight:1.7 }}>
+        <h2 style={{ fontFamily:'Georgia,serif',fontSize:'1.9rem',color:'var(--ink)',fontWeight:400,marginBottom:'0.5rem' }}>Booking Saved!</h2>
+        <p style={{ color:'var(--muted)',fontSize:'0.9rem',maxWidth:440,margin:'0 auto 1.5rem',lineHeight:1.7 }}>
           {sessions > 1
-            ? `${sessions} sessions have been created. Your provider will confirm within 30 minutes.`
-            : 'Your booking has been submitted. Your provider will confirm within 30 minutes and you\'ll receive a notification.'}
+            ? `${sessions} sessions have been submitted. Once a nurse accepts your booking, you will see a Pay Now button in My Bookings.`
+            : 'Your booking has been submitted. Once a nurse accepts, you will see a Pay Now button in My Bookings to complete payment.'}
         </p>
         <div style={{ display:'inline-flex',alignItems:'center',gap:8,background:'rgba(14,123,140,0.06)',border:'1px solid rgba(14,123,140,0.15)',borderRadius:10,padding:'10px 20px',fontFamily:'monospace',fontSize:'0.95rem',fontWeight:700,color:'#0E7B8C',marginBottom:'1.5rem' }}>
           📋 Booking Ref: {bookingRef || `NC-${new Date().getFullYear()}-${Math.floor(10000 + Math.random()*90000)}`}
@@ -502,6 +534,7 @@ export default function PatientBookingClient({
                       />
                     </Field>
                   </BookCard>
+                  {error && <div className="auth-error" style={{ marginTop:'0.5rem' }}><span>⚠️</span> {error}</div>}
                 </div>
               )}
 
@@ -513,15 +546,26 @@ export default function PatientBookingClient({
                       <div style={{ fontSize:'0.8rem',color:'var(--muted)' }}>{careType} · {SHIFTS.find(s=>s.key===smartShift)?.label} Shift · {smartCity}</div>
                     </div>
                   </div>
-                  <div style={{ display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(260px,1fr))',gap:16 }}>
-                    {matchedList.map(n=>(
-                      <NurseCard key={n.id} nurse={n} selected={matchedNurse?.id===n.id}
-                        onSelect={()=>{setMatchedNurse(n);showToast(`${n.name} selected!`)}}
-                        onViewDetails={()=>setDetailNurse(n)}
-                        onViewAvailability={()=>showAvailability(n, smartStart)}
-                        color="#006D7A" showMatch />
-                    ))}
-                  </div>
+                  {matchedList.length === 0 ? (
+                    <div className="dash-card" style={{ padding:'2.5rem',textAlign:'center' }}>
+                      <div style={{ fontSize:'2rem',marginBottom:'0.75rem' }}>😔</div>
+                      <div style={{ fontWeight:700,fontSize:'0.95rem',color:'var(--ink)',marginBottom:6 }}>No available nurses found</div>
+                      <div style={{ fontSize:'0.82rem',color:'var(--muted)',marginBottom:'1.2rem' }}>
+                        No nurses are available for <strong>{SHIFTS.find(s=>s.key===smartShift)?.label} shift</strong> on <strong>{smartStart}</strong> in <strong>{smartCity}</strong>.<br />Try a different date, shift, or city.
+                      </div>
+                      <button onClick={()=>setStep(1)} style={{ padding:'9px 20px',borderRadius:9,border:'1.5px solid var(--border)',background:'var(--cream)',color:'var(--ink)',fontWeight:600,fontSize:'0.85rem',cursor:'pointer',fontFamily:'inherit' }}>← Change Search</button>
+                    </div>
+                  ) : (
+                    <div style={{ display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(260px,1fr))',gap:16 }}>
+                      {matchedList.map(n=>(
+                        <NurseCard key={n.id} nurse={n} selected={matchedNurse?.id===n.id}
+                          onSelect={()=>{setMatchedNurse(n);showToast(`${n.name} selected!`)}}
+                          onViewDetails={()=>setDetailNurse(n)}
+                          onViewAvailability={()=>showAvailability(n, smartStart)}
+                          color="#006D7A" showMatch patientRate={patientRate} />
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -541,7 +585,7 @@ export default function PatientBookingClient({
                   <input type="hidden" name="notes"             value={smartNotes} />
                   <input type="hidden" name="nurse_id"          value={matchedNurse.id} />
                   <input type="hidden" name="nurse_name"        value={matchedNurse.name} />
-                  <input type="hidden" name="hourly_rate"       value={matchedNurse.hourlyRate} />
+                  <input type="hidden" name="hourly_rate"       value={patientRate(matchedNurse.hourlyRate)} />
                   <input type="hidden" name="duration"          value={calcHours(smartStartTime, smartEndTime, smartShift)} />
                   {selectedDays.map(d=><input key={d} type="hidden" name="days_of_week" value={d} />)}
 
@@ -562,11 +606,14 @@ export default function PatientBookingClient({
                       ...(bookingType==='weekly'?[['Days',selectedDays.map(d=>WEEKDAYS[d]).join(', ')] as [string,string]]:[]),
                       ['Duration',     `${smartDays} day${smartDays>1?'s':''}`],
                     ]} />
-                    <PriceBreakdown rate={matchedNurse.hourlyRate} hours={calcHours(smartStartTime, smartEndTime, smartShift)} vatRate={vatRate} />
+                    <PriceBreakdown rate={patientRate(matchedNurse.hourlyRate)} hours={calcHours(smartStartTime, smartEndTime, smartShift)} vatRate={vatRate} />
                   </BookCard>
 
                   <Field label="Full Address *">
-                    <input className="form-input" value={smartAddr} onChange={e=>setSmartAddr(e.target.value)} placeholder="Street, district, building number" required style={{ fontSize:'0.88rem' }} />
+                    <div style={{ display:'flex', gap:8 }}>
+                      <input className="form-input" value={smartAddr} onChange={e=>setSmartAddr(e.target.value)} placeholder="Street, district, building number" required style={{ fontSize:'0.88rem', flex:1 }} />
+                      <LocationBtn onAddress={setSmartAddr} />
+                    </div>
                   </Field>
                 </form>
               )}
@@ -614,7 +661,7 @@ export default function PatientBookingClient({
                           onSelect={()=>{setSelectedNurse(n);showToast(`${n.name} selected!`)}}
                           onViewDetails={()=>setDetailNurse(n)}
                           onViewAvailability={()=>showAvailability(n, browseStart)}
-                          color="#C5880F" />
+                          color="#C5880F" patientRate={patientRate} />
                       ))}
                     </div>
                   )}
@@ -720,7 +767,7 @@ export default function PatientBookingClient({
                   <input type="hidden" name="notes"             value={browseNotes} />
                   <input type="hidden" name="nurse_id"          value={selectedNurse.id} />
                   <input type="hidden" name="nurse_name"        value={selectedNurse.name} />
-                  <input type="hidden" name="hourly_rate"       value={selectedNurse.hourlyRate} />
+                  <input type="hidden" name="hourly_rate"       value={patientRate(selectedNurse.hourlyRate)} />
                   <input type="hidden" name="duration"          value={calcHours(browseStartTime, browseEndTime, browseShift)} />
                   {selectedDays.map(d=><input key={d} type="hidden" name="days_of_week" value={d} />)}
 
@@ -740,10 +787,13 @@ export default function PatientBookingClient({
                       ['Duration',     `${browseDays} day${browseDays>1?'s':''}`],
                       ['Shift',        `${SHIFTS.find(s=>s.key===browseShift)?.label} (${SHIFTS.find(s=>s.key===browseShift)?.time})`],
                     ]} />
-                    <PriceBreakdown rate={selectedNurse.hourlyRate} hours={calcHours(browseStartTime, browseEndTime, browseShift)} vatRate={vatRate} />
+                    <PriceBreakdown rate={patientRate(selectedNurse.hourlyRate)} hours={calcHours(browseStartTime, browseEndTime, browseShift)} vatRate={vatRate} />
                   </BookCard>
                   <Field label="Full Address *">
-                    <input className="form-input" value={browseAddr} onChange={e=>setBrowseAddr(e.target.value)} placeholder="Street, district, building number" required style={{ fontSize:'0.88rem' }} />
+                    <div style={{ display:'flex', gap:8 }}>
+                      <input className="form-input" value={browseAddr} onChange={e=>setBrowseAddr(e.target.value)} placeholder="Street, district, building number" required style={{ fontSize:'0.88rem', flex:1 }} />
+                      <LocationBtn onAddress={setBrowseAddr} />
+                    </div>
                   </Field>
                 </form>
               )}
@@ -828,7 +878,7 @@ export default function PatientBookingClient({
                               <div style={{ fontSize:'0.72rem',fontFamily:'monospace',color:'var(--muted)',marginBottom:8 }}>{aiSuggestion.specialization}</div>
                               <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',marginTop:10 }}>
                                 <span style={{ fontSize:'0.68rem',fontWeight:600,color:'var(--muted)' }}>MOH ✓ Verified</span>
-                                <span style={{ fontWeight:700,color:'#6B3FA0',fontSize:'0.85rem' }}>SAR {aiSuggestion.hourlyRate}/shift</span>
+                                <span style={{ fontWeight:700,color:'#6B3FA0',fontSize:'0.85rem' }}>SAR {patientRate(aiSuggestion.hourlyRate)}/hr</span>
                               </div>
                             </div>
                             <button onClick={()=>{setSelectedNurse(aiSuggestion);setAiStep(2)}} style={{ width:'100%',background:'linear-gradient(135deg,#6B3FA0,#5B2D90)',color:'#fff',padding:'10px',borderRadius:9,fontWeight:700,fontSize:'0.83rem',border:'none',cursor:'pointer',fontFamily:'inherit' }}>
@@ -895,7 +945,7 @@ export default function PatientBookingClient({
                   <input type="hidden" name="notes"             value="" />
                   <input type="hidden" name="nurse_id"          value={selectedNurse.id} />
                   <input type="hidden" name="nurse_name"        value={selectedNurse.name} />
-                  <input type="hidden" name="hourly_rate"       value={selectedNurse.hourlyRate} />
+                  <input type="hidden" name="hourly_rate"       value={patientRate(selectedNurse.hourlyRate)} />
                   <input type="hidden" name="duration"          value="8" />
                   {selectedDays.map(d=><input key={d} type="hidden" name="days_of_week" value={d} />)}
 
@@ -909,7 +959,7 @@ export default function PatientBookingClient({
                       ['Date',        browseStart],
                       ['Shift',       SHIFTS.find(s=>s.key===aiShift)?.label??aiShift],
                     ]} />
-                    <PriceBreakdown rate={selectedNurse.hourlyRate} hours={8} vatRate={vatRate} />
+                    <PriceBreakdown rate={patientRate(selectedNurse.hourlyRate)} hours={8} vatRate={vatRate} />
                   </BookCard>
                 </form>
               )}
@@ -936,15 +986,20 @@ export default function PatientBookingClient({
               {((mode!=='ai'&&step>1)||(mode==='ai'&&aiStep>1)) && (
                 <button onClick={()=>mode==='ai'?setAiStep(s=>s-1):setStep(s=>s-1)} style={{ padding:'10px 20px',borderRadius:10,background:'none',border:'1.5px solid var(--border)',color:'var(--ink)',fontWeight:600,fontSize:'0.85rem',cursor:'pointer',fontFamily:'inherit' }}>← Back</button>
               )}
-              <BottomNextBtn mode={mode} step={step} aiStep={aiStep} color={MC[mode]}
+              <BottomNextBtn mode={mode} step={step} aiStep={aiStep} color={MC[mode]} smartMatchLoading={smartMatchLoading}
                 onNext={()=>{
                   if(mode==='smart'){
-                    if(step===1)handleSmartMatch()
+                    if(step===1) handleSmartMatch()
                     else if(step===2){if(!matchedNurse){showToast('Please select a provider');return}setStep(3)}
                     else{ if(!smartAddr){showToast('Please enter your address');return} bookingFormRef.current?.requestSubmit() }
                   } else if(mode==='browse'){
                     if(step===1){if(!selectedNurse){showToast('Please select a provider');return}setStep(2)}
-                    else if(step===2)setStep(3)
+                    else if(step===2){
+                      const bHours = calcHours(browseStartTime, browseEndTime, browseShift)
+                      if(bHours < minBookingHours){ setError(`Minimum booking duration is ${minBookingHours} hours. You selected ${bHours}h — please adjust the time slot.`); return }
+                      setError('')
+                      setStep(3)
+                    }
                     else{ if(!browseAddr){showToast('Please enter your address');return} bookingFormRef.current?.requestSubmit() }
                   } else {
                     if(aiStep===1){if(!aiSuggestion){showToast('Chat with AI first');return}setSelectedNurse(aiSuggestion);setAiStep(2)}
@@ -1119,8 +1174,8 @@ export default function PatientBookingClient({
                   { icon:'🌍', label:'Nationality',   value: detailNurse.nationality || '—' },
                   { icon: detailNurse.gender==='male'?'♂':'♀', label:'Gender', value: detailNurse.gender.charAt(0).toUpperCase()+detailNurse.gender.slice(1) },
                   { icon:'⏳', label:'Experience',    value: `${detailNurse.experienceYears} year${detailNurse.experienceYears!==1?'s':''}` },
-                  { icon:'💰', label:'Rate/Hour',     value: detailNurse.hourlyRate ? `SAR ${detailNurse.hourlyRate}` : '—' },
-                  { icon:'📅', label:'Daily Rate',    value: detailNurse.dailyRate ? `SAR ${detailNurse.dailyRate}` : '—' },
+                  { icon:'💰', label:'Rate/Hour',     value: detailNurse.hourlyRate ? `SAR ${patientRate(detailNurse.hourlyRate)}` : '—' },
+                  { icon:'📅', label:'Daily Rate',    value: detailNurse.dailyRate ? `SAR ${patientRate(detailNurse.dailyRate)}` : '—' },
                 ].map(item=>(
                   <div key={item.label} style={{ background:'var(--shell-bg)',borderRadius:10,padding:'10px 12px',border:'1px solid var(--border)' }}>
                     <div style={{ fontSize:'0.65rem',fontWeight:600,color:'var(--muted)',textTransform:'uppercase',letterSpacing:'0.06em',marginBottom:3 }}>{item.icon} {item.label}</div>
@@ -1169,28 +1224,29 @@ export default function PatientBookingClient({
 }
 
 // ── Bottom Next Button ────────────────────────────────────────────────────────
-function BottomNextBtn({ mode, step, aiStep, color, onNext, isPending, selectedNurse }: {
+function BottomNextBtn({ mode, step, aiStep, color, onNext, isPending, selectedNurse, smartMatchLoading }: {
   mode: Mode; step: number; aiStep: number; color: string;
-  onNext: () => void; isPending: boolean; selectedNurse: Nurse | null;
+  onNext: () => void; isPending: boolean; selectedNurse: Nurse | null; smartMatchLoading?: boolean;
 }) {
   const labels: Record<string, string> = {
-    'smart-1': 'Find Matching Nurses →',
+    'smart-1': smartMatchLoading ? '🔍 Checking availability…' : 'Find Matching Nurses →',
     'smart-2': 'Confirm Booking →',
-    'smart-3': isPending ? '⏳ Processing...' : '✅ Confirm & Pay',
+    'smart-3': isPending ? '⏳ Saving...' : '💾 Save Booking',
     'browse-1': selectedNurse ? `Book ${selectedNurse.name.split(' ')[0]} →` : 'Select a Provider First',
     'browse-2': 'Review Booking →',
-    'browse-3': isPending ? '⏳ Processing...' : '✅ Confirm & Pay',
+    'browse-3': isPending ? '⏳ Saving...' : '💾 Save Booking',
     'ai-1': 'Proceed to Book →',
     'ai-2': 'Review & Confirm →',
-    'ai-3': isPending ? '⏳ Processing...' : '✅ Confirm & Book',
+    'ai-3': isPending ? '⏳ Saving...' : '💾 Save Booking',
   }
   const key = `${mode}-${mode === 'ai' ? aiStep : step}`
+  const isDisabled = isPending || !!smartMatchLoading
   return (
-    <button onClick={onNext} disabled={isPending} style={{
-      padding:'11px 24px',borderRadius:10,border:'none',cursor:isPending?'not-allowed':'pointer',
+    <button onClick={onNext} disabled={isDisabled} style={{
+      padding:'11px 24px',borderRadius:10,border:'none',cursor:isDisabled?'not-allowed':'pointer',
       fontWeight:700,fontSize:'0.88rem',fontFamily:'inherit',
       background:`linear-gradient(135deg,${color},${color}cc)`,
-      color:'#fff',opacity:isPending?0.7:1,
+      color:'#fff',opacity:isDisabled?0.7:1,
       boxShadow:`0 3px 14px ${color}44`,
       transition:'all 0.2s',
     }}>
@@ -1211,6 +1267,69 @@ function BookCard({ icon, title, sub, color, children }: { icon:string;title:str
         </div>
       </div>
       <div style={{ padding:'1.2rem' }}>{children}</div>
+    </div>
+  )
+}
+
+// ── Location Button ───────────────────────────────────────────────────────────
+function LocationBtn({ onAddress }: { onAddress: (addr: string) => void }) {
+  const [loading, setLoading] = useState(false)
+  const [err, setErr]         = useState('')
+
+  async function handleClick() {
+    setErr('')
+    if (!navigator.geolocation) { setErr('Geolocation not supported'); return }
+    setLoading(true)
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          const { latitude: lat, longitude: lon } = pos.coords
+          const res = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&accept-language=en`,
+            { headers: { 'User-Agent': 'NurseCare+/1.0' } }
+          )
+          const data = await res.json()
+          const a = data.address ?? {}
+          // Build readable address: house_number road, suburb/neighbourhood, city
+          const parts = [
+            a.house_number && a.road ? `${a.house_number} ${a.road}` : a.road,
+            a.suburb ?? a.neighbourhood ?? a.quarter,
+            a.city ?? a.town ?? a.village ?? a.county,
+          ].filter(Boolean)
+          const addr = parts.join(', ') || data.display_name?.split(',').slice(0, 3).join(',') || ''
+          onAddress(addr)
+        } catch {
+          setErr('Could not fetch address')
+        }
+        setLoading(false)
+      },
+      (e) => {
+        setErr(e.code === 1 ? 'Location permission denied' : 'Could not get location')
+        setLoading(false)
+      },
+      { timeout: 10000 }
+    )
+  }
+
+  return (
+    <div style={{ display:'flex', flexDirection:'column', gap:3 }}>
+      <button
+        type="button"
+        onClick={handleClick}
+        disabled={loading}
+        title="Use my current location"
+        style={{
+          padding:'0 14px', height:42, borderRadius:9, border:'1.5px solid var(--border)',
+          background: loading ? 'var(--cream)' : 'linear-gradient(135deg,rgba(14,123,140,0.1),rgba(10,191,204,0.08))',
+          color: loading ? 'var(--muted)' : '#0E7B8C',
+          fontSize:'0.82rem', fontWeight:700, cursor: loading ? 'not-allowed' : 'pointer',
+          fontFamily:'inherit', whiteSpace:'nowrap', display:'flex', alignItems:'center', gap:5,
+          flexShrink:0,
+        }}
+      >
+        {loading ? '⏳' : '📍'} {loading ? 'Locating…' : 'My Location'}
+      </button>
+      {err && <span style={{ fontSize:'0.65rem', color:'#E04A4A', fontWeight:600 }}>{err}</span>}
     </div>
   )
 }
@@ -1332,10 +1451,11 @@ function ShiftCard({ shift, active, onClick, availStatus }: {
   )
 }
 
-function NurseCard({ nurse, selected, onSelect, onViewDetails, onViewAvailability, color, showMatch }: {
+function NurseCard({ nurse, selected, onSelect, onViewDetails, onViewAvailability, color, showMatch, patientRate }: {
   nurse:Nurse; selected:boolean; onSelect:()=>void; onViewDetails:()=>void;
   onViewAvailability?:()=>void;
   color:string; showMatch?:boolean;
+  patientRate: (r: number) => number;
 }) {
   const shortId = nurse.id.slice(-6).toUpperCase()
   return (
@@ -1376,7 +1496,7 @@ function NurseCard({ nurse, selected, onSelect, onViewDetails, onViewAvailabilit
             <div style={{ fontSize:'0.6rem',color:'var(--muted)' }}>Experience</div>
           </div>
           <div style={{ flex:1,textAlign:'center',padding:'7px 4px' }}>
-            <div style={{ fontSize:'0.8rem',fontWeight:700,color:'var(--ink)' }}>SAR {nurse.hourlyRate}</div>
+            <div style={{ fontSize:'0.8rem',fontWeight:700,color:'var(--ink)' }}>SAR {patientRate(nurse.hourlyRate)}</div>
             <div style={{ fontSize:'0.6rem',color:'var(--muted)' }}>Per Hour</div>
           </div>
         </div>

@@ -224,29 +224,67 @@ export default async function ProviderDashboardPage({ searchParams }: Props) {
       {/* Pending Requests Preview */}
       {(pendingRequests ?? []).length > 0 && (
         <div className="dash-card" style={{ marginBottom: '1.5rem', borderLeft: '4px solid #F5842A' }}>
-          <div className="dash-card-header">
-            <span className="dash-card-title">📥 Pending Requests</span>
-            <Link href="/provider/bookings" style={{ fontSize: '0.78rem', color: 'var(--teal)', textDecoration: 'none', fontWeight: 600 }}>View all →</Link>
+          <div style={{ padding: '0.85rem 1.2rem', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ fontWeight: 700, fontSize: '0.92rem' }}>📥 Pending Requests</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <span style={{ background: 'rgba(245,132,42,0.1)', color: '#F5842A', fontSize: '0.72rem', fontWeight: 700, padding: '3px 10px', borderRadius: 50 }}>
+                {(pendingRequests ?? []).length} Pending
+              </span>
+              <Link href="/provider/bookings" style={{ fontSize: '0.78rem', color: 'var(--teal)', textDecoration: 'none', fontWeight: 600 }}>View all →</Link>
+            </div>
           </div>
-          <div style={{ padding: 0 }}>
-            {(pendingRequests ?? []).map((b: any, i: number) => (
-              <div key={b.id} style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                padding: '12px 20px',
-                borderBottom: i < (pendingRequests ?? []).length - 1 ? '1px solid var(--border)' : 'none',
-              }}>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 600, fontSize: '0.88rem' }}>{b.patient_name}</div>
-                  <div style={{ fontSize: '0.72rem', color: 'var(--muted)', marginTop: 2 }}>
-                    {b.service_type} · {b.shift} · {b.city} · {b.start_date}
-                  </div>
-                </div>
-                <Link href="/provider/bookings" style={{
-                  background: '#27A869', color: '#fff', padding: '6px 14px',
-                  borderRadius: 7, fontSize: '0.75rem', fontWeight: 700, textDecoration: 'none', whiteSpace: 'nowrap', marginLeft: 12,
-                }}>Respond →</Link>
-              </div>
-            ))}
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+              <thead>
+                <tr style={{ background: 'var(--cream)', borderBottom: '1px solid var(--border)' }}>
+                  <DashTh>#</DashTh>
+                  <DashTh>Patient</DashTh>
+                  <DashTh>Service</DashTh>
+                  <DashTh>Date / Shift</DashTh>
+                  <DashTh>City</DashTh>
+                  <DashTh>Received</DashTh>
+                  <DashTh>Action</DashTh>
+                </tr>
+              </thead>
+              <tbody>
+                {(pendingRequests ?? []).map((b: any, i: number) => (
+                  <tr key={b.id} style={{ borderBottom: '1px solid var(--border)', background: i % 2 === 0 ? '#fff' : 'rgba(245,132,42,0.015)' }}>
+                    <DashTd>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 24, height: 24, borderRadius: 6, background: 'var(--cream)', border: '1px solid var(--border)', fontSize: '0.68rem', fontWeight: 700, color: 'var(--muted)' }}>
+                        {i + 1}
+                      </span>
+                    </DashTd>
+                    <DashTd>
+                      <div style={{ fontWeight: 700 }}>{b.patient_name}</div>
+                    </DashTd>
+                    <DashTd>{b.service_type ?? '—'}</DashTd>
+                    <DashTd>
+                      {b.start_date && <div>{b.start_date}</div>}
+                      <div style={{ color: 'var(--muted)', fontSize: '0.7rem' }}>{b.shift}</div>
+                    </DashTd>
+                    <DashTd>{b.city ?? '—'}</DashTd>
+                    <DashTd>
+                      <div>{new Date(b.created_at).toLocaleDateString('en-SA', { day: '2-digit', month: 'short', year: 'numeric' })}</div>
+                      <div style={{ color: 'var(--muted)', fontSize: '0.7rem' }}>{new Date(b.created_at).toLocaleTimeString('en-SA', { hour: '2-digit', minute: '2-digit' })}</div>
+                    </DashTd>
+                    <DashTd>
+                      <div style={{ display: 'flex', gap: '0.4rem' }}>
+                        <Link href={`/provider/bookings/${b.id}`} style={{
+                          padding: '5px 10px', borderRadius: 7, border: '1px solid var(--border)',
+                          background: 'var(--cream)', color: 'var(--teal)', fontSize: '0.72rem',
+                          fontWeight: 700, textDecoration: 'none', whiteSpace: 'nowrap',
+                        }}>View →</Link>
+                        <Link href="/provider/bookings" style={{
+                          padding: '5px 10px', borderRadius: 7, border: 'none',
+                          background: '#27A869', color: '#fff', fontSize: '0.72rem',
+                          fontWeight: 700, textDecoration: 'none', whiteSpace: 'nowrap',
+                        }}>Respond →</Link>
+                      </div>
+                    </DashTd>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       )}
@@ -270,70 +308,78 @@ export default async function ProviderDashboardPage({ searchParams }: Props) {
           </div>
         </div>
 
+        {/* Results count */}
+        <div style={{ padding: '0.5rem 1.2rem', borderBottom: '1px solid var(--border)', fontSize: '0.75rem', color: 'var(--muted)' }}>
+          {myBookingsTotal ?? 0} booking{(myBookingsTotal ?? 0) !== 1 ? 's' : ''}
+          {filterTab ? ` · ${filterTab}` : ''}
+          {totalPages > 1 ? ` · Page ${page} of ${totalPages}` : ''}
+        </div>
+
         {!myBookings?.length ? (
           <div style={{ textAlign: 'center', color: 'var(--muted)', padding: '2.5rem', fontSize: '0.9rem' }}>
             No bookings found
           </div>
         ) : (
-          <div style={{ padding: 0 }}>
-            {(myBookings ?? []).map((req: any, i: number) => {
-              const s = STATUS_MAP[req.status] ?? STATUS_MAP.pending
-              const canMarkStarted = req.status === 'accepted' || req.status === 'confirmed'
-              const canMarkDone    = req.status === 'in_progress'
-              const isWorkDone     = req.status === 'work_done'
-
-              return (
-                <div key={req.id} style={{
-                  padding: '1.1rem 1.5rem',
-                  borderBottom: i < (myBookings ?? []).length - 1 ? '1px solid var(--border)' : 'none',
-                }}>
-                  {/* Top row */}
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '1rem', flexWrap: 'wrap' }}>
-                    <div style={{
-                      width: 42, height: 42, borderRadius: 11, flexShrink: 0,
-                      background: 'linear-gradient(135deg,rgba(14,123,140,0.1),rgba(10,191,204,0.08))',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem',
-                    }}>🏥</div>
-
-                    <div style={{ flex: 1, minWidth: 180 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap', marginBottom: '0.25rem' }}>
-                        <span style={{ fontWeight: 700, fontSize: '0.9rem' }}>{req.patient_name}</span>
-                        <span style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>{req.service_type}</span>
-                        <span style={{ background: s.bg, color: s.color, fontSize: '0.65rem', fontWeight: 700, padding: '2px 8px', borderRadius: 50 }}>{s.label}</span>
-                      </div>
-
-                      <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', marginBottom: '0.3rem' }}>
-                        {req.start_date && <Chip>📅 {req.start_date}{req.end_date && req.end_date !== req.start_date ? ` → ${req.end_date}` : ''}</Chip>}
-                        {req.shift && <Chip>🕐 {req.shift}</Chip>}
-                        {req.duration_hours && <Chip>⏱ {req.duration_hours}h</Chip>}
-                        {req.city && <Chip>📍 {req.city}</Chip>}
-                        {req.booking_type && <Chip>{req.booking_type === 'weekly' ? '🔁 Weekly' : req.booking_type === 'monthly' ? '📆 Monthly' : '📅 One-Time'}</Chip>}
-                      </div>
-
-                      {req.address && <div style={{ fontSize: '0.72rem', color: 'var(--muted)' }}>📌 {req.address}</div>}
-                      {req.notes  && <div style={{ fontSize: '0.72rem', color: 'var(--muted)', fontStyle: 'italic', marginTop: 2 }}>📝 {req.notes}</div>}
-                    </div>
-
-                    <div style={{ fontSize: '0.72rem', color: 'var(--muted)', flexShrink: 0, textAlign: 'right' }}>
-                      {new Date(req.created_at).toLocaleDateString('en-SA', { day: '2-digit', month: 'short', year: 'numeric' })}
-                    </div>
-                  </div>
-
-                  {/* Work action buttons */}
-                  {(canMarkStarted || canMarkDone || isWorkDone) && (
-                    <div style={{ marginTop: '0.75rem', marginLeft: 54, display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
-                      {canMarkStarted && <WorkStartedBtn requestId={req.id} />}
-                      {canMarkDone    && <WorkDoneBtn requestId={req.id} />}
-                      {isWorkDone && (
-                        <span style={{ fontSize: '0.75rem', color: '#6B3FA0', fontStyle: 'italic' }}>
-                          ⏳ Awaiting patient confirmation…
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+              <thead>
+                <tr style={{ background: 'var(--cream)', borderBottom: '1px solid var(--border)' }}>
+                  <DashTh>#</DashTh>
+                  <DashTh>Patient</DashTh>
+                  <DashTh>Service</DashTh>
+                  <DashTh>Date / Shift</DashTh>
+                  <DashTh>City</DashTh>
+                  <DashTh>Status</DashTh>
+                  <DashTh>Action</DashTh>
+                  <DashTh>Details</DashTh>
+                </tr>
+              </thead>
+              <tbody>
+                {(myBookings ?? []).map((req: any, i: number) => {
+                  const s = STATUS_MAP[req.status] ?? STATUS_MAP.pending
+                  const canMarkStarted = req.status === 'accepted' || req.status === 'confirmed'
+                  const canMarkDone    = req.status === 'in_progress'
+                  const isWorkDone     = req.status === 'work_done'
+                  const serial = offset + i + 1
+                  return (
+                    <tr key={req.id} style={{ borderBottom: '1px solid var(--border)', background: i % 2 === 0 ? '#fff' : 'rgba(14,123,140,0.015)' }}>
+                      <DashTd>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 24, height: 24, borderRadius: 6, background: 'var(--cream)', border: '1px solid var(--border)', fontSize: '0.68rem', fontWeight: 700, color: 'var(--muted)' }}>
+                          {serial}
                         </span>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )
-            })}
+                      </DashTd>
+                      <DashTd>
+                        <div style={{ fontWeight: 700 }}>{req.patient_name}</div>
+                      </DashTd>
+                      <DashTd>{req.service_type ?? '—'}</DashTd>
+                      <DashTd>
+                        {req.start_date && <div>{req.start_date}{req.end_date && req.end_date !== req.start_date ? ` → ${req.end_date}` : ''}</div>}
+                        <div style={{ color: 'var(--muted)', fontSize: '0.7rem' }}>
+                          {[req.shift, req.duration_hours ? `${req.duration_hours}h` : null].filter(Boolean).join(' · ')}
+                        </div>
+                      </DashTd>
+                      <DashTd>{req.city ?? '—'}</DashTd>
+                      <DashTd>
+                        <span style={{ background: s.bg, color: s.color, fontSize: '0.65rem', fontWeight: 700, padding: '3px 9px', borderRadius: 50, whiteSpace: 'nowrap' }}>{s.label}</span>
+                      </DashTd>
+                      <DashTd>
+                        {canMarkStarted && <WorkStartedBtn requestId={req.id} startDate={req.start_date} isPaid={req.payment_status === 'paid'} />}
+                        {canMarkDone    && <WorkDoneBtn requestId={req.id} />}
+                        {isWorkDone && <span style={{ fontSize: '0.7rem', color: '#6B3FA0', fontStyle: 'italic' }}>⏳ Awaiting patient…</span>}
+                        {!canMarkStarted && !canMarkDone && !isWorkDone && <span style={{ color: 'var(--muted)', fontSize: '0.7rem' }}>—</span>}
+                      </DashTd>
+                      <DashTd>
+                        <a href={`/provider/bookings/${req.id}`} style={{
+                          padding: '4px 10px', borderRadius: 6, border: '1px solid var(--border)',
+                          background: 'var(--cream)', color: 'var(--teal)', fontSize: '0.72rem',
+                          fontWeight: 700, textDecoration: 'none', whiteSpace: 'nowrap',
+                        }}>View →</a>
+                      </DashTd>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
           </div>
         )}
 
@@ -423,14 +469,19 @@ export default async function ProviderDashboardPage({ searchParams }: Props) {
   )
 }
 
-function Chip({ children }: { children: React.ReactNode }) {
+function DashTh({ children }: { children: React.ReactNode }) {
   return (
-    <span style={{
-      background: 'var(--cream)', border: '1px solid var(--border)',
-      borderRadius: 7, padding: '2px 8px', fontSize: '0.7rem', color: 'var(--ink)', fontWeight: 500,
-    }}>
+    <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 700, fontSize: '0.68rem', color: 'var(--muted)', whiteSpace: 'nowrap', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
       {children}
-    </span>
+    </th>
+  )
+}
+
+function DashTd({ children }: { children: React.ReactNode }) {
+  return (
+    <td style={{ padding: '10px 12px', verticalAlign: 'middle', color: 'var(--ink)' }}>
+      {children}
+    </td>
   )
 }
 
