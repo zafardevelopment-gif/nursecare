@@ -4,7 +4,7 @@ import { createSupabaseServerClient, createSupabaseServiceRoleClient } from '@/l
 import { requireRole } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
 import { SHIFT_HOURS, DAY_OF_WEEK } from './shiftConstants'
-import type { ShiftKey, DayKey, WeekState, ShiftStatus } from './shiftConstants'
+import type { ShiftKey, DayKey, DayShifts, WeekState, ShiftStatus } from './shiftConstants'
 export type { ShiftKey, DayKey, DayShifts, WeekState, ShiftStatus } from './shiftConstants'
 
 // ── Calendar types ────────────────────────────────────────
