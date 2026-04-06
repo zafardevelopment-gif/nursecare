@@ -12,7 +12,7 @@ export default async function PatientBookingPage() {
 
   const { data: settings } = await serviceSupabase
     .from('platform_settings')
-    .select('vat_rate, default_commission')
+    .select('vat_rate, default_commission, min_booking_hours')
     .limit(1)
     .single()
 
