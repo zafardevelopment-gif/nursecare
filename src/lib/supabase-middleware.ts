@@ -14,10 +14,11 @@ export async function createSupabaseMiddlewareClient(request: NextRequest) {
           return request.cookies.getAll()
         },
         setAll(cookiesToSet) {
+          // Must set on both request AND the existing response
+          // Do NOT create a new NextResponse here — that drops the refreshed cookies
           cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set(name, value)
           )
-          supabaseResponse = NextResponse.next({ request })
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options)
           )

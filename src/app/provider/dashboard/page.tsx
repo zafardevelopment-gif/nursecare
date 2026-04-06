@@ -1,5 +1,5 @@
 import { requireRole } from '@/lib/auth'
-import { createSupabaseServerClient } from '@/lib/supabase-server'
+import { createSupabaseServerClient, createSupabaseServiceRoleClient } from '@/lib/supabase-server'
 import Link from 'next/link'
 
 interface Props {
@@ -9,6 +9,7 @@ interface Props {
 export default async function ProviderDashboardPage({ searchParams }: Props) {
   const user = await requireRole('provider')
   const supabase = await createSupabaseServerClient()
+  const serviceSupabase = createSupabaseServiceRoleClient()
   const params = await searchParams
 
   const { data: nurse } = await supabase
@@ -20,15 +21,14 @@ export default async function ProviderDashboardPage({ searchParams }: Props) {
   const status = nurse?.status ?? null
 
   const [
-    { count: pendingCount },
     { count: acceptedCount },
     { data: pendingAgreements },
+    { data: pendingRequests },
   ] = await Promise.all([
-    nurse?.status === 'approved'
-      ? supabase.from('bookings').select('*', { count: 'exact', head: true }).eq('status', 'pending').eq('city', nurse.city ?? '')
-      : Promise.resolve({ count: 0 }),
-    supabase.from('bookings').select('*', { count: 'exact', head: true })
-      .eq('nurse_id', user.id).eq('status', 'accepted'),
+    // Count accepted bookings this nurse has
+    serviceSupabase.from('booking_requests').select('*', { count: 'exact', head: true })
+      .eq('nurse_id', user.id)
+      .in('status', ['accepted', 'confirmed']),
     // Agreements waiting for nurse approval
     nurse?.id
       ? supabase
@@ -39,7 +39,18 @@ export default async function ProviderDashboardPage({ searchParams }: Props) {
           .is('nurse_approved_at', null)
           .order('generated_at', { ascending: false })
       : Promise.resolve({ data: [] }),
+    // Pending booking_requests — service role bypasses RLS so nurses can see all pending
+    nurse?.status === 'approved'
+      ? serviceSupabase
+          .from('booking_requests')
+          .select('id, patient_name, service_type, start_date, shift, city, status, created_at')
+          .eq('status', 'pending')
+          .order('created_at', { ascending: false })
+          .limit(5)
+      : Promise.resolve({ data: [] }),
   ])
+
+  const pendingCount = (pendingRequests ?? []).length
 
   const hasPendingAgreements = (pendingAgreements ?? []).length > 0
 
@@ -58,11 +69,25 @@ export default async function ProviderDashboardPage({ searchParams }: Props) {
         </div>
       )}
 
+      {/* Pending Bookings Alert */}
+      {pendingCount > 0 && (
+        <div style={{
+          background: '#FFF8F0', border: '1px solid rgba(245,132,42,0.35)', color: '#b85e00',
+          padding: '12px 18px', borderRadius: 9, marginBottom: '1.5rem',
+          fontSize: '0.88rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 10,
+        }}>
+          <span style={{ fontSize: '1.1rem' }}>📥</span>
+          <span>You have {pendingCount} pending booking request{pendingCount > 1 ? 's' : ''} awaiting your response —{' '}
+            <a href="/provider/bookings" style={{ color: '#b85e00', textDecoration: 'underline' }}>Review now</a>
+          </span>
+        </div>
+      )}
+
       {/* KPI Row */}
       <div className="dash-kpi-row">
         <div className="dash-kpi">
           <div className="dash-kpi-icon" style={{ background: '#FFF3E0' }}>📥</div>
-          <div className="dash-kpi-num">{pendingCount ?? 0}</div>
+          <div className="dash-kpi-num">{pendingCount}</div>
           <div className="dash-kpi-label">New Requests</div>
         </div>
         <div className="dash-kpi">
@@ -132,6 +157,38 @@ export default async function ProviderDashboardPage({ searchParams }: Props) {
                 }}>
                   Review &amp; Sign →
                 </Link>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Pending Booking Requests Card */}
+      {(pendingRequests ?? []).length > 0 && (
+        <div className="dash-card" style={{ marginBottom: '1.5rem', borderLeft: '4px solid #F5842A' }}>
+          <div className="dash-card-header">
+            <span className="dash-card-title">📥 Pending Booking Requests</span>
+            <a href="/provider/bookings" style={{ fontSize: '0.78rem', color: 'var(--teal)', textDecoration: 'none', fontWeight: 600 }}>View all →</a>
+          </div>
+          <div className="dash-card-body" style={{ padding: 0 }}>
+            {(pendingRequests ?? []).map((b: any, i: number) => (
+              <div key={b.id} style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '12px 20px',
+                borderBottom: i < (pendingRequests ?? []).length - 1 ? '1px solid var(--border)' : 'none',
+              }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 600, fontSize: '0.88rem', color: 'var(--ink)' }}>
+                    {b.patient_name}
+                  </div>
+                  <div style={{ fontSize: '0.72rem', color: 'var(--muted)', marginTop: 2 }}>
+                    {b.service_type} · {b.shift} · {b.city} · {b.start_date}
+                  </div>
+                </div>
+                <a href="/provider/bookings" style={{
+                  background: '#27A869', color: '#fff', padding: '6px 14px',
+                  borderRadius: 7, fontSize: '0.75rem', fontWeight: 700, textDecoration: 'none', whiteSpace: 'nowrap', marginLeft: 12,
+                }}>Respond →</a>
               </div>
             ))}
           </div>

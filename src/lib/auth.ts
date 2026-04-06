@@ -46,7 +46,7 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
 
 /**
  * Asserts that a user is authenticated.
- * Redirects to /auth/login if not.
+ * Redirects to /auth/login if not (throws Next.js redirect).
  */
 export async function requireAuth(): Promise<AuthUser> {
   const user = await getCurrentUser()
@@ -61,6 +61,17 @@ export async function requireAuth(): Promise<AuthUser> {
 export async function requireRole(...roles: UserRole[]): Promise<AuthUser> {
   const user = await requireAuth()
   if (!roles.includes(user.role)) redirect('/unauthorized')
+  return user
+}
+
+/**
+ * Like requireRole but throws a plain Error instead of redirecting.
+ * Use inside server actions where redirect() would cause unwanted navigation.
+ */
+export async function requireRoleAction(...roles: UserRole[]): Promise<AuthUser> {
+  const user = await getCurrentUser()
+  if (!user) throw new Error('NOT_AUTHENTICATED')
+  if (!roles.includes(user.role)) throw new Error('UNAUTHORIZED')
   return user
 }
 

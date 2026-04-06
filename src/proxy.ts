@@ -12,9 +12,16 @@ const PROTECTED_ROUTES: Record<string, string[]> = {
 // Routes that logged-in users should NOT visit (auth pages)
 const AUTH_ROUTES = ['/auth/login', '/auth/signup']
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { supabase, supabaseResponse } = await createSupabaseMiddlewareClient(request)
   const pathname = request.nextUrl.pathname
+
+  // Skip auth redirect for server actions — they are POST requests from the client
+  // and the user was already authenticated when the page loaded.
+  if (request.method === 'POST') {
+    await supabase.auth.getUser()
+    return supabaseResponse
+  }
 
   // Refresh session — critical, must always run
   const { data: { user } } = await supabase.auth.getUser()

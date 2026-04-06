@@ -152,11 +152,11 @@ export default async function AdminNurseDetailPage({ params }: Props) {
               <form action={updateNursePrice} style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-end', flexWrap: 'wrap', background: 'rgba(14,123,140,0.04)', border: '1px solid rgba(14,123,140,0.15)', borderRadius: '10px', padding: '0.8rem 1rem' }}>
                 <input type="hidden" name="nurseId" value={nurse.id} />
                 <div>
-                  <div style={smallLabel}>Hourly Rate</div>
+                  <div style={smallLabel}>Hourly Patient Rate</div>
                   <input type="number" name="hourly_rate" defaultValue={nurse.hourly_rate ?? ''} min="0" step="0.01" style={inputStyle} />
                 </div>
                 <div>
-                  <div style={smallLabel}>Daily Rate</div>
+                  <div style={smallLabel}>Daily Shift Rate</div>
                   <input type="number" name="daily_rate" defaultValue={nurse.daily_rate ?? ''} min="0" step="0.01" style={inputStyle} />
                 </div>
                 <button type="submit" style={{ ...btnStyle('teal'), alignSelf: 'flex-end' }}>Update Price</button>
@@ -210,11 +210,11 @@ export default async function AdminNurseDetailPage({ params }: Props) {
                   <div style={{ fontWeight: 700, fontSize: '0.8rem', color: '#27A869', marginBottom: '0.6rem' }}>✓ Approve Nurse</div>
                   <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.6rem' }}>
                     <div>
-                      <div style={smallLabel}>Hourly Rate (SAR)</div>
+                      <div style={smallLabel}>Hourly Patient Rate (SAR)</div>
                       <input type="number" name="hourly_rate" defaultValue={nurse.hourly_rate ?? ''} min="0" step="0.01" placeholder="e.g. 100" style={{ ...inputStyle, width: '100px' }} />
                     </div>
                     <div>
-                      <div style={smallLabel}>Daily Rate (SAR)</div>
+                      <div style={smallLabel}>Daily Shift Rate (SAR)</div>
                       <input type="number" name="daily_rate" defaultValue={nurse.daily_rate ?? ''} min="0" step="0.01" placeholder="e.g. 700" style={{ ...inputStyle, width: '100px' }} />
                     </div>
                   </div>
@@ -255,7 +255,7 @@ export default async function AdminNurseDetailPage({ params }: Props) {
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '0.6rem', marginBottom: '1rem' }}>
                   {((pendingUpdate.changed_fields ?? []) as string[]).map((field: string) => {
                     const LABELS: Record<string, string> = {
-                      hourly_rate: 'Hourly Rate (SAR)', daily_rate: 'Daily Rate (SAR)',
+                      hourly_rate: 'Hourly Patient Rate (SAR)', daily_rate: 'Daily Shift Rate (SAR)',
                       specialization: 'Specialization', experience_years: 'Years of Experience', license_no: 'License No',
                     }
                     const old = (pendingUpdate.old_values as any)?.[field]

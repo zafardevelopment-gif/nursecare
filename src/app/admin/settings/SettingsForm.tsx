@@ -10,6 +10,7 @@ interface Settings {
   vat_rate?: number
   free_cancellation_hours?: number
   auto_complete_hours?: number
+  min_booking_hours?: number
   allow_emergency_bookings?: boolean
   email_notifications?: boolean
   whatsapp_notifications?: boolean
@@ -127,6 +128,19 @@ export default function SettingsForm({ settings }: { settings: Settings | null }
             description="Saudi ZATCA compliant"
           >
             <NumberInput name="vat_rate" defaultValue={settings?.vat_rate ?? 15} unit="%" />
+          </SettingRow>
+
+          <SettingRow
+            label="Minimum Booking Hours"
+            description={
+              <>
+                Minimum hours a patient must book per session.
+                <br />
+                <span style={{ color: 'var(--teal)' }}>e.g. 2 hrs → patient cannot book less than 2 hours per shift</span>
+              </>
+            }
+          >
+            <NumberInput name="min_booking_hours" defaultValue={settings?.min_booking_hours ?? 2} unit="hours" />
           </SettingRow>
 
           <SettingRow

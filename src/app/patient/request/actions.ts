@@ -1,7 +1,7 @@
 'use server'
 
-import { createSupabaseServerClient } from '@/lib/supabase-server'
-import { requireRole } from '@/lib/auth'
+import { createSupabaseServiceRoleClient } from '@/lib/supabase-server'
+import { requireRoleAction } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 
 // Generate all dates for a recurring booking
@@ -22,7 +22,6 @@ function generateDates(
   const end = new Date(endDate + 'T00:00:00')
 
   if (bookingType === 'weekly') {
-    // Walk day-by-day from start to end, collect matching days
     const cur = new Date(start)
     while (cur <= end) {
       if (daysOfWeek.includes(cur.getDay())) {
@@ -33,12 +32,10 @@ function generateDates(
   }
 
   if (bookingType === 'monthly') {
-    // Same day-of-month each month
     const dayOfMonth = start.getDate()
     const cur = new Date(start)
     while (cur <= end) {
       dates.push(cur.toISOString().split('T')[0])
-      // Advance to next month, same day
       cur.setMonth(cur.getMonth() + 1)
       cur.setDate(dayOfMonth)
     }
@@ -48,8 +45,16 @@ function generateDates(
 }
 
 export async function createBookingAction(formData: FormData) {
-  const user = await requireRole('patient')
-  const supabase = await createSupabaseServerClient()
+  // Auth — use requireRoleAction to avoid redirect-throw issues,
+  // but we still redirect on error since this is a native form action
+  let user
+  try {
+    user = await requireRoleAction('patient')
+  } catch {
+    redirect('/auth/login')
+  }
+
+  const supabase = createSupabaseServiceRoleClient()
 
   const service_type      = formData.get('service_type') as string
   const patient_condition = formData.get('patient_condition') as string

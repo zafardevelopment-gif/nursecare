@@ -52,6 +52,7 @@ export async function savePlatformSettings(formData: FormData) {
     vat_rate:                 parseFloat(formData.get('vat_rate') as string) || 15,
     free_cancellation_hours:  parseInt(formData.get('free_cancellation_hours') as string) || 24,
     auto_complete_hours:      parseInt(formData.get('auto_complete_hours') as string) || 24,
+    min_booking_hours:        parseInt(formData.get('min_booking_hours') as string) || 2,
     allow_emergency_bookings: formData.get('allow_emergency_bookings') === 'true',
     chat_enabled:             formData.get('chat_enabled') === 'true',
     email_notifications:      formData.get('email_notifications') === 'true',

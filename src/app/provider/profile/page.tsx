@@ -173,8 +173,8 @@ function ViewProfile({ nurse, isUpdatePending }: { nurse: any; isUpdatePending: 
         </div>
         <div className="dash-card-body">
           <div style={gridStyle}>
-            <Field label="Hourly Rate (Nurse)"  value={nurse.hourly_rate   ? `SAR ${nurse.hourly_rate}`        : null} />
-            <Field label="Daily Rate (Nurse)"   value={nurse.daily_rate    ? `SAR ${nurse.daily_rate}`         : null} />
+            <Field label="Hourly Patient Rate"  value={nurse.hourly_rate   ? `SAR ${nurse.hourly_rate}`        : null} />
+            <Field label="Daily Shift Rate"     value={nurse.daily_rate    ? `SAR ${nurse.daily_rate}`         : null} />
             <Field label="Final Hourly (Patient)" value={nurse.final_hourly_price ? `SAR ${nurse.final_hourly_price}` : null} />
             <Field label="Final Daily (Patient)"  value={nurse.final_daily_price  ? `SAR ${nurse.final_daily_price}`  : null} />
             <Field label="Commission"           value={nurse.commission_percent ? `${nurse.commission_percent}%` : null} />
@@ -267,11 +267,11 @@ function EditForm({ nurse }: { nurse: any }) {
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
             <div className="form-group">
-              <label className="form-label">Hourly Rate (SAR)</label>
+              <label className="form-label">Hourly Patient Rate (SAR)</label>
               <input type="number" name="hourly_rate" className="form-input" defaultValue={nurse?.hourly_rate ?? ''} min="0" step="0.01" placeholder="e.g. 100" />
             </div>
             <div className="form-group">
-              <label className="form-label">Daily Rate (SAR)</label>
+              <label className="form-label">Daily Shift Rate (SAR)</label>
               <input type="number" name="daily_rate" className="form-input" defaultValue={nurse?.daily_rate ?? ''} min="0" step="0.01" placeholder="e.g. 700" />
             </div>
           </div>

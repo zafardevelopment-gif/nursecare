@@ -106,11 +106,11 @@ export default function OnboardingForm({ isPending: isAlreadyPending }: { isPend
       </p>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
         <div className={grp}>
-          <label className="form-label">Hourly Rate (SAR)</label>
+          <label className="form-label">Hourly Patient Rate (SAR)</label>
           <input type="number" name="hourly_rate" min="0" step="0.01" className={inp} placeholder="e.g. 100" />
         </div>
         <div className={grp}>
-          <label className="form-label">Daily Rate (SAR)</label>
+          <label className="form-label">Daily Shift Rate (SAR)</label>
           <input type="number" name="daily_rate" min="0" step="0.01" className={inp} placeholder="e.g. 700" />
         </div>
       </div>
