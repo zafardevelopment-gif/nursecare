@@ -147,7 +147,7 @@ export default function TemplatesClient({
                     <span style={{ fontSize: '0.7rem', color: 'var(--muted)', background: 'var(--cream)', padding: '2px 8px', borderRadius: 50 }}>v{tpl.version}</span>
                   </div>
                   <p style={{ fontSize: '0.8rem', color: 'var(--muted)', whiteSpace: 'pre-wrap', maxHeight: 60, overflow: 'hidden' }}>{tpl.content.substring(0, 180)}…</p>
-                  <div style={{ fontSize: '0.72rem', color: 'var(--muted)', marginTop: 6 }}>Created: {new Date(tpl.created_at).toLocaleDateString()}</div>
+                  <div style={{ fontSize: '0.72rem', color: 'var(--muted)', marginTop: 6 }}>Created: {new Date(tpl.created_at).toLocaleDateString('en-GB')}</div>
                 </div>
                 <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
                   <button onClick={() => { setEditing(tpl); setShowNew(false); setSelectedLogo(tpl.logo_url ?? '') }} style={btnSecondary}>Edit</button>

@@ -20,7 +20,7 @@ export async function updateProfileAction(formData: FormData) {
   // Fetch current nurse record
   const { data: nurse, error: fetchError } = await supabase
     .from('nurses')
-    .select('id, status, hourly_rate, daily_rate, specialization, experience_years, license_no, phone, city, bio, nationality, gender')
+    .select('id, status, hourly_rate, daily_rate, specialization, experience_years, license_no, phone, city, bio, nationality, gender, languages')
     .eq('user_id', user.id)
     .single()
 
@@ -35,6 +35,7 @@ export async function updateProfileAction(formData: FormData) {
     bio:              formData.get('bio') as string,
     nationality:      formData.get('nationality') as string,
     gender:           formData.get('gender') as string,
+    languages:        formData.getAll('languages') as string[],
     specialization:   (formData.get('specialization') as string) || null,
     experience_years: parseInt(formData.get('experience_years') as string) || 0,
     license_no:       (formData.get('license_no') as string) || null,
@@ -88,6 +89,7 @@ export async function updateProfileAction(formData: FormData) {
       bio:         submitted.bio,
       nationality: submitted.nationality,
       gender:      submitted.gender,
+      languages:   submitted.languages,
     })
     .eq('id', nurse.id)
 

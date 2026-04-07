@@ -34,6 +34,7 @@ export default async function PatientBookingPage() {
       nationality,
       experience_years,
       bio,
+      languages,
       is_available,
       status,
       nurse_documents ( doc_type, file_url )
@@ -51,6 +52,7 @@ export default async function PatientBookingPage() {
     nationality:     n.nationality     ?? '',
     experienceYears: n.experience_years ?? 0,
     bio:             n.bio             ?? '',
+    languages:       Array.isArray(n.languages) ? n.languages : [],
     photoUrl:        (n.nurse_documents as any[])?.find((d: any) => d.doc_type === 'photo')?.file_url ?? null,
   }))
 
@@ -61,27 +63,9 @@ export default async function PatientBookingPage() {
     nurseList.map(n => n.nationality).filter(Boolean)
   )).sort() as string[]
 
-  // Languages — not in DB yet, so we derive from nationality as a proxy
-  // (Saudi/Egyptian → Arabic, Pakistani/Indian → Urdu, Filipino → Tagalog, etc.)
-  const languageMap: Record<string, string[]> = {
-    saudi:      ['Arabic'],
-    egyptian:   ['Arabic'],
-    emirati:    ['Arabic'],
-    jordanian:  ['Arabic'],
-    lebanese:   ['Arabic'],
-    pakistani:  ['Urdu', 'English'],
-    indian:     ['Hindi', 'English'],
-    filipino:   ['Tagalog', 'English'],
-    bangladeshi:['Bengali', 'English'],
-    british:    ['English'],
-    american:   ['English'],
-  }
+  // Languages — from the nurse's own languages field in DB
   const languageSet = new Set<string>()
-  nurseList.forEach(n => {
-    const key = n.nationality?.toLowerCase()
-    const langs = languageMap[key] ?? ['Arabic']
-    langs.forEach(l => languageSet.add(l))
-  })
+  nurseList.forEach(n => n.languages.forEach((l: string) => languageSet.add(l)))
   const languages = Array.from(languageSet).sort()
 
   return (

@@ -20,6 +20,7 @@ export type Nurse = {
   experienceYears: number
   bio:             string
   photoUrl:        string | null
+  languages:       string[]
 }
 
 type Mode = 'smart' | 'browse' | 'ai'
@@ -37,9 +38,9 @@ const PLATFORM_FEE = 0
 
 // fallback demo nurses shown only when DB returns nothing
 const DEMO_NURSES: Nurse[] = [
-  { id:'d1', name:'Sarah Al-Rashidi',  specialization:'ICU / Post-Surgery', city:'Riyadh', hourlyRate:380, dailyRate:2800, gender:'female', nationality:'Saudi',    experienceYears:8, bio:'Experienced ICU nurse.',   photoUrl:null },
-  { id:'d2', name:'Hana Al-Qahtani',   specialization:'Pediatric / NICU',   city:'Riyadh', hourlyRate:400, dailyRate:3000, gender:'female', nationality:'Saudi',    experienceYears:7, bio:'Specialist in pediatrics.', photoUrl:null },
-  { id:'d3', name:'Khalid Mansour',    specialization:'General Nursing',    city:'Riyadh', hourlyRate:320, dailyRate:2400, gender:'male',   nationality:'Pakistani', experienceYears:5, bio:'General home nursing.',    photoUrl:null },
+  { id:'d1', name:'Sarah Al-Rashidi',  specialization:'ICU / Post-Surgery', city:'Riyadh', hourlyRate:380, dailyRate:2800, gender:'female', nationality:'Saudi',    experienceYears:8, bio:'Experienced ICU nurse.',   photoUrl:null, languages:['Arabic','English'] },
+  { id:'d2', name:'Hana Al-Qahtani',   specialization:'Pediatric / NICU',   city:'Riyadh', hourlyRate:400, dailyRate:3000, gender:'female', nationality:'Saudi',    experienceYears:7, bio:'Specialist in pediatrics.', photoUrl:null, languages:['Arabic'] },
+  { id:'d3', name:'Khalid Mansour',    specialization:'General Nursing',    city:'Riyadh', hourlyRate:320, dailyRate:2400, gender:'male',   nationality:'Pakistani', experienceYears:5, bio:'General home nursing.',    photoUrl:null, languages:['Urdu','English'] },
 ]
 
 function nurseEmoji(n: Nurse) { return n.gender === 'male' ? '👨‍⚕️' : '👩‍⚕️' }
@@ -320,6 +321,7 @@ export default function PatientBookingClient({
     (browseCity        === 'All' || n.city === browseCity) &&
     (browseGender      === 'Any' || n.gender.toLowerCase() === browseGender.toLowerCase()) &&
     (browseNationality === 'Any' || n.nationality.toLowerCase() === browseNationality.toLowerCase()) &&
+    (browseLanguage    === 'Any' || (n.languages ?? []).some(l => l.toLowerCase() === browseLanguage.toLowerCase())) &&
     (browseSearch === '' || n.name.toLowerCase().includes(browseSearch.toLowerCase()) || n.specialization.toLowerCase().includes(browseSearch.toLowerCase()))
   )
 
@@ -1176,6 +1178,7 @@ export default function PatientBookingClient({
                   { icon:'⏳', label:'Experience',    value: `${detailNurse.experienceYears} year${detailNurse.experienceYears!==1?'s':''}` },
                   { icon:'💰', label:'Rate/Hour',     value: detailNurse.hourlyRate ? `SAR ${patientRate(detailNurse.hourlyRate)}` : '—' },
                   { icon:'📅', label:'Daily Rate',    value: detailNurse.dailyRate ? `SAR ${patientRate(detailNurse.dailyRate)}` : '—' },
+                  ...(detailNurse.languages?.length ? [{ icon:'🗣', label:'Languages', value: detailNurse.languages.join(', ') }] : []),
                 ].map(item=>(
                   <div key={item.label} style={{ background:'var(--shell-bg)',borderRadius:10,padding:'10px 12px',border:'1px solid var(--border)' }}>
                     <div style={{ fontSize:'0.65rem',fontWeight:600,color:'var(--muted)',textTransform:'uppercase',letterSpacing:'0.06em',marginBottom:3 }}>{item.icon} {item.label}</div>
@@ -1483,6 +1486,9 @@ function NurseCard({ nurse, selected, onSelect, onViewDetails, onViewAvailabilit
         <div style={{ display:'flex',flexWrap:'wrap',gap:4,marginBottom:8 }}>
           {nurse.nationality && <span style={{ padding:'2px 7px',borderRadius:5,fontSize:'0.62rem',fontWeight:600,background:'var(--shell-bg)',color:'var(--muted)' }}>🌍 {nurse.nationality}</span>}
           <span style={{ padding:'2px 7px',borderRadius:5,fontSize:'0.62rem',fontWeight:600,background:'var(--shell-bg)',color:'var(--muted)' }}>{nurse.gender==='female'?'♀':'♂'} {nurse.gender}</span>
+          {(nurse.languages ?? []).map(l => (
+            <span key={l} style={{ padding:'2px 7px',borderRadius:5,fontSize:'0.62rem',fontWeight:600,background:'rgba(14,123,140,0.08)',color:'#0E7B8C' }}>🗣 {l}</span>
+          ))}
         </div>
         {/* Tags */}
         <div style={{ display:'flex',flexWrap:'wrap',gap:5,marginBottom:10 }}>

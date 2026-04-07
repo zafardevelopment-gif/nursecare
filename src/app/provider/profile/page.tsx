@@ -141,6 +141,16 @@ function ViewProfile({ nurse, isUpdatePending }: { nurse: any; isUpdatePending: 
             <Field label="Gender"       value={nurse.gender} capitalize />
             <Field label="Nationality"  value={nurse.nationality} />
           </div>
+          {Array.isArray(nurse.languages) && nurse.languages.length > 0 && (
+            <div style={{ marginTop: '1rem' }}>
+              <div style={fieldLabel}>🗣 Languages Spoken</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', marginTop: 6 }}>
+                {(nurse.languages as string[]).map((l: string) => (
+                  <span key={l} style={{ background: 'rgba(14,123,140,0.08)', color: '#0E7B8C', fontSize: '0.78rem', fontWeight: 600, padding: '3px 10px', borderRadius: 50, border: '1px solid rgba(14,123,140,0.2)' }}>{l}</span>
+                ))}
+              </div>
+            </div>
+          )}
           {nurse.bio && (
             <div style={{ marginTop: '1rem' }}>
               <div style={fieldLabel}>Bio</div>
@@ -240,6 +250,21 @@ function EditForm({ nurse }: { nurse: any }) {
           <div className="form-group">
             <label className="form-label">Bio</label>
             <textarea name="bio" className="form-input" rows={3} defaultValue={nurse?.bio ?? ''} placeholder="Tell patients about your experience..." style={{ resize: 'vertical' }} />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">🗣 Languages Spoken</label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.6rem', marginTop: 6 }}>
+              {['Arabic','English','Urdu','Hindi','Tagalog','Bengali','French','Turkish','Persian'].map(lang => {
+                const checked = Array.isArray(nurse?.languages) && (nurse.languages as string[]).includes(lang)
+                return (
+                  <label key={lang} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.84rem', cursor: 'pointer', background: 'var(--cream)', border: '1px solid var(--border)', borderRadius: 8, padding: '5px 12px', fontWeight: 600 }}>
+                    <input type="checkbox" name="languages" value={lang} defaultChecked={checked} style={{ accentColor: 'var(--teal)' }} />
+                    {lang}
+                  </label>
+                )
+              })}
+            </div>
           </div>
 
           <SectionLabel sensitive>Professional Details — requires admin approval</SectionLabel>

@@ -123,6 +123,16 @@ export default async function AdminNurseDetailPage({ params }: Props) {
                 <Field label="License No"  value={nurse.license_no} />
                 <Field label="Specialization" value={nurse.specialization} />
               </div>
+              {Array.isArray(nurse.languages) && nurse.languages.length > 0 && (
+                <div style={{ marginTop: '0.8rem' }}>
+                  <div style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 5 }}>🗣 Languages</div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+                    {(nurse.languages as string[]).map((l: string) => (
+                      <span key={l} style={{ background: 'rgba(14,123,140,0.08)', color: '#0E7B8C', fontSize: '0.75rem', fontWeight: 600, padding: '2px 9px', borderRadius: 50, border: '1px solid rgba(14,123,140,0.2)' }}>{l}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
               {nurse.bio && (
                 <div style={{ marginTop: '0.8rem', fontSize: '0.84rem', color: 'var(--muted)', fontStyle: 'italic' }}>
                   "{nurse.bio}"
