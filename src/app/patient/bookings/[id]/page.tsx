@@ -84,6 +84,9 @@ export default async function BookingDetailPage({ params }: Props) {
           )}
           <DetailRow icon="🕐" label="Shift" value={b.shift ?? '—'} />
           <DetailRow icon="⏱" label="Duration" value={b.duration_hours ? `${b.duration_hours} hours` : '—'} />
+          {b.shift && b.duration_hours && (
+            <DetailRow icon="🕰" label="Work Hours" value={shiftTimeRange(b.shift, b.duration_hours)} />
+          )}
           <DetailRow icon="📆" label="Booking Type" value={typeLabel} />
           {b.total_sessions && (
             <DetailRow icon="🔢" label="Sessions" value={String(b.total_sessions)} />
@@ -121,6 +124,15 @@ export default async function BookingDetailPage({ params }: Props) {
       </div>
     </div>
   )
+}
+
+function shiftTimeRange(shift: string, durationHours: number): string {
+  const START: Record<string, number> = { morning: 8, evening: 16, night: 0 }
+  const startH = START[shift.toLowerCase()] ?? null
+  if (startH === null) return `${durationHours}h`
+  const endH = (startH + durationHours) % 24
+  const fmt = (h: number) => `${String(h).padStart(2, '0')}:00`
+  return `${fmt(startH)} – ${fmt(endH)}`
 }
 
 function DetailRow({ icon, label, value }: { icon: string; label: string; value: string }) {

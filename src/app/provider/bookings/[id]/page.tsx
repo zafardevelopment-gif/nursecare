@@ -115,6 +115,9 @@ export default async function ProviderBookingDetailPage({ params }: Props) {
             {b.end_date && b.end_date !== b.start_date && <DetailRow icon="📅" label="End Date" value={b.end_date} />}
             <DetailRow icon="🕐" label="Shift"    value={b.shift ?? '—'} />
             <DetailRow icon="⏱" label="Duration" value={b.duration_hours ? `${b.duration_hours} hours` : '—'} />
+            {b.shift && b.duration_hours && (
+              <DetailRow icon="🕰" label="Work Hours" value={shiftTimeRange(b.shift, b.duration_hours)} />
+            )}
           </Section>
           <Section label="Location">
             <DetailRow icon="📍" label="City"    value={b.city ?? '—'} />
@@ -145,6 +148,15 @@ export default async function ProviderBookingDetailPage({ params }: Props) {
       </div>
     </div>
   )
+}
+
+function shiftTimeRange(shift: string, durationHours: number): string {
+  const START: Record<string, number> = { morning: 8, evening: 16, night: 0 }
+  const startH = START[shift.toLowerCase()] ?? null
+  if (startH === null) return `${durationHours}h`
+  const endH = (startH + durationHours) % 24
+  const fmt = (h: number) => `${String(h).padStart(2, '0')}:00`
+  return `${fmt(startH)} – ${fmt(endH)}`
 }
 
 function statusStyle(status: string) {

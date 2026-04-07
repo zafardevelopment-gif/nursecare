@@ -25,6 +25,16 @@ const SHIFT_START_TIMES: Record<string, string> = {
   night:   '00:00',
 }
 
+function shiftTimeRange(shift?: string | null, durationHours?: number | null): string | null {
+  if (!shift || !durationHours) return null
+  const START: Record<string, number> = { morning: 8, evening: 16, night: 0 }
+  const startH = START[shift.toLowerCase()] ?? null
+  if (startH === null) return null
+  const endH = (startH + durationHours) % 24
+  const fmt = (h: number) => `${String(h).padStart(2, '0')}:00`
+  return `${fmt(startH)}–${fmt(endH)}`
+}
+
 const FILTER_TABS = [
   { key: '',            label: 'All' },
   { key: 'pending',     label: '📥 Pending' },
@@ -216,7 +226,7 @@ export default async function ProviderBookingsPage({ searchParams }: Props) {
                     <Td>
                       {req.start_date && <div>{req.start_date}{req.end_date && req.end_date !== req.start_date ? ` → ${req.end_date}` : ''}</div>}
                       <div style={{ color: 'var(--muted)', fontSize: '0.7rem' }}>
-                        {[req.shift, req.duration_hours ? `${req.duration_hours}h` : null].filter(Boolean).join(' · ')}
+                        {[req.shift, shiftTimeRange(req.shift, req.duration_hours), req.duration_hours ? `${req.duration_hours}h` : null].filter(Boolean).join(' · ')}
                       </div>
                     </Td>
                     <Td>{req.city ?? '—'}</Td>
@@ -311,7 +321,7 @@ export default async function ProviderBookingsPage({ searchParams }: Props) {
                       <Td>
                         {req.start_date && <div>{req.start_date}{req.end_date && req.end_date !== req.start_date ? ` → ${req.end_date}` : ''}</div>}
                         <div style={{ color: 'var(--muted)', fontSize: '0.7rem' }}>
-                          {[req.shift, req.duration_hours ? `${req.duration_hours}h` : null].filter(Boolean).join(' · ')}
+                          {[req.shift, shiftTimeRange(req.shift, req.duration_hours), req.duration_hours ? `${req.duration_hours}h` : null].filter(Boolean).join(' · ')}
                         </div>
                       </Td>
                       <Td>{req.city ?? '—'}</Td>

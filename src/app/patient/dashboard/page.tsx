@@ -132,7 +132,7 @@ export default async function PatientDashboardPage() {
                       <DTd>{b.nurse_name ? <span style={{ color: '#0E7B8C', fontWeight: 600 }}>👩‍⚕️ {b.nurse_name}</span> : <span style={{ color: 'var(--muted)' }}>—</span>}</DTd>
                       <DTd>
                         {b.start_date && <div>{b.start_date}</div>}
-                        <div style={{ color: 'var(--muted)', fontSize: '0.7rem' }}>{b.shift}</div>
+                        <div style={{ color: 'var(--muted)', fontSize: '0.7rem' }}>{[b.shift, shiftTimeRange(b.shift, b.duration_hours)].filter(Boolean).join(' · ')}</div>
                       </DTd>
                       <DTd>{b.city ?? '—'}</DTd>
                       <DTd>
@@ -189,6 +189,16 @@ export default async function PatientDashboardPage() {
       </div>
     </div>
   )
+}
+
+function shiftTimeRange(shift?: string | null, durationHours?: number | null): string | null {
+  if (!shift || !durationHours) return null
+  const START: Record<string, number> = { morning: 8, evening: 16, night: 0 }
+  const startH = START[shift.toLowerCase()] ?? null
+  if (startH === null) return null
+  const endH = (startH + durationHours) % 24
+  const fmt = (h: number) => `${String(h).padStart(2, '0')}:00`
+  return `${fmt(startH)}–${fmt(endH)}`
 }
 
 function DTh({ children }: { children: React.ReactNode }) {

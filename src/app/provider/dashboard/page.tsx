@@ -273,7 +273,7 @@ export default async function ProviderDashboardPage({ searchParams }: Props) {
                     <DashTd>{b.service_type ?? '—'}</DashTd>
                     <DashTd>
                       {b.start_date && <div>{b.start_date}</div>}
-                      <div style={{ color: 'var(--muted)', fontSize: '0.7rem' }}>{b.shift}</div>
+                      <div style={{ color: 'var(--muted)', fontSize: '0.7rem' }}>{[b.shift, shiftTimeRange(b.shift, b.duration_hours)].filter(Boolean).join(' · ')}</div>
                     </DashTd>
                     <DashTd>{b.city ?? '—'}</DashTd>
                     <DashTd>
@@ -368,7 +368,7 @@ export default async function ProviderDashboardPage({ searchParams }: Props) {
                       <DashTd>
                         {req.start_date && <div>{req.start_date}{req.end_date && req.end_date !== req.start_date ? ` → ${req.end_date}` : ''}</div>}
                         <div style={{ color: 'var(--muted)', fontSize: '0.7rem' }}>
-                          {[req.shift, req.duration_hours ? `${req.duration_hours}h` : null].filter(Boolean).join(' · ')}
+                          {[req.shift, shiftTimeRange(req.shift, req.duration_hours), req.duration_hours ? `${req.duration_hours}h` : null].filter(Boolean).join(' · ')}
                         </div>
                       </DashTd>
                       <DashTd>{req.city ?? '—'}</DashTd>
@@ -480,6 +480,16 @@ export default async function ProviderDashboardPage({ searchParams }: Props) {
       </div>
     </div>
   )
+}
+
+function shiftTimeRange(shift?: string | null, durationHours?: number | null): string | null {
+  if (!shift || !durationHours) return null
+  const START: Record<string, number> = { morning: 8, evening: 16, night: 0 }
+  const startH = START[shift.toLowerCase()] ?? null
+  if (startH === null) return null
+  const endH = (startH + durationHours) % 24
+  const fmt = (h: number) => `${String(h).padStart(2, '0')}:00`
+  return `${fmt(startH)}–${fmt(endH)}`
 }
 
 function DashTh({ children }: { children: React.ReactNode }) {

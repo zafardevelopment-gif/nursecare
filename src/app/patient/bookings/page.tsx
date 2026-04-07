@@ -240,7 +240,7 @@ export default async function PatientBookingsPage({ searchParams }: Props) {
                         <Td>
                           {b.start_date && <div>{b.start_date}{b.end_date && b.end_date !== b.start_date ? ` → ${b.end_date}` : ''}</div>}
                           <div style={{ color: 'var(--muted)', fontSize: '0.7rem' }}>
-                            {[b.shift, b.duration_hours ? `${b.duration_hours}h` : null].filter(Boolean).join(' · ')}
+                            {[b.shift, shiftTimeRange(b.shift, b.duration_hours), b.duration_hours ? `${b.duration_hours}h` : null].filter(Boolean).join(' · ')}
                           </div>
                         </Td>
                         <Td>{b.booking_type === 'weekly' ? '🔁 Weekly' : b.booking_type === 'monthly' ? '📆 Monthly' : '📅 One-Time'}</Td>
@@ -310,6 +310,16 @@ export default async function PatientBookingsPage({ searchParams }: Props) {
       )}
     </div>
   )
+}
+
+function shiftTimeRange(shift?: string | null, durationHours?: number | null): string | null {
+  if (!shift || !durationHours) return null
+  const START: Record<string, number> = { morning: 8, evening: 16, night: 0 }
+  const startH = START[shift.toLowerCase()] ?? null
+  if (startH === null) return null
+  const endH = (startH + durationHours) % 24
+  const fmt = (h: number) => `${String(h).padStart(2, '0')}:00`
+  return `${fmt(startH)}–${fmt(endH)}`
 }
 
 function Th({ children }: { children: React.ReactNode }) {
