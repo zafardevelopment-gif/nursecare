@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { updateHospitalAgreementAction } from '../../../new/actions'
+import { updateHospitalAgreementAction } from '../../new/actions'
 
 type PaymentType = 'advance' | 'daily' | 'weekly' | 'monthly'
 type MissedAction = 'pause' | 'cancel'
