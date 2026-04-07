@@ -56,6 +56,7 @@ export async function savePlatformSettings(formData: FormData) {
     allow_emergency_bookings:            formData.get('allow_emergency_bookings') === 'true',
     require_work_start_confirmation:     formData.get('require_work_start_confirmation') === 'true',
     require_work_completion_confirmation:formData.get('require_work_completion_confirmation') === 'true',
+    work_start_enable_hours_before:      parseInt(formData.get('work_start_enable_hours_before') as string) || 1,
     chat_enabled:                        formData.get('chat_enabled') === 'true',
     email_notifications:      formData.get('email_notifications') === 'true',
     whatsapp_notifications:   formData.get('whatsapp_notifications') === 'true',

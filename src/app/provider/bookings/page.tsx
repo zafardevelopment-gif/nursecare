@@ -19,6 +19,12 @@ const statusStyle: Record<string, { bg: string; color: string; label: string }> 
   cancelled:   { bg: 'rgba(138,155,170,0.1)', color: '#8A9BAA', label: 'Cancelled' },
 }
 
+const SHIFT_START_TIMES: Record<string, string> = {
+  morning: '08:00',
+  evening: '16:00',
+  night:   '00:00',
+}
+
 const FILTER_TABS = [
   { key: '',            label: 'All' },
   { key: 'pending',     label: '📥 Pending' },
@@ -45,11 +51,12 @@ export default async function ProviderBookingsPage({ searchParams }: Props) {
 
   const { data: settings } = await serviceSupabase
     .from('platform_settings')
-    .select('require_work_start_confirmation, require_work_completion_confirmation')
+    .select('require_work_start_confirmation, require_work_completion_confirmation, work_start_enable_hours_before')
     .limit(1)
     .single()
 
-  const requireWorkStart = settings?.require_work_start_confirmation ?? true
+  const requireWorkStart      = settings?.require_work_start_confirmation ?? true
+  const hoursBeforeEnabled    = (settings as any)?.work_start_enable_hours_before ?? 1
 
   const { data: nurse } = await supabase
     .from('nurses')
@@ -312,7 +319,7 @@ export default async function ProviderBookingsPage({ searchParams }: Props) {
                         <span style={{ background: s.bg, color: s.color, fontSize: '0.65rem', fontWeight: 700, padding: '3px 9px', borderRadius: 50, whiteSpace: 'nowrap' }}>{s.label}</span>
                       </Td>
                       <Td>
-                        {canMarkStarted && <WorkStartedBtn requestId={req.id} startDate={req.start_date} isPaid={req.payment_status === 'paid'} />}
+                        {canMarkStarted && <WorkStartedBtn requestId={req.id} startDate={req.start_date} startTime={SHIFT_START_TIMES[req.shift] ?? null} isPaid={req.payment_status === 'paid'} hoursBeforeEnabled={hoursBeforeEnabled} />}
                         {canMarkDone    && <WorkDoneBtn requestId={req.id} />}
                         {isWorkDone && <span style={{ fontSize: '0.7rem', color: '#6B3FA0', fontStyle: 'italic' }}>⏳ Awaiting patient…</span>}
                         {!canMarkStarted && !canMarkDone && !isWorkDone && <span style={{ color: 'var(--muted)', fontSize: '0.7rem' }}>—</span>}

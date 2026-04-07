@@ -28,11 +28,12 @@ export default async function ProviderBookingDetailPage({ params }: Props) {
 
   const { data: settings } = await supabase
     .from('platform_settings')
-    .select('require_work_start_confirmation, require_work_completion_confirmation')
+    .select('require_work_start_confirmation, require_work_completion_confirmation, work_start_enable_hours_before')
     .limit(1)
     .single()
 
-  const requireWorkStart = settings?.require_work_start_confirmation ?? true
+  const requireWorkStart   = settings?.require_work_start_confirmation ?? true
+  const hoursBeforeEnabled = (settings as any)?.work_start_enable_hours_before ?? 1
 
   const { data: b } = await supabase
     .from('booking_requests')
@@ -91,7 +92,7 @@ export default async function ProviderBookingDetailPage({ params }: Props) {
               {canMarkDone    && <div style={{ fontWeight: 700, fontSize: '0.88rem', color: '#0E7B8C' }}>🔄 Work in progress — Mark done when complete</div>}
               {isWorkDone     && <div style={{ fontWeight: 700, fontSize: '0.88rem', color: '#6B3FA0' }}>✅ Work marked done — Waiting for patient confirmation</div>}
             </div>
-            {canMarkStarted && <WorkStartedBtn requestId={b.id} startDate={b.start_date} isPaid={b.payment_status === 'paid'} />}
+            {canMarkStarted && <WorkStartedBtn requestId={b.id} startDate={b.start_date} startTime={({ morning: '08:00', evening: '16:00', night: '00:00' } as Record<string,string>)[b.shift] ?? null} isPaid={b.payment_status === 'paid'} hoursBeforeEnabled={hoursBeforeEnabled} />}
             {canMarkDone    && <WorkDoneBtn requestId={b.id} />}
           </div>
         )}

@@ -7,25 +7,46 @@ import { markWorkStarted, markWorkDone } from './actions'
 export function WorkStartedBtn({
   requestId,
   startDate,
+  startTime,
   isPaid,
+  hoursBeforeEnabled = 1,
 }: {
   requestId: string
   startDate?: string | null
+  startTime?: string | null   // HH:MM of shift start e.g. "16:00"
   isPaid?: boolean
+  hoursBeforeEnabled?: number // from admin setting
 }) {
   const [pending, start] = useTransition()
   const router = useRouter()
 
-  // Check if today matches start_date (compare YYYY-MM-DD)
-  const todayStr = new Date().toISOString().slice(0, 10)
-  const isToday  = !startDate || startDate === todayStr
-  const paid     = isPaid ?? false
+  const paid = isPaid ?? false
 
-  const blocked     = !isToday || !paid
+  // Build a Date for when button becomes enabled:
+  // shift start time on startDate minus hoursBeforeEnabled
+  let timeUnlocked = false
+  let unlockMsg = ''
+  if (startDate) {
+    const now = new Date()
+    // parse start datetime — default to 00:00 if no time
+    const [sh, sm] = (startTime ?? '00:00').split(':').map(Number)
+    const shiftStart = new Date(`${startDate}T${String(sh).padStart(2,'0')}:${String(sm ?? 0).padStart(2,'0')}:00`)
+    const enableAt   = new Date(shiftStart.getTime() - hoursBeforeEnabled * 60 * 60 * 1000)
+    timeUnlocked = now >= enableAt
+    if (!timeUnlocked) {
+      const diffMs  = enableAt.getTime() - now.getTime()
+      const diffHrs = Math.ceil(diffMs / (1000 * 60 * 60))
+      unlockMsg = `📅 Available ${diffHrs}h before shift (${startDate})`
+    }
+  } else {
+    timeUnlocked = true // no date set — don't block
+  }
+
+  const blocked     = !paid || !timeUnlocked
   const blockReason = !paid
     ? '💳 Payment not received yet'
-    : !isToday
-      ? `📅 Can only start on ${startDate}`
+    : !timeUnlocked
+      ? unlockMsg
       : ''
 
   async function handleClick() {
