@@ -57,6 +57,14 @@ export default async function AdminAgreementDetailPage({ params, searchParams }:
           <p className="dash-sub">{hospital.hospital_name} · {agreement.start_date} → {agreement.end_date}</p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          {(agreement.status === 'draft' || agreement.status === 'admin_approved') && (
+            <Link
+              href={`/admin/hospitals/${hospitalId}/agreement/${agreementId}/edit`}
+              style={{ background: 'var(--cream)', color: 'var(--ink)', border: '1px solid var(--border)', padding: '7px 16px', borderRadius: 8, fontWeight: 600, fontSize: '0.8rem', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+            >
+              ✏️ Edit
+            </Link>
+          )}
           <a
             href={`/api/hospital-agreements/${agreementId}/pdf`}
             target="_blank"
@@ -226,18 +234,20 @@ export default async function AdminAgreementDetailPage({ params, searchParams }:
           {/* Signatures */}
           <DocSection title="Signatures">
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 6 }}>
-              {[
-                { party: 'Party A — NurseCare+', name: 'Admin', desig: 'NurseCare+ Healthcare Solutions' },
-                { party: 'Party B — Hospital',   name: hospital.contact_person, desig: `${hospital.designation ?? ''} — ${hospital.hospital_name}` },
-              ].map(sig => (
-                <div key={sig.party} style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 16, background: 'var(--cream)' }}>
-                  <div style={{ fontSize: '0.68rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--muted)', marginBottom: 8 }}>{sig.party}</div>
-                  <div style={{ fontWeight: 600, fontSize: '0.88rem', color: 'var(--ink)' }}>{sig.name}</div>
-                  <div style={{ fontSize: '0.78rem', color: 'var(--muted)', marginTop: 2 }}>{sig.desig}</div>
-                  <div style={{ height: 1, background: '#CBD5E1', margin: '16px 0 6px' }} />
-                  <div style={{ fontSize: '0.7rem', color: 'var(--muted)' }}>Signature & Date</div>
-                </div>
-              ))}
+              {/* Admin sig */}
+              <SigBox
+                party="Party A — NurseCare+"
+                name="Admin"
+                desig="NurseCare+ Healthcare Solutions"
+                signedAt={agreement.admin_approved_at ?? null}
+              />
+              {/* Hospital sig */}
+              <SigBox
+                party="Party B — Hospital"
+                name={hospital.contact_person}
+                desig={`${hospital.designation ?? ''} — ${hospital.hospital_name}`.replace(/^— /, '')}
+                signedAt={agreement.hospital_accepted_at ?? null}
+              />
             </div>
           </DocSection>
         </div>
@@ -288,6 +298,31 @@ function DocRow({ k, v }: { k: string; v: string }) {
     <div style={{ display: 'flex', padding: '7px 0', borderBottom: '1px solid #F8FAFC' }}>
       <div style={{ width: 190, flexShrink: 0, fontSize: '0.8rem', color: '#64748B', fontWeight: 500 }}>{k}</div>
       <div style={{ fontSize: '0.8rem', color: '#0F172A', fontWeight: 600 }}>{v}</div>
+    </div>
+  )
+}
+
+function SigBox({ party, name, desig, signedAt }: { party: string; name: string; desig: string; signedAt: string | null }) {
+  if (signedAt) {
+    return (
+      <div style={{ border: '1.5px solid #27A869', borderRadius: 8, padding: 16, background: 'rgba(26,122,74,0.04)' }}>
+        <div style={{ fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--muted)', marginBottom: 8 }}>{party}</div>
+        <div style={{ fontWeight: 700, fontSize: '0.88rem', color: 'var(--ink)' }}>{name}</div>
+        <div style={{ fontSize: '0.75rem', color: 'var(--muted)', marginTop: 2, marginBottom: 10 }}>{desig}</div>
+        <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#1A7A4A' }}>✓ Digitally Signed & Accepted</div>
+        <div style={{ fontSize: '0.7rem', color: 'var(--muted)', marginTop: 3 }}>
+          Signed on: {new Date(signedAt).toLocaleString('en-GB', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+        </div>
+      </div>
+    )
+  }
+  return (
+    <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 16, background: 'var(--cream)' }}>
+      <div style={{ fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--muted)', marginBottom: 8 }}>{party}</div>
+      <div style={{ fontWeight: 600, fontSize: '0.88rem', color: 'var(--ink)' }}>{name}</div>
+      <div style={{ fontSize: '0.75rem', color: 'var(--muted)', marginTop: 2 }}>{desig}</div>
+      <div style={{ height: 1, background: '#CBD5E1', margin: '16px 0 6px' }} />
+      <div style={{ fontSize: '0.7rem', color: 'var(--muted)' }}>Signature & Date</div>
     </div>
   )
 }

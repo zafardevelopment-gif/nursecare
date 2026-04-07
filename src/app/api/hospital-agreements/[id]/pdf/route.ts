@@ -103,7 +103,7 @@ function buildHospitalAgreementHtml(agreement: Record<string, any>, hospital: Re
   }
 
   const hospitalDesig = `${hospital.designation ? hospital.designation + ' — ' : ''}${hospital.hospital_name}`
-  const adminSig   = sigBox('Party A — NurseCare+', 'Admin', 'NurseCare+ Healthcare Solutions')
+  const adminSig   = sigBox('Party A — NurseCare+', 'Admin', 'NurseCare+ Healthcare Solutions', agreement.admin_approved_at ?? null)
   const hospitalSig = sigBox(
     'Party B — Hospital',
     hospital.contact_person,
