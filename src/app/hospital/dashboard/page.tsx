@@ -45,17 +45,27 @@ export default async function HospitalDashboardPage() {
   const isApproved = hospital.status === 'approved' || hospital.status === 'agreement_pending'
   const isActive   = hospital.status === 'active'
 
-  // Fetch agreements
-  const { data: agreements } = await supabase
-    .from('hospital_agreements')
-    .select('id, ref_number, status, payment_type, start_date, end_date, created_at')
-    .eq('hospital_id', hospital.id)
-    .order('created_at', { ascending: false })
+  // Fetch agreements + booking requests
+  const [{ data: agreements }, { data: bookingReqs }] = await Promise.all([
+    supabase
+      .from('hospital_agreements')
+      .select('id, ref_number, status, payment_type, start_date, end_date, created_at')
+      .eq('hospital_id', hospital.id)
+      .order('created_at', { ascending: false }),
+    supabase
+      .from('hospital_booking_requests')
+      .select('id, status, start_date, end_date, total_nurses, shifts, created_at, nurse_selections')
+      .eq('hospital_id', hospital.id)
+      .order('created_at', { ascending: false })
+      .limit(10),
+  ])
 
-  const allAgreements   = agreements ?? []
+  const allAgreements    = agreements ?? []
+  const allBookings      = bookingReqs ?? []
   const pendingSentCount = allAgreements.filter(a => a.status === 'sent').length
   const activeCount      = allAgreements.filter(a => a.status === 'active' || a.status === 'hospital_accepted').length
   const totalCount       = allAgreements.length
+  const pendingBookings  = allBookings.filter(b => b.status === 'pending' || b.status === 'reviewing').length
 
   const statusColors: Record<string, { bg: string; color: string; label: string }> = {
     draft:             { bg: '#F1F5F9', color: '#64748B', label: 'Draft' },
@@ -67,14 +77,13 @@ export default async function HospitalDashboardPage() {
     expired:           { bg: '#F1F5F9', color: '#64748B', label: 'Expired' },
   }
 
-  const deptBreakdown = [
-    { dept: 'ICU', nurses: 8, color: '#0E7B8C' },
-    { dept: 'General Ward', nurses: 14, color: '#0ABFCC' },
-    { dept: 'Pediatrics', nurses: 6, color: '#7B2FBE' },
-    { dept: 'Emergency', nurses: 10, color: '#b85e00' },
-    { dept: 'Surgery', nurses: 5, color: '#1A7A4A' },
-  ]
-  const maxNurses = Math.max(...deptBreakdown.map(d => d.nurses))
+  const bookingStatusColors: Record<string, { bg: string; color: string; label: string }> = {
+    pending:   { bg: '#FFF8F0', color: '#b85e00', label: '⏳ Pending' },
+    reviewing: { bg: '#EFF6FF', color: '#3B82F6', label: '🔍 Reviewing' },
+    matched:   { bg: 'rgba(14,123,140,0.08)', color: '#0E7B8C', label: '✅ Matched' },
+    confirmed: { bg: 'rgba(26,122,74,0.08)', color: '#1A7A4A', label: '✅ Confirmed' },
+    cancelled: { bg: 'rgba(224,74,74,0.06)', color: '#E04A4A', label: '✕ Cancelled' },
+  }
 
   return (
     <div className="dash-shell">
@@ -123,6 +132,15 @@ export default async function HospitalDashboardPage() {
           </div>
         </div>
       )}
+      {pendingBookings > 0 && (
+        <div style={{ background: 'rgba(123,47,190,0.05)', border: '1px solid rgba(123,47,190,0.2)', borderRadius: 10, padding: '14px 20px', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: '1.1rem' }}>👩‍⚕️</span>
+          <span style={{ fontWeight: 700, color: '#7B2FBE', fontSize: '0.88rem' }}>
+            {pendingBookings} booking request{pendingBookings > 1 ? 's' : ''} pending admin review —{' '}
+            <Link href="/hospital/booking" style={{ color: '#7B2FBE', textDecoration: 'underline' }}>View bookings</Link>
+          </span>
+        </div>
+      )}
       {pendingSentCount > 0 && (
         <div style={{ background: '#FFF8F0', border: '1px solid rgba(245,132,42,0.3)', borderRadius: 10, padding: '14px 20px', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: 10 }}>
           <span style={{ fontSize: '1.1rem' }}>📨</span>
@@ -139,7 +157,7 @@ export default async function HospitalDashboardPage() {
           { label: 'Total Agreements', value: totalCount,       color: '#0E7B8C', icon: '📄', bg: 'rgba(14,123,140,0.08)',  href: '/hospital/agreements' },
           { label: 'Awaiting Review',  value: pendingSentCount, color: '#b85e00', icon: '⏳', bg: 'rgba(181,94,0,0.08)',    href: '/hospital/agreements' },
           { label: 'Active',           value: activeCount,      color: '#1A7A4A', icon: '✅', bg: 'rgba(26,122,74,0.08)',   href: '/hospital/agreements' },
-          { label: 'Active Nurses',    value: 0,                color: '#7B2FBE', icon: '👩‍⚕️', bg: 'rgba(123,47,190,0.08)', href: '/hospital/dashboard' },
+          { label: 'Pending Bookings',  value: pendingBookings,  color: '#7B2FBE', icon: '👩‍⚕️', bg: 'rgba(123,47,190,0.08)', href: '/hospital/booking' },
         ].map(kpi => (
           <Link key={kpi.label} href={kpi.href} style={{ textDecoration: 'none' }}>
             <div className="dash-card" style={{ padding: '1.2rem', cursor: 'pointer', borderTop: `3px solid ${kpi.color}` }}>
@@ -191,25 +209,41 @@ export default async function HospitalDashboardPage() {
           </div>
         </div>
 
-        {/* Dept Breakdown */}
+        {/* Recent Bookings */}
         <div className="dash-card">
           <div className="dash-card-header">
-            <span className="dash-card-title">Dept. Nurse Distribution</span>
+            <span className="dash-card-title">Recent Bookings</span>
+            <Link href="/hospital/booking" style={{ fontSize: '0.78rem', color: 'var(--teal)', textDecoration: 'none', fontWeight: 600 }}>View all →</Link>
           </div>
-          <div className="dash-card-body">
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              {deptBreakdown.map(d => (
-                <div key={d.dept}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5, fontSize: '0.82rem' }}>
-                    <span style={{ fontWeight: 600, color: 'var(--ink)' }}>{d.dept}</span>
-                    <span style={{ fontWeight: 700, color: d.color }}>{d.nurses} nurses</span>
+          <div className="dash-card-body" style={{ padding: 0 }}>
+            {!allBookings.length ? (
+              <div style={{ padding: '1.5rem', textAlign: 'center' }}>
+                <div style={{ color: 'var(--muted)', fontSize: '0.85rem', marginBottom: 12 }}>No bookings yet</div>
+                <Link href="/hospital/booking" style={{ background: 'linear-gradient(135deg,#0E7B8C,#0ABFCC)', color: '#fff', padding: '8px 18px', borderRadius: 8, fontWeight: 700, fontSize: '0.82rem', textDecoration: 'none' }}>
+                  Book Nurses →
+                </Link>
+              </div>
+            ) : allBookings.slice(0, 5).map((b, i) => {
+              const bsm = bookingStatusColors[b.status] ?? bookingStatusColors.pending
+              const nurseCount = (b.nurse_selections as any[])?.length ?? 0
+              return (
+                <Link key={b.id} href={`/hospital/booking/${b.id}`} style={{ textDecoration: 'none' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: i < Math.min(allBookings.length, 5) - 1 ? '1px solid var(--border)' : 'none' }}>
+                    <div>
+                      <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--ink)' }}>
+                        {new Date(b.start_date).toLocaleDateString('en-GB')} – {new Date(b.end_date).toLocaleDateString('en-GB')}
+                      </div>
+                      <div style={{ fontSize: '0.72rem', color: 'var(--muted)', marginTop: 2 }}>
+                        {b.total_nurses} nurses · {nurseCount} selected
+                      </div>
+                    </div>
+                    <span style={{ background: bsm.bg, color: bsm.color, fontSize: '0.68rem', fontWeight: 700, padding: '3px 9px', borderRadius: 50, marginLeft: 10, whiteSpace: 'nowrap' }}>
+                      {bsm.label}
+                    </span>
                   </div>
-                  <div style={{ height: 8, borderRadius: 4, background: 'var(--border)' }}>
-                    <div style={{ height: '100%', borderRadius: 4, width: `${(d.nurses / maxNurses) * 100}%`, background: d.color }} />
-                  </div>
-                </div>
-              ))}
-            </div>
+                </Link>
+              )
+            })}
           </div>
         </div>
       </div>

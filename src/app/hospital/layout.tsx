@@ -10,6 +10,7 @@ const hospitalMenu = [
   { icon: '🏠', label: 'Dashboard',       href: '/hospital/dashboard' },
   { icon: '📄', label: 'Agreements',      href: '/hospital/agreements' },
   { icon: '🏢', label: 'Departments',     href: '/hospital/departments' },
+  { icon: '👩‍⚕️', label: 'Book Nurses',     href: '/hospital/booking' },
   { icon: '🗓️', label: 'Shift Schedule',  href: '/hospital/schedule' },
   { icon: '💬', label: 'Messages',        href: '/hospital/messages' },
   { icon: '👤', label: 'My Profile',      href: '/hospital/profile' },

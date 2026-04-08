@@ -12,6 +12,7 @@ const adminMenu = [
   { icon: '🔄', label: 'Profile Updates',  href: '/admin/nurse-updates' },
   { icon: '📋', label: 'Bookings',          href: '/admin/bookings' },
   { icon: '🏥', label: 'Hospitals',          href: '/admin/hospitals' },
+  { icon: '👩‍⚕️', label: 'Hospital Bookings', href: '/admin/hospital-bookings' },
   { icon: '📄', label: 'Agreements',        href: '/admin/agreements' },
   { icon: '🪪', label: 'ID Cards',          href: '/admin/nurses/id-cards' },
   { icon: '👥', label: 'Users',             href: '/admin/users' },
