@@ -24,13 +24,18 @@ export async function respondToHospitalBooking(
 
   const selections: any[] = booking.nurse_selections ?? []
 
+  // If the overall booking is confirmed/matched, treat all pending selections as implicitly approved
+  const bookingImpliesApproval = booking.status === 'confirmed' || booking.status === 'matched'
+
   // Update all entries for this nurse with their response
   let anyAccepted = false
   const updated = selections.map((ns: any) => {
     if (ns.nurseId !== user.id) return ns
     if (response === 'accepted') anyAccepted = true
+    const implicitlyApproved = bookingImpliesApproval && (!ns.status || ns.status === 'pending')
     return {
       ...ns,
+      ...(implicitlyApproved ? { status: 'approved' } : {}),
       nurseResponse: response,
       nurseRespondedAt: new Date().toISOString(),
     }

@@ -3,6 +3,7 @@ import { createSupabaseServiceRoleClient } from '@/lib/supabase-server'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { updateBookingStatusAction, updateNurseApprovalAction } from './actions'
+import { NurseAvatarBtn } from '@/app/components/NurseCardModal'
 
 export const dynamic = 'force-dynamic'
 
@@ -53,6 +54,58 @@ export default async function AdminHospitalBookingDetailPage({ params }: { param
   const deptBreakdown = booking.dept_breakdown ?? []
   const bsm = BOOKING_STATUS_META[booking.status] ?? BOOKING_STATUS_META.pending
 
+  // Only non-rejected nurses count toward cost
+  const activeSelections = nurseSelections.filter(ns => ns.status !== 'rejected')
+
+  // Fetch nurse rates + extended profile for pricing and modal
+  const nurseIds = [...new Set(nurseSelections.map(ns => ns.nurseId).filter(Boolean))]
+  const { data: nurseRates } = nurseIds.length > 0
+    ? await supabase.from('nurses').select('id, user_id, full_name, daily_rate, final_daily_price, commission_percent, bio, city, nationality, gender, experience_years, phone, license_no').in('user_id', nurseIds)
+    : { data: [] }
+
+  // Fetch nurse photos via nurses.id -> nurse_documents.nurse_id
+  const nurseTableIdMap: Record<string, string> = {}
+  for (const n of (nurseRates ?? [])) nurseTableIdMap[n.user_id] = n.id
+  const nurseTableIds = Object.values(nurseTableIdMap)
+  const { data: photoRows } = nurseTableIds.length > 0
+    ? await supabase.from('nurse_documents').select('nurse_id, file_url').eq('doc_type', 'photo').in('nurse_id', nurseTableIds)
+    : { data: [] }
+  const photoByNurseId: Record<string, string> = {}
+  for (const p of (photoRows ?? [])) photoByNurseId[p.nurse_id] = p.file_url
+
+  const nurseProfileMap: Record<string, {
+    daily_rate: number; final_daily_price: number; commission_percent: number
+    bio: string | null; city: string | null; nationality: string | null
+    gender: string | null; experience_years: number | null
+    phone: string | null; license_no: string | null; photo_url: string | null
+  }> = {}
+  for (const n of (nurseRates ?? [])) {
+    const tableId = nurseTableIdMap[n.user_id]
+    nurseProfileMap[n.user_id] = {
+      daily_rate: Number(n.daily_rate ?? 0),
+      final_daily_price: Number(n.final_daily_price ?? n.daily_rate ?? 0),
+      commission_percent: Number(n.commission_percent ?? 0),
+      bio: n.bio ?? null, city: n.city ?? null, nationality: n.nationality ?? null,
+      gender: n.gender ?? null, experience_years: n.experience_years ?? null,
+      phone: n.phone ?? null, license_no: n.license_no ?? null,
+      photo_url: tableId ? (photoByNurseId[tableId] ?? null) : null,
+    }
+  }
+  // Keep nurseRateMap alias for backward compat with existing pricing render
+  const nurseRateMap = nurseProfileMap
+
+  const durationDays = booking.duration_days ?? 1
+  const totalNurseEarnings = activeSelections.reduce((sum, ns) => {
+    const rate = nurseRateMap[ns.nurseId]
+    return sum + (rate ? rate.daily_rate * durationDays : 0)
+  }, 0)
+  const totalNurseCost = activeSelections.reduce((sum, ns) => {
+    const rate = nurseRateMap[ns.nurseId]
+    return sum + (rate ? rate.final_daily_price * durationDays : 0)
+  }, 0)
+  const totalCommission = totalNurseCost - totalNurseEarnings
+  const hasPricing = activeSelections.some(ns => nurseRateMap[ns.nurseId]?.daily_rate > 0)
+
   // Group nurses by dept
   const byDept: Record<string, { deptName: string; nurses: { ns: NurseSelection; index: number }[] }> = {}
   nurseSelections.forEach((ns, index) => {
@@ -73,6 +126,10 @@ export default async function AdminHospitalBookingDetailPage({ params }: { param
           </Link>
           <h1 className="dash-title" style={{ marginTop: 6 }}>Booking Request</h1>
           <p className="dash-sub">{hospital?.hospital_name} · Submitted {new Date(booking.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 6, background: 'var(--shell-bg)', border: '1px solid var(--border)', borderRadius: 6, padding: '3px 10px' }}>
+            <span style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Booking ID</span>
+            <code style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--teal)', letterSpacing: '0.02em' }}>{id.slice(0, 8).toUpperCase()}</code>
+          </div>
         </div>
         <span style={{ background: bsm.bg, color: bsm.color, padding: '8px 18px', borderRadius: 50, fontWeight: 700, fontSize: '0.85rem' }}>
           {bsm.label}
@@ -162,6 +219,93 @@ export default async function AdminHospitalBookingDetailPage({ params }: { param
         </div>
       )}
 
+      {/* Pricing Breakdown */}
+      {hasPricing && (
+        <div className="dash-card" style={{ marginBottom: '1rem', borderLeft: '4px solid #1A7A4A' }}>
+          <div className="dash-card-header">
+            <span className="dash-card-title">💰 Pricing Breakdown</span>
+            <span style={{ fontSize: '0.72rem', color: 'var(--muted)' }}>
+              {durationDays} day{durationDays !== 1 ? 's' : ''} · {activeSelections.length} active nurse{activeSelections.length !== 1 ? 's' : ''}
+              {nurseSelections.length - activeSelections.length > 0 ? ` (${nurseSelections.length - activeSelections.length} rejected excluded)` : ''}
+            </span>
+          </div>
+          {/* Summary row */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px,1fr))', gap: '1rem', padding: '1rem 1.2rem', borderBottom: '1px solid var(--border)' }}>
+            {[
+              { label: 'Nurse Earnings', value: `SAR ${totalNurseEarnings.toFixed(2)}`, sub: 'paid to nurses', color: '#0E7B8C' },
+              { label: 'Platform Commission', value: `SAR ${totalCommission.toFixed(2)}`, sub: 'admin revenue', color: '#7B2FBE' },
+              { label: 'Hospital Pays', value: `SAR ${totalNurseCost.toFixed(2)}`, sub: 'total cost', color: '#1A7A4A', highlight: true },
+            ].map(k => (
+              <div key={k.label} style={{ background: k.highlight ? `${k.color}08` : 'var(--shell-bg)', border: `1px solid ${k.color}20`, borderRadius: 10, padding: '14px 16px', borderTop: `3px solid ${k.color}` }}>
+                <div style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 6 }}>{k.label}</div>
+                <div style={{ fontSize: '1.05rem', fontWeight: 800, color: k.color }}>{k.value}</div>
+                <div style={{ fontSize: '0.68rem', color: 'var(--muted)', marginTop: 3 }}>{k.sub}</div>
+              </div>
+            ))}
+          </div>
+          {/* Per-nurse table */}
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+              <thead>
+                <tr style={{ background: 'var(--shell-bg)', borderBottom: '1px solid var(--border)' }}>
+                  {['Nurse', 'Dept', 'Shift', 'Status', 'Daily Rate', 'Commission %', 'Days', 'Nurse Earns', 'Hospital Pays'].map(h => (
+                    <th key={h} style={{ padding: '9px 13px', textAlign: 'left', fontWeight: 700, color: 'var(--muted)', fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {activeSelections.map((ns, i) => {
+                  const rate = nurseRateMap[ns.nurseId]
+                  const nsMeta = NURSE_STATUS_META[ns.status ?? 'pending']
+                  if (!rate) return (
+                    <tr key={i} style={{ borderBottom: '1px solid var(--border)' }}>
+                      <td style={{ padding: '10px 13px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <NurseAvatarBtn nurse={{ nurseId: ns.nurseId, nurseName: ns.nurseName, nurseSpecialization: ns.nurseSpecialization, shift: ns.shift, deptName: ns.deptName, selectionStatus: ns.status }} />
+                          <span style={{ fontWeight: 700 }}>{ns.nurseName}</span>
+                        </div>
+                      </td>
+                      <td colSpan={8} style={{ padding: '10px 13px', color: 'var(--muted)', fontSize: '0.75rem' }}>Rate not set yet</td>
+                    </tr>
+                  )
+                  const nurseEarns = rate.daily_rate * durationDays
+                  const hospPays   = rate.final_daily_price * durationDays
+                  return (
+                    <tr key={i} style={{ borderBottom: '1px solid var(--border)', background: i % 2 === 0 ? 'transparent' : 'rgba(14,123,140,0.015)' }}>
+                      <td style={{ padding: '10px 13px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <NurseAvatarBtn nurse={{ nurseId: ns.nurseId, nurseName: ns.nurseName, nurseSpecialization: ns.nurseSpecialization, shift: ns.shift, deptName: ns.deptName, bio: rate.bio, city: rate.city, nationality: rate.nationality, gender: rate.gender, experienceYears: rate.experience_years, phone: rate.phone, licenseNo: rate.license_no, dailyRate: rate.daily_rate, finalDailyPrice: rate.final_daily_price, commissionPercent: rate.commission_percent, photoUrl: rate.photo_url, selectionStatus: ns.status }} showPrice />
+                          <span style={{ fontWeight: 700, color: 'var(--ink)' }}>{ns.nurseName}</span>
+                        </div>
+                      </td>
+                      <td style={{ padding: '10px 13px', color: 'var(--muted)', fontSize: '0.78rem' }}>{ns.deptName}</td>
+                      <td style={{ padding: '10px 13px' }}>
+                        <Tag label={`${SHIFT_META[ns.shift]?.icon ?? ''} ${SHIFT_META[ns.shift]?.label ?? ns.shift}`} color={SHIFT_META[ns.shift]?.color ?? '#666'} />
+                      </td>
+                      <td style={{ padding: '10px 13px' }}>
+                        <span style={{ background: nsMeta.bg, color: nsMeta.color, fontSize: '0.68rem', fontWeight: 700, padding: '2px 8px', borderRadius: 50 }}>{nsMeta.label}</span>
+                      </td>
+                      <td style={{ padding: '10px 13px', fontWeight: 600, color: '#0E7B8C' }}>SAR {rate.daily_rate.toFixed(2)}</td>
+                      <td style={{ padding: '10px 13px', color: '#7B2FBE', fontWeight: 600 }}>{rate.commission_percent > 0 ? `${rate.commission_percent}%` : '—'}</td>
+                      <td style={{ padding: '10px 13px', color: 'var(--muted)' }}>{durationDays}</td>
+                      <td style={{ padding: '10px 13px', fontWeight: 700, color: '#0E7B8C' }}>SAR {nurseEarns.toFixed(2)}</td>
+                      <td style={{ padding: '10px 13px', fontWeight: 800, color: '#1A7A4A' }}>SAR {hospPays.toFixed(2)}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+              <tfoot>
+                <tr style={{ borderTop: '2px solid var(--border)', background: 'var(--shell-bg)' }}>
+                  <td colSpan={7} style={{ padding: '10px 13px', fontWeight: 800, fontSize: '0.82rem', color: 'var(--ink)' }}>TOTAL ({activeSelections.length} active nurses)</td>
+                  <td style={{ padding: '10px 13px', fontWeight: 800, color: '#0E7B8C' }}>SAR {totalNurseEarnings.toFixed(2)}</td>
+                  <td style={{ padding: '10px 13px', fontWeight: 800, color: '#1A7A4A' }}>SAR {totalNurseCost.toFixed(2)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      )}
+
       {/* Selected Nurses — per-nurse approve/reject */}
       <div className="dash-card">
         <div className="dash-card-header">
@@ -187,7 +331,24 @@ export default async function AdminHospitalBookingDetailPage({ params }: { param
                   return (
                     <div key={index} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '13px 16px', borderBottom: '1px solid var(--border)', flexWrap: 'wrap', gap: 10 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                        <div style={{ width: 38, height: 38, borderRadius: '50%', background: 'rgba(14,123,140,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem', flexShrink: 0 }}>👩‍⚕️</div>
+                        {(() => {
+                          const rate = nurseProfileMap[ns.nurseId]
+                          return (
+                            <NurseAvatarBtn nurse={{
+                              nurseId: ns.nurseId, nurseName: ns.nurseName,
+                              nurseSpecialization: ns.nurseSpecialization,
+                              shift: ns.shift, deptName: ns.deptName,
+                              ...(rate ? {
+                                bio: rate.bio, city: rate.city, nationality: rate.nationality,
+                                gender: rate.gender, experienceYears: rate.experience_years,
+                                phone: rate.phone, licenseNo: rate.license_no,
+                                dailyRate: rate.daily_rate, finalDailyPrice: rate.final_daily_price,
+                                commissionPercent: rate.commission_percent, photoUrl: rate.photo_url,
+                              } : {}),
+                              selectionStatus: ns.status,
+                            }} showPrice={!!nurseProfileMap[ns.nurseId]} />
+                          )
+                        })()}
                         <div>
                           <div style={{ fontWeight: 700, fontSize: '0.88rem', color: 'var(--ink)' }}>{ns.nurseName}</div>
                           <div style={{ fontSize: '0.75rem', color: 'var(--muted)', marginTop: 2 }}>

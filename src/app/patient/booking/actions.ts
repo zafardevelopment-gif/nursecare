@@ -184,7 +184,7 @@ export async function submitBookingAction(formData: FormData): Promise<{ booking
     ? ` Please complete payment within ${paymentDeadlineHours} hour${paymentDeadlineHours !== 1 ? 's' : ''} to confirm your booking.`
     : ''
 
-  const notifPayloads = [
+  const notifPayloads: Parameters<typeof sendNotifications>[0] = [
     {
       userId: userId,
       type: 'payment_reminder' as const,
@@ -200,7 +200,7 @@ export async function submitBookingAction(formData: FormData): Promise<{ booking
       type: 'booking_accepted' as const,
       title: '🔔 New Booking Request',
       body: `You have a new booking request from ${userName} for ${start_date}. Awaiting payment confirmation.`,
-      data: { bookingId: request.id },
+      data: { bookingId: request.id, deadlineHours: 0 },
     })
   }
 

@@ -2,6 +2,7 @@ import { requireRole } from '@/lib/auth'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
+import { PatientReportNoShowBtn, DisputeBanner } from '@/app/components/ReportIssueModal'
 
 export const dynamic = 'force-dynamic'
 
@@ -14,6 +15,8 @@ const statusStyle: Record<string, { bg: string; color: string; label: string }> 
   work_done:   { bg: 'rgba(107,63,160,0.1)',  color: '#6B3FA0', label: '✅ Work Done — Confirm?' },
   completed:   { bg: 'rgba(14,123,140,0.1)',  color: '#0E7B8C', label: '✓ Completed' },
   cancelled:   { bg: 'rgba(138,155,170,0.1)', color: '#8A9BAA', label: 'Cancelled' },
+  no_show:     { bg: 'rgba(224,74,74,0.1)',   color: '#E04A4A', label: '🚨 No-Show Reported' },
+  disputed:    { bg: 'rgba(224,74,74,0.08)',  color: '#E04A4A', label: '⚠️ Disputed' },
 }
 
 interface Props {
@@ -25,14 +28,20 @@ export default async function BookingDetailPage({ params }: Props) {
   const supabase = await createSupabaseServerClient()
   const { id } = await params
 
-  const { data: b } = await supabase
-    .from('booking_requests')
-    .select('*')
-    .eq('id', id)
-    .eq('patient_id', user.id)
-    .single()
+  const [{ data: b }, { data: platformSettings }] = await Promise.all([
+    supabase.from('booking_requests').select('*').eq('id', id).eq('patient_id', user.id).single(),
+    supabase.from('platform_settings').select('share_provider_phone_with_patient').limit(1).single(),
+  ])
 
   if (!b) notFound()
+  const sharePhone = platformSettings?.share_provider_phone_with_patient ?? false
+
+  // Fetch nurse phone if sharing is enabled and a nurse is assigned
+  let nursePhone: string | null = null
+  if (sharePhone && b.nurse_id) {
+    const { data: nurseRow } = await supabase.from('nurses').select('phone').eq('user_id', b.nurse_id).single()
+    nursePhone = nurseRow?.phone ?? null
+  }
 
   const s = statusStyle[b.status] ?? statusStyle.pending
   const typeLabel = b.booking_type === 'weekly' ? '🔁 Weekly' : b.booking_type === 'monthly' ? '📆 Monthly' : '📅 One-Time'
@@ -75,9 +84,37 @@ export default async function BookingDetailPage({ params }: Props) {
           </div>
         </div>
 
+        {/* Dispute banner */}
+        {b.dispute_status && b.dispute_status !== 'none' && (
+          <div style={{ padding: '1rem 1.5rem 0' }}>
+            <DisputeBanner
+              disputeType={b.dispute_type ?? null}
+              disputeReason={b.dispute_reason ?? null}
+              disputeStatus={b.dispute_status}
+              disputeRaisedAt={b.dispute_raised_at ?? null}
+              disputeResolution={b.dispute_resolution ?? null}
+              role="patient"
+            />
+          </div>
+        )}
+
+        {/* Report no-show action — only for accepted/confirmed/in_progress with no prior dispute */}
+        {['accepted', 'confirmed', 'in_progress'].includes(b.status) && (!b.dispute_status || b.dispute_status === 'none') && (
+          <div style={{ padding: '1rem 1.5rem', borderBottom: '1px solid var(--border)', background: 'rgba(245,132,42,0.02)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: '0.85rem', color: 'var(--ink)' }}>Did the nurse arrive as scheduled?</div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--muted)', marginTop: 2 }}>If the provider did not show up, you can report a no-show for admin review.</div>
+            </div>
+            <PatientReportNoShowBtn bookingId={b.id} />
+          </div>
+        )}
+
         {/* Details grid */}
         <div style={{ padding: '1.5rem', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '1.25rem' }}>
           <DetailRow icon="👩‍⚕️" label="Assigned Nurse" value={b.nurse_name ?? '—'} />
+          {sharePhone && nursePhone && (
+            <DetailRow icon="📞" label="Nurse Phone" value={nursePhone} />
+          )}
           <DetailRow icon="📅" label="Start Date" value={b.start_date ?? '—'} />
           {b.end_date && b.end_date !== b.start_date && (
             <DetailRow icon="📅" label="End Date" value={b.end_date} />

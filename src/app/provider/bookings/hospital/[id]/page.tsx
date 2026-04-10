@@ -54,6 +54,13 @@ export default async function ProviderHospitalBookingDetailPage({
     .eq('id', booking.hospital_id)
     .single()
 
+  // Fetch this nurse's rate for pricing
+  const { data: nurseProfile } = await supabase
+    .from('nurses')
+    .select('daily_rate, final_daily_price, commission_percent, hourly_rate, final_hourly_price')
+    .eq('user_id', user.id)
+    .single()
+
   const deptBreakdown: any[] = booking.dept_breakdown ?? []
   const bStatus = BOOKING_STATUS[booking.status] ?? BOOKING_STATUS.pending
   const isCancelled = booking.status === 'cancelled'
@@ -61,8 +68,11 @@ export default async function ProviderHospitalBookingDetailPage({
   // Determine if nurse can still respond
   const myResponse = mySelections[0]?.nurseResponse as string | undefined
   const adminStatus = mySelections[0]?.status as string | undefined
-  // Nurse can respond if: admin has approved them AND they haven't responded yet
-  const canRespond  = adminStatus === 'approved' && !myResponse && !isCancelled
+  // Nurse can respond if: admin approved them OR the whole booking is confirmed/matched
+  // (admin confirming the booking implicitly approves all selected nurses)
+  const bookingImpliesApproval = booking.status === 'confirmed' || booking.status === 'matched'
+  const effectivelyApproved    = adminStatus === 'approved' || (bookingImpliesApproval && adminStatus !== 'rejected')
+  const canRespond  = effectivelyApproved && !myResponse && !isCancelled
   const hasResponded = !!myResponse
 
   return (
@@ -79,6 +89,10 @@ export default async function ProviderHospitalBookingDetailPage({
             <p style={{ fontSize: '0.82rem', color: 'var(--muted)', margin: '4px 0 0' }}>
               {hospital?.hospital_name ?? '—'} · Submitted {new Date(booking.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}
             </p>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 6, background: 'var(--shell-bg)', border: '1px solid var(--border)', borderRadius: 6, padding: '3px 10px' }}>
+              <span style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Booking ID</span>
+              <code style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--teal)', letterSpacing: '0.02em' }}>{id.slice(0, 8).toUpperCase()}</code>
+            </div>
           </div>
           <span style={{ background: bStatus.bg, color: bStatus.color, padding: '7px 18px', borderRadius: 50, fontWeight: 700, fontSize: '0.82rem', border: `1px solid ${bStatus.color}30` }}>
             {bStatus.label}
@@ -185,7 +199,7 @@ export default async function ProviderHospitalBookingDetailPage({
       )}
 
       {/* Waiting for admin approval notice */}
-      {!isCancelled && adminStatus === 'pending' && !hasResponded && (
+      {!isCancelled && adminStatus === 'pending' && !hasResponded && !bookingImpliesApproval && (
         <div style={{ background: '#FFF8F0', border: '1px solid rgba(181,94,0,0.25)', borderRadius: 12, padding: '14px 20px', marginBottom: '1.5rem', display: 'flex', gap: 12, alignItems: 'center' }}>
           <span style={{ fontSize: '1.3rem' }}>⏳</span>
           <div>
@@ -320,6 +334,39 @@ export default async function ProviderHospitalBookingDetailPage({
         </div>
       </div>
 
+      {/* Pricing Summary */}
+      {nurseProfile?.daily_rate && (
+        <div className="dash-card" style={{ marginBottom: '1.5rem', borderLeft: '4px solid #1A7A4A' }}>
+          <div className="dash-card-header">
+            <span className="dash-card-title">💰 Your Earnings Estimate</span>
+            <span style={{ fontSize: '0.72rem', color: 'var(--muted)' }}>Based on your daily rate × duration</span>
+          </div>
+          <div className="dash-card-body">
+            {(() => {
+              const dailyRate     = Number(nurseProfile.daily_rate)
+              const finalRate     = Number(nurseProfile.final_daily_price ?? dailyRate)
+              const commPct       = Number(nurseProfile.commission_percent ?? 0)
+              const days          = booking.duration_days ?? 1
+              const shifts        = mySelections.length || 1
+              const grossEarnings = dailyRate * days * shifts
+              const commission    = grossEarnings * (commPct / 100)
+              const netEarnings   = grossEarnings - commission
+              const patientPays   = finalRate * days * shifts
+              return (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px,1fr))', gap: '1rem' }}>
+                  <PriceCard label="Your Daily Rate" value={`SAR ${dailyRate.toFixed(2)}`} sub="per day" color="#0E7B8C" />
+                  <PriceCard label="Duration" value={`${days} days`} sub={`× ${shifts} shift${shifts !== 1 ? 's' : ''}`} color="#7B2FBE" />
+                  <PriceCard label="Gross Earnings" value={`SAR ${grossEarnings.toFixed(2)}`} sub="before commission" color="#b85e00" />
+                  {commPct > 0 && <PriceCard label={`Commission (${commPct}%)`} value={`− SAR ${commission.toFixed(2)}`} sub="platform fee" color="#E04A4A" />}
+                  <PriceCard label="Net Earnings" value={`SAR ${netEarnings.toFixed(2)}`} sub="your take-home" color="#1A7A4A" highlight />
+                  <PriceCard label="Patient Pays" value={`SAR ${patientPays.toFixed(2)}`} sub="total booking cost" color="#3B82F6" />
+                </div>
+              )
+            })()}
+          </div>
+        </div>
+      )}
+
       {/* Department Breakdown */}
       {deptBreakdown.length > 0 && (
         <div className="dash-card">
@@ -365,6 +412,16 @@ export default async function ProviderHospitalBookingDetailPage({
         </div>
       )}
 
+    </div>
+  )
+}
+
+function PriceCard({ label, value, sub, color, highlight }: { label: string; value: string; sub?: string; color: string; highlight?: boolean }) {
+  return (
+    <div style={{ background: highlight ? `${color}08` : 'var(--shell-bg)', border: `1px solid ${color}20`, borderRadius: 10, padding: '14px 16px', borderTop: `3px solid ${color}` }}>
+      <div style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 6 }}>{label}</div>
+      <div style={{ fontSize: '1.05rem', fontWeight: 800, color }}>{value}</div>
+      {sub && <div style={{ fontSize: '0.68rem', color: 'var(--muted)', marginTop: 3 }}>{sub}</div>}
     </div>
   )
 }

@@ -2,6 +2,7 @@ import { requireRole } from '@/lib/auth'
 import { createSupabaseServiceRoleClient } from '@/lib/supabase-server'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
+import { NurseAvatarBtn } from '@/app/components/NurseCardModal'
 
 export const dynamic = 'force-dynamic'
 
@@ -56,17 +57,88 @@ export default async function HospitalBookingDetailPage({
 
   if (!hospital) notFound()
 
-  const { data: booking } = await supabase
-    .from('hospital_booking_requests')
-    .select('*')
-    .eq('id', id)
-    .eq('hospital_id', hospital.id)
-    .single()
+  const [{ data: booking }, { data: platformSettings }] = await Promise.all([
+    supabase.from('hospital_booking_requests').select('*').eq('id', id).eq('hospital_id', hospital.id).single(),
+    supabase.from('platform_settings').select('show_price_with_commission, show_hospital_contracts, share_provider_phone_with_patient').limit(1).single(),
+  ])
 
   if (!booking) notFound()
+  const showWithCommission = platformSettings?.show_price_with_commission ?? true
+  const showContracts      = platformSettings?.show_hospital_contracts ?? true
+  const sharePhone         = platformSettings?.share_provider_phone_with_patient ?? false
 
   const nurseSelections: NurseSelection[] = booking.nurse_selections ?? []
   const deptBreakdown: any[]              = booking.dept_breakdown ?? []
+
+  // Only non-rejected nurses count toward cost
+  const activeSelections = nurseSelections.filter(ns => ns.status !== 'rejected')
+
+  // Fetch extended nurse profiles for modal + pricing
+  const nurseIds = [...new Set(nurseSelections.map(ns => ns.nurseId).filter(Boolean))]
+  const { data: nurseRates } = nurseIds.length > 0
+    ? await supabase.from('nurses').select('user_id, full_name, daily_rate, final_daily_price, commission_percent, bio, city, nationality, gender, experience_years, phone, license_no').in('user_id', nurseIds)
+    : { data: [] }
+
+  // Fetch nurse photos
+  const { data: nursePhotos } = nurseIds.length > 0
+    ? await supabase.from('nurse_documents').select('nurse_id, file_url').eq('doc_type', 'photo').in('nurse_id', (nurseRates ?? []).map((n: any) => n.user_id))
+    : { data: [] }
+  const photoByUserId: Record<string, string> = {}
+  // need to map nurse.id -> user_id; nurseRates already has user_id
+  // nurse_documents.nurse_id = nurses.id (uuid), not user_id — need to join via nurses.id
+  // For simplicity fetch nurses.id too
+  const nurseProfileMap: Record<string, {
+    daily_rate: number; final_daily_price: number; commission_percent: number
+    bio: string | null; city: string | null; nationality: string | null
+    gender: string | null; experience_years: number | null
+    phone: string | null; license_no: string | null; photo_url: string | null
+    nurse_table_id?: string
+  }> = {}
+
+  // Fetch nurse table IDs for photo lookup
+  const { data: nurseTableRows } = nurseIds.length > 0
+    ? await supabase.from('nurses').select('id, user_id').in('user_id', nurseIds)
+    : { data: [] }
+  const nurseTableIdMap: Record<string, string> = {}
+  for (const r of (nurseTableRows ?? [])) nurseTableIdMap[r.user_id] = r.id
+
+  // Fetch photos by nurse table id
+  const nurseTableIds = Object.values(nurseTableIdMap)
+  const { data: photoRows } = nurseTableIds.length > 0
+    ? await supabase.from('nurse_documents').select('nurse_id, file_url').eq('doc_type', 'photo').in('nurse_id', nurseTableIds)
+    : { data: [] }
+  const photoByNurseId: Record<string, string> = {}
+  for (const p of (photoRows ?? [])) photoByNurseId[p.nurse_id] = p.file_url
+
+  for (const n of (nurseRates ?? [])) {
+    const tableId = nurseTableIdMap[n.user_id]
+    nurseProfileMap[n.user_id] = {
+      daily_rate: Number(n.daily_rate ?? 0),
+      final_daily_price: Number(n.final_daily_price ?? n.daily_rate ?? 0),
+      commission_percent: Number(n.commission_percent ?? 0),
+      bio: n.bio ?? null,
+      city: n.city ?? null,
+      nationality: n.nationality ?? null,
+      gender: n.gender ?? null,
+      experience_years: n.experience_years ?? null,
+      phone: n.phone ?? null,
+      license_no: n.license_no ?? null,
+      photo_url: tableId ? (photoByNurseId[tableId] ?? null) : null,
+    }
+  }
+
+  const durationDays = booking.duration_days ?? 1
+  // Cost only counts non-rejected nurses
+  const totalNurseCost = activeSelections.reduce((sum, ns) => {
+    const rate = nurseProfileMap[ns.nurseId]
+    return sum + (rate ? rate.final_daily_price * durationDays : 0)
+  }, 0)
+  const totalNurseEarnings = activeSelections.reduce((sum, ns) => {
+    const rate = nurseProfileMap[ns.nurseId]
+    return sum + (rate ? rate.daily_rate * durationDays : 0)
+  }, 0)
+  const totalCommission = totalNurseCost - totalNurseEarnings
+  const hasPricing = activeSelections.some(ns => nurseProfileMap[ns.nurseId]?.daily_rate > 0)
   const bStatus = BOOKING_STATUS[booking.status] ?? BOOKING_STATUS.pending
   const isCancelled = booking.status === 'cancelled'
   const canEdit = booking.status === 'pending' || booking.status === 'reviewing'
@@ -103,6 +175,10 @@ export default async function HospitalBookingDetailPage({
             <p style={{ fontSize: '0.82rem', color: 'var(--muted)', margin: '4px 0 0' }}>
               {hospital.hospital_name} · Submitted {new Date(booking.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}
             </p>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 6, background: 'var(--shell-bg)', border: '1px solid var(--border)', borderRadius: 6, padding: '3px 10px' }}>
+              <span style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Booking ID</span>
+              <code style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--teal)', letterSpacing: '0.02em' }}>{id.slice(0, 8).toUpperCase()}</code>
+            </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <span style={{
@@ -343,6 +419,97 @@ export default async function HospitalBookingDetailPage({
         </div>
       )}
 
+      {/* ── Pricing Breakdown ── */}
+      {hasPricing && (
+        <div className="dash-card" style={{ marginBottom: '1.5rem', borderLeft: '4px solid #1A7A4A' }}>
+          <div className="dash-card-header">
+            <span className="dash-card-title">💰 Cost Breakdown</span>
+            <span style={{ fontSize: '0.72rem', color: 'var(--muted)' }}>Estimated total for {durationDays} day{durationDays !== 1 ? 's' : ''}</span>
+          </div>
+          {/* Summary KPIs */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px,1fr))', gap: '1rem', padding: '1rem 1.2rem', borderBottom: '1px solid var(--border)' }}>
+            <HPriceCard label="Active Nurses" value={String(activeSelections.length)} sub={rejectedCount > 0 ? `${rejectedCount} rejected excluded` : 'selected nurses'} color="#0E7B8C" />
+            <HPriceCard label="Duration" value={`${durationDays} days`} sub="service period" color="#7B2FBE" />
+            {showWithCommission && (
+              <HPriceCard label="Nurses Earnings" value={`SAR ${totalNurseEarnings.toFixed(2)}`} sub="base total" color="#b85e00" />
+            )}
+            {showWithCommission && (
+              <HPriceCard label="Platform Fee" value={`SAR ${totalCommission.toFixed(2)}`} sub="admin commission" color="#E04A4A" />
+            )}
+            <HPriceCard
+              label="Total Cost"
+              value={`SAR ${showWithCommission ? totalNurseCost.toFixed(2) : totalNurseEarnings.toFixed(2)}`}
+              sub="you pay"
+              color="#1A7A4A"
+              highlight
+            />
+          </div>
+          {/* Per-nurse breakdown — active (non-rejected) only */}
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+              <thead>
+                <tr style={{ background: 'var(--shell-bg)', borderBottom: '1px solid var(--border)' }}>
+                  {['Nurse', 'Department', 'Shift', 'Daily Rate', ...(showWithCommission ? ['Commission', 'Days', 'Total'] : ['Days', 'Total'])].map(h => (
+                    <th key={h} style={{ padding: '9px 14px', textAlign: 'left', fontWeight: 700, color: 'var(--muted)', fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {activeSelections.map((ns, i) => {
+                  const rate = nurseProfileMap[ns.nurseId]
+                  const colSpanNo = showWithCommission ? 6 : 4
+                  if (!rate) return (
+                    <tr key={i} style={{ borderBottom: '1px solid var(--border)' }}>
+                      <td style={{ padding: '10px 14px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <NurseAvatarBtn nurse={{ nurseId: ns.nurseId, nurseName: ns.nurseName, nurseSpecialization: ns.nurseSpecialization, shift: ns.shift, deptName: ns.deptName }} showPrice={showWithCommission} />
+                          <span style={{ fontWeight: 700 }}>{ns.nurseName}</span>
+                        </div>
+                      </td>
+                      <td colSpan={colSpanNo} style={{ padding: '10px 14px', color: 'var(--muted)', fontSize: '0.75rem' }}>Rate not set</td>
+                    </tr>
+                  )
+                  const displayTotal = showWithCommission ? rate.final_daily_price * durationDays : rate.daily_rate * durationDays
+                  const commission = (rate.final_daily_price - rate.daily_rate) * durationDays
+                  return (
+                    <tr key={i} style={{ borderBottom: '1px solid var(--border)', background: i % 2 === 0 ? 'transparent' : 'rgba(14,123,140,0.01)' }}>
+                      <td style={{ padding: '10px 14px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <NurseAvatarBtn nurse={{ nurseId: ns.nurseId, nurseName: ns.nurseName, nurseSpecialization: ns.nurseSpecialization, shift: ns.shift, deptName: ns.deptName, bio: rate.bio, city: rate.city, nationality: rate.nationality, gender: rate.gender, experienceYears: rate.experience_years, phone: sharePhone ? rate.phone : null, licenseNo: rate.license_no, dailyRate: rate.daily_rate, finalDailyPrice: rate.final_daily_price, commissionPercent: rate.commission_percent, photoUrl: rate.photo_url }} showPrice showCommission={showWithCommission} />
+                          <span style={{ fontWeight: 700, color: 'var(--ink)' }}>{ns.nurseName}</span>
+                        </div>
+                      </td>
+                      <td style={{ padding: '10px 14px', color: 'var(--muted)' }}>{ns.deptName}</td>
+                      <td style={{ padding: '10px 14px' }}>
+                        <span style={{ background: ns.shift === 'morning' ? '#FFF8E8' : ns.shift === 'evening' ? '#FFF3E0' : '#EDE9FE', color: ns.shift === 'morning' ? '#b85e00' : ns.shift === 'evening' ? '#DD6B20' : '#7B2FBE', padding: '2px 8px', borderRadius: 5, fontSize: '0.72rem', fontWeight: 700 }}>
+                          {ns.shift}
+                        </span>
+                      </td>
+                      <td style={{ padding: '10px 14px', fontWeight: 600, color: '#0E7B8C' }}>SAR {rate.daily_rate.toFixed(2)}</td>
+                      {showWithCommission && (
+                        <td style={{ padding: '10px 14px', color: '#E04A4A', fontWeight: 600 }}>
+                          {rate.commission_percent > 0 ? `${rate.commission_percent}% (SAR ${commission.toFixed(2)})` : '—'}
+                        </td>
+                      )}
+                      <td style={{ padding: '10px 14px', color: 'var(--muted)' }}>{durationDays}</td>
+                      <td style={{ padding: '10px 14px', fontWeight: 800, color: '#1A7A4A' }}>SAR {displayTotal.toFixed(2)}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+              <tfoot>
+                <tr style={{ borderTop: '2px solid var(--border)', background: 'var(--shell-bg)' }}>
+                  <td colSpan={showWithCommission ? 6 : 4} style={{ padding: '10px 14px', fontWeight: 800, fontSize: '0.82rem', color: 'var(--ink)' }}>TOTAL</td>
+                  <td style={{ padding: '10px 14px', fontWeight: 800, fontSize: '0.9rem', color: '#1A7A4A' }}>
+                    SAR {showWithCommission ? totalNurseCost.toFixed(2) : totalNurseEarnings.toFixed(2)}
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      )}
+
       {/* ── Nurse Roster ── */}
       <div className="dash-card">
         <div className="dash-card-header" style={{ flexWrap: 'wrap', gap: 8 }}>
@@ -385,9 +552,24 @@ export default async function HospitalBookingDetailPage({
                       </td>
                       <td style={{ padding: '12px 14px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                          <div style={{ width: 34, height: 34, borderRadius: '50%', background: 'rgba(14,123,140,0.08)', border: '2px solid rgba(14,123,140,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', flexShrink: 0 }}>
-                            👩‍⚕️
-                          </div>
+                          {(() => {
+                            const rate = nurseProfileMap[ns.nurseId]
+                            return (
+                              <NurseAvatarBtn nurse={{
+                                nurseId: ns.nurseId, nurseName: ns.nurseName,
+                                nurseSpecialization: ns.nurseSpecialization,
+                                shift: ns.shift, deptName: ns.deptName,
+                                ...(rate ? {
+                                  bio: rate.bio, city: rate.city, nationality: rate.nationality,
+                                  gender: rate.gender, experienceYears: rate.experience_years,
+                                  phone: sharePhone ? rate.phone : null, licenseNo: rate.license_no,
+                                  dailyRate: rate.daily_rate, finalDailyPrice: rate.final_daily_price,
+                                  commissionPercent: rate.commission_percent, photoUrl: rate.photo_url,
+                                } : {}),
+                                selectionStatus: ns.status,
+                              }} showPrice={!!nurseProfileMap[ns.nurseId]} showCommission={showWithCommission} />
+                            )
+                          })()}
                           <div>
                             <div style={{ fontWeight: 700, color: 'var(--ink)', fontSize: '0.85rem' }}>{ns.nurseName}</div>
                             <div style={{ fontSize: '0.68rem', color: 'var(--muted)', marginTop: 1 }}>ID: {ns.nurseId.slice(0, 8).toUpperCase()}</div>
@@ -433,6 +615,16 @@ export default async function HospitalBookingDetailPage({
 }
 
 /* ── Helper components ── */
+function HPriceCard({ label, value, sub, color, highlight }: { label: string; value: string; sub?: string; color: string; highlight?: boolean }) {
+  return (
+    <div style={{ background: highlight ? `${color}08` : 'var(--shell-bg)', border: `1px solid ${color}20`, borderRadius: 10, padding: '14px 16px', borderTop: `3px solid ${color}` }}>
+      <div style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 6 }}>{label}</div>
+      <div style={{ fontSize: '1.05rem', fontWeight: 800, color }}>{value}</div>
+      {sub && <div style={{ fontSize: '0.68rem', color: 'var(--muted)', marginTop: 3 }}>{sub}</div>}
+    </div>
+  )
+}
+
 function InfoRow({ label, value, highlight }: { label: string; value: string | number; highlight?: boolean }) {
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, marginBottom: 10, paddingBottom: 10, borderBottom: '1px solid var(--border)' }}>

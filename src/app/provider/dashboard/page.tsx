@@ -18,6 +18,14 @@ const STATUS_MAP: Record<string, { bg: string; color: string; label: string }> =
   cancelled:   { bg: 'rgba(138,155,170,0.1)', color: '#8A9BAA', label: 'Cancelled' },
 }
 
+const BOOKING_STATUS_MAP: Record<string, { bg: string; color: string; label: string }> = {
+  pending:   { bg: 'rgba(181,94,0,0.08)',   color: '#b85e00', label: '⏳ Pending' },
+  reviewing: { bg: 'rgba(59,130,246,0.08)', color: '#3B82F6', label: '🔍 Reviewing' },
+  matched:   { bg: 'rgba(14,123,140,0.08)', color: '#0E7B8C', label: '✅ Matched' },
+  confirmed: { bg: 'rgba(26,122,74,0.08)',  color: '#1A7A4A', label: '✅ Confirmed' },
+  cancelled: { bg: 'rgba(224,74,74,0.06)',  color: '#E04A4A', label: '✕ Cancelled' },
+}
+
 const SHIFT_START_TIMES: Record<string, string> = {
   morning: '08:00',
   evening: '16:00',
@@ -113,7 +121,7 @@ export default async function ProviderDashboardPage({ searchParams }: Props) {
       .range(offset, offset + PAGE_SIZE - 1),
     // Hospital bookings where this nurse is in nurse_selections
     serviceSupabase.from('hospital_booking_requests')
-      .select('id, status, start_date, end_date, hospital_id, nurse_selections')
+      .select('id, status, start_date, end_date, hospital_id, nurse_selections, created_at')
       .order('created_at', { ascending: false }),
   ])
 
@@ -122,6 +130,20 @@ export default async function ProviderDashboardPage({ searchParams }: Props) {
     (b.nurse_selections ?? []).some((ns: any) => ns.nurseId === user.id)
   )
   const hospBookingCount = myHospBookings.length
+
+  // Fetch hospital names for my hospital bookings
+  const hospIds = [...new Set(myHospBookings.map((b: any) => b.hospital_id).filter(Boolean))]
+  const { data: hospitalsData } = hospIds.length > 0
+    ? await serviceSupabase.from('hospitals').select('id, hospital_name, city').in('id', hospIds)
+    : { data: [] }
+  const hospitalMap: Record<string, { hospital_name: string; city: string }> = {}
+  for (const h of (hospitalsData ?? [])) hospitalMap[h.id] = h
+
+  // Count hospital bookings awaiting my response (admin approved, no nurse response)
+  const hospActionRequired = myHospBookings.filter((b: any) => {
+    const myNs = (b.nurse_selections ?? []).filter((ns: any) => ns.nurseId === user.id)
+    return myNs.some((ns: any) => ns.status === 'approved' && !ns.nurseResponse)
+  }).length
 
   const pendingCount        = (pendingRequests ?? []).length
   const hasPendingAgreements = (pendingAgreements ?? []).length > 0
@@ -214,10 +236,13 @@ export default async function ProviderDashboardPage({ searchParams }: Props) {
           )}
         </div>
         <Link href="/provider/bookings?type=hospital" style={{ textDecoration: 'none' }}>
-          <div className="dash-kpi" style={{ cursor: 'pointer', border: hospBookingCount > 0 ? '1px solid rgba(14,123,140,0.25)' : '1px solid var(--border)' }}>
-            <div className="dash-kpi-icon" style={{ background: 'rgba(14,123,140,0.08)' }}>🏥</div>
-            <div className="dash-kpi-num" style={{ color: hospBookingCount > 0 ? 'var(--teal)' : 'var(--ink)' }}>{hospBookingCount}</div>
+          <div className="dash-kpi" style={{ cursor: 'pointer', border: hospActionRequired > 0 ? '1px solid rgba(245,132,42,0.4)' : hospBookingCount > 0 ? '1px solid rgba(14,123,140,0.25)' : '1px solid var(--border)', position: 'relative' }}>
+            <div className="dash-kpi-icon" style={{ background: hospActionRequired > 0 ? '#FFF3E0' : 'rgba(14,123,140,0.08)' }}>🏥</div>
+            <div className="dash-kpi-num" style={{ color: hospActionRequired > 0 ? '#F5842A' : hospBookingCount > 0 ? 'var(--teal)' : 'var(--ink)' }}>{hospBookingCount}</div>
             <div className="dash-kpi-label">Hospital</div>
+            {hospActionRequired > 0 && (
+              <span style={{ position: 'absolute', top: 8, right: 8, width: 10, height: 10, borderRadius: '50%', background: '#F5842A' }} />
+            )}
           </div>
         </Link>
       </div>
@@ -432,6 +457,96 @@ export default async function ProviderDashboardPage({ searchParams }: Props) {
           </div>
         )}
       </div>
+
+      {/* Hospital Bookings section */}
+      {myHospBookings.length > 0 && (
+        <div className="dash-card" style={{ marginTop: '1.5rem' }}>
+          <div style={{ padding: '0.85rem 1.2rem', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.6rem' }}>
+            <span className="dash-card-title">🏥 My Hospital Bookings</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              {hospActionRequired > 0 && (
+                <span style={{ background: 'rgba(245,132,42,0.1)', color: '#F5842A', fontSize: '0.72rem', fontWeight: 700, padding: '3px 10px', borderRadius: 50 }}>
+                  {hospActionRequired} Action Required
+                </span>
+              )}
+              <Link href="/provider/bookings?type=hospital" style={{ fontSize: '0.78rem', color: 'var(--teal)', textDecoration: 'none', fontWeight: 600 }}>View all →</Link>
+            </div>
+          </div>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+              <thead>
+                <tr style={{ background: 'var(--cream)', borderBottom: '1px solid var(--border)' }}>
+                  <DashTh>#</DashTh>
+                  <DashTh>Hospital</DashTh>
+                  <DashTh>Period</DashTh>
+                  <DashTh>Dept / Shift</DashTh>
+                  <DashTh>Booking Status</DashTh>
+                  <DashTh>My Status</DashTh>
+                  <DashTh>Details</DashTh>
+                </tr>
+              </thead>
+              <tbody>
+                {myHospBookings.slice(0, 8).map((b: any, i: number) => {
+                  const myNs = (b.nurse_selections ?? []).filter((ns: any) => ns.nurseId === user.id)
+                  const hosp = hospitalMap[b.hospital_id]
+                  const bsm = BOOKING_STATUS_MAP[b.status] ?? BOOKING_STATUS_MAP.pending
+                  const needsAction = myNs.some((ns: any) => ns.status === 'approved' && !ns.nurseResponse)
+                  const myResp = myNs[0]?.nurseResponse as string | undefined
+                  const myAdminStatus = myNs[0]?.status as string | undefined
+                  const myStatusLabel = needsAction
+                    ? { label: '⚡ Action Required', bg: 'rgba(245,132,42,0.1)', color: '#F5842A' }
+                    : myResp === 'accepted'
+                    ? { label: '✅ Accepted', bg: 'rgba(26,122,74,0.08)', color: '#1A7A4A' }
+                    : myResp === 'rejected'
+                    ? { label: '✕ Rejected', bg: 'rgba(224,74,74,0.06)', color: '#E04A4A' }
+                    : myAdminStatus === 'pending'
+                    ? { label: '⏳ Awaiting Approval', bg: 'rgba(181,94,0,0.08)', color: '#b85e00' }
+                    : myAdminStatus === 'rejected'
+                    ? { label: '✕ Not Selected', bg: 'rgba(224,74,74,0.06)', color: '#E04A4A' }
+                    : { label: '—', bg: 'var(--shell-bg)', color: 'var(--muted)' }
+                  return (
+                    <tr key={b.id} style={{ borderBottom: '1px solid var(--border)', background: needsAction ? 'rgba(245,132,42,0.02)' : i % 2 === 0 ? '#fff' : 'rgba(14,123,140,0.015)' }}>
+                      <DashTd>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 24, height: 24, borderRadius: 6, background: 'var(--cream)', border: '1px solid var(--border)', fontSize: '0.68rem', fontWeight: 700, color: 'var(--muted)' }}>
+                          {i + 1}
+                        </span>
+                      </DashTd>
+                      <DashTd>
+                        <div style={{ fontWeight: 700 }}>{hosp?.hospital_name ?? '—'}</div>
+                        {hosp?.city && <div style={{ fontSize: '0.7rem', color: 'var(--muted)' }}>{hosp.city}</div>}
+                      </DashTd>
+                      <DashTd>
+                        <div>{new Date(b.start_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} – {new Date(b.end_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</div>
+                      </DashTd>
+                      <DashTd>
+                        {myNs.map((ns: any, j: number) => (
+                          <div key={j} style={{ fontSize: '0.72rem', color: 'var(--muted)', marginBottom: j < myNs.length - 1 ? 2 : 0 }}>
+                            {ns.deptName} · <span style={{ color: ns.shift === 'morning' ? '#b85e00' : ns.shift === 'evening' ? '#DD6B20' : '#7B2FBE' }}>{ns.shift}</span>
+                          </div>
+                        ))}
+                      </DashTd>
+                      <DashTd>
+                        <span style={{ background: bsm.bg, color: bsm.color, fontSize: '0.65rem', fontWeight: 700, padding: '3px 9px', borderRadius: 50, whiteSpace: 'nowrap' }}>{bsm.label}</span>
+                      </DashTd>
+                      <DashTd>
+                        <span style={{ background: myStatusLabel.bg, color: myStatusLabel.color, fontSize: '0.65rem', fontWeight: 700, padding: '3px 9px', borderRadius: 50, whiteSpace: 'nowrap' }}>{myStatusLabel.label}</span>
+                      </DashTd>
+                      <DashTd>
+                        <Link href={`/provider/bookings/hospital/${b.id}`} style={{
+                          padding: '4px 10px', borderRadius: 6, border: needsAction ? 'none' : '1px solid var(--border)',
+                          background: needsAction ? '#F5842A' : 'var(--cream)',
+                          color: needsAction ? '#fff' : 'var(--teal)',
+                          fontSize: '0.72rem', fontWeight: 700, textDecoration: 'none', whiteSpace: 'nowrap',
+                        }}>{needsAction ? 'Respond →' : 'View →'}</Link>
+                      </DashTd>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* Profile status card */}
       <div className="dash-card" style={{ marginTop: '1.5rem' }}>

@@ -3,6 +3,7 @@ import { createSupabaseServiceRoleClient } from '@/lib/supabase-server'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { WorkStartedBtn, WorkDoneBtn } from '../WorkActions'
+import { ProviderReportIssueBtn, DisputeBanner } from '@/app/components/ReportIssueModal'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,6 +16,8 @@ const STATUS_MAP: Record<string, { bg: string; color: string; label: string }> =
   work_done:   { bg: 'rgba(107,63,160,0.1)',  color: '#6B3FA0', label: '✅ Work Done' },
   completed:   { bg: 'rgba(14,123,140,0.1)',  color: '#0E7B8C', label: '✓ Completed' },
   cancelled:   { bg: 'rgba(138,155,170,0.1)', color: '#8A9BAA', label: 'Cancelled' },
+  no_show:     { bg: 'rgba(224,74,74,0.1)',   color: '#E04A4A', label: '🚨 No-Show' },
+  disputed:    { bg: 'rgba(224,74,74,0.08)',  color: '#E04A4A', label: '⚠️ Disputed' },
 }
 
 interface Props {
@@ -94,6 +97,31 @@ export default async function ProviderBookingDetailPage({ params }: Props) {
             </div>
             {canMarkStarted && <WorkStartedBtn requestId={b.id} startDate={b.start_date} startTime={({ morning: '08:00', evening: '16:00', night: '00:00' } as Record<string,string>)[b.shift] ?? null} isPaid={b.payment_status === 'paid'} hoursBeforeEnabled={hoursBeforeEnabled} />}
             {canMarkDone    && <WorkDoneBtn requestId={b.id} />}
+          </div>
+        )}
+
+        {/* Dispute banner */}
+        {b.dispute_status && b.dispute_status !== 'none' && (
+          <div style={{ padding: '1rem 1.5rem 0' }}>
+            <DisputeBanner
+              disputeType={b.dispute_type ?? null}
+              disputeReason={b.dispute_reason ?? null}
+              disputeStatus={b.dispute_status}
+              disputeRaisedAt={b.dispute_raised_at ?? null}
+              disputeResolution={b.dispute_resolution ?? null}
+              role="provider"
+            />
+          </div>
+        )}
+
+        {/* Report issue — only for accepted/confirmed/in_progress with no prior dispute */}
+        {['accepted', 'confirmed', 'in_progress'].includes(b.status) && (!b.dispute_status || b.dispute_status === 'none') && (
+          <div style={{ padding: '1rem 1.5rem', borderBottom: '1px solid var(--border)', background: 'rgba(181,94,0,0.02)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: '0.85rem', color: 'var(--ink)' }}>Having trouble on-site?</div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--muted)', marginTop: 2 }}>If the patient is absent, access is denied, or you face another issue, report it here for admin review.</div>
+            </div>
+            <ProviderReportIssueBtn bookingId={b.id} />
           </div>
         )}
 

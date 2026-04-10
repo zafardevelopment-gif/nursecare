@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition, useRef } from 'react'
+import { useState, useTransition, useRef, useEffect } from 'react'
 import { savePlatformSettings, uploadLogo } from './actions'
 
 interface Settings {
@@ -22,6 +22,9 @@ interface Settings {
   whatsapp_notifications?: boolean
   sms_notifications?: boolean
   chat_enabled?: boolean
+  share_provider_phone_with_patient?: boolean
+  show_hospital_contracts?: boolean
+  show_price_with_commission?: boolean
 }
 
 type Tab = 'general' | 'provider' | 'patient' | 'hospital'
@@ -46,25 +49,88 @@ export default function SettingsForm({ settings }: { settings: Settings | null }
   const [whatsapp, setWhatsapp] = useState(settings?.whatsapp_notifications ?? false)
   const [sms, setSms]           = useState(settings?.sms_notifications ?? true)
 
+  const [sharePhone, setSharePhone]         = useState(settings?.share_provider_phone_with_patient ?? false)
+  const [showContracts, setShowContracts]   = useState(settings?.show_hospital_contracts ?? true)
+  const [showCommission, setShowCommission] = useState(settings?.show_price_with_commission ?? true)
+
+  // Sync all boolean toggles when settings prop changes (server revalidation after save)
+  useEffect(() => {
+    if (settings?.allow_emergency_bookings !== undefined)             setEmergencyBookings(settings.allow_emergency_bookings)
+    if (settings?.require_work_start_confirmation !== undefined)     setRequireWorkStart(settings.require_work_start_confirmation)
+    if (settings?.require_work_completion_confirmation !== undefined) setRequireWorkDone(settings.require_work_completion_confirmation)
+    if (settings?.chat_enabled !== undefined)                        setChatEnabled(settings.chat_enabled)
+    if (settings?.email_notifications !== undefined)                 setEmail(settings.email_notifications)
+    if (settings?.whatsapp_notifications !== undefined)              setWhatsapp(settings.whatsapp_notifications)
+    if (settings?.sms_notifications !== undefined)                   setSms(settings.sms_notifications)
+    if (settings?.share_provider_phone_with_patient !== undefined)   setSharePhone(settings.share_provider_phone_with_patient)
+    if (settings?.show_hospital_contracts !== undefined)             setShowContracts(settings.show_hospital_contracts)
+    if (settings?.show_price_with_commission !== undefined)          setShowCommission(settings.show_price_with_commission)
+  }, [
+    settings?.allow_emergency_bookings,
+    settings?.require_work_start_confirmation,
+    settings?.require_work_completion_confirmation,
+    settings?.chat_enabled,
+    settings?.email_notifications,
+    settings?.whatsapp_notifications,
+    settings?.sms_notifications,
+    settings?.share_provider_phone_with_patient,
+    settings?.show_hospital_contracts,
+    settings?.show_price_with_commission,
+  ])
+
   const [logoUrl, setLogoUrl]             = useState<string | null>(settings?.logo_url ?? null)
   const [logoUploading, setLogoUploading] = useState(false)
   const [logoError, setLogoError]         = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  // Refs for numeric inputs — read at submit time regardless of active tab
+  const refPlatformName            = useRef<HTMLInputElement>(null)
+  const refDefaultCommission       = useRef<HTMLInputElement>(null)
+  const refVatRate                 = useRef<HTMLInputElement>(null)
+  const refFreeCancellation        = useRef<HTMLInputElement>(null)
+  const refAutoComplete            = useRef<HTMLInputElement>(null)
+  const refMinBookingHours         = useRef<HTMLInputElement>(null)
+  const refMinAdvanceHours         = useRef<HTMLInputElement>(null)
+  const refMaxAdvanceDays          = useRef<HTMLInputElement>(null)
+  const refPaymentDeadline         = useRef<HTMLInputElement>(null)
+  const refWorkStartEnableHours    = useRef<HTMLInputElement>(null)
+
+  function num(ref: React.RefObject<HTMLInputElement | null>, fallback: number) {
+    const v = parseFloat(ref.current?.value ?? '')
+    return isNaN(v) ? fallback : v
+  }
+
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
-    const fd = new FormData(e.currentTarget)
-    fd.set('allow_emergency_bookings',             String(emergencyBookings))
-    fd.set('require_work_start_confirmation',       String(requireWorkStart))
-    fd.set('require_work_completion_confirmation',  String(requireWorkDone))
-    fd.set('chat_enabled',                          String(chatEnabled))
-    fd.set('email_notifications',      String(email))
-    fd.set('whatsapp_notifications',   String(whatsapp))
-    fd.set('sms_notifications',        String(sms))
-    if (logoUrl) fd.set('logo_url', logoUrl)
+    e.stopPropagation()
+    if (pending) return
+
+    const input = {
+      platform_name:                        refPlatformName.current?.value?.trim() || 'NurseCare+',
+      logo_url:                             logoUrl,
+      default_commission:                   num(refDefaultCommission, settings?.default_commission ?? 10),
+      vat_rate:                             num(refVatRate, settings?.vat_rate ?? 15),
+      free_cancellation_hours:              num(refFreeCancellation, settings?.free_cancellation_hours ?? 24),
+      auto_complete_hours:                  num(refAutoComplete, settings?.auto_complete_hours ?? 24),
+      min_booking_hours:                    num(refMinBookingHours, settings?.min_booking_hours ?? 2),
+      min_advance_hours:                    num(refMinAdvanceHours, settings?.min_advance_hours ?? 2),
+      max_advance_days:                     num(refMaxAdvanceDays, settings?.max_advance_days ?? 30),
+      payment_deadline_hours:               num(refPaymentDeadline, settings?.payment_deadline_hours ?? 24),
+      work_start_enable_hours_before:       num(refWorkStartEnableHours, settings?.work_start_enable_hours_before ?? 1),
+      allow_emergency_bookings:             emergencyBookings,
+      require_work_start_confirmation:      requireWorkStart,
+      require_work_completion_confirmation: requireWorkDone,
+      chat_enabled:                         chatEnabled,
+      email_notifications:                  email,
+      whatsapp_notifications:               whatsapp,
+      sms_notifications:                    sms,
+      share_provider_phone_with_patient:    sharePhone,
+      show_hospital_contracts:              showContracts,
+      show_price_with_commission:           showCommission,
+    }
 
     startTransition(async () => {
-      await savePlatformSettings(fd)
+      await savePlatformSettings(input)
       setSaved(true)
       setTimeout(() => setSaved(false), 3000)
     })
@@ -145,17 +211,17 @@ export default function SettingsForm({ settings }: { settings: Settings | null }
               </div>
             </SettingRow>
             <SettingRow label="Platform Name" description="Displayed in header and emails">
-              <input type="text" name="platform_name" defaultValue={settings?.platform_name ?? 'NurseCare+'} style={inputStyle} />
+              <input ref={refPlatformName} type="text" name="platform_name" defaultValue={settings?.platform_name ?? 'NurseCare+'} style={inputStyle} />
             </SettingRow>
           </div>
 
           <SectionHeader icon="💰" title="Billing & Rates" sub="Commission, VAT, and pricing rules" />
           <div style={{ padding: '0 1.2rem' }}>
             <SettingRow label="Default Commission (%)" description="Platform commission applied on top of nurse's hourly rate for patients">
-              <NumberInput name="default_commission" defaultValue={settings?.default_commission ?? 10} unit="%" />
+              <NumberInput name="default_commission" defaultValue={settings?.default_commission ?? 10} unit="%" inputRef={refDefaultCommission} />
             </SettingRow>
             <SettingRow label="VAT Rate (%)" description="Saudi ZATCA compliant — applied to total booking amount">
-              <NumberInput name="vat_rate" defaultValue={settings?.vat_rate ?? 15} unit="%" />
+              <NumberInput name="vat_rate" defaultValue={settings?.vat_rate ?? 15} unit="%" inputRef={refVatRate} />
             </SettingRow>
           </div>
 
@@ -202,7 +268,7 @@ export default function SettingsForm({ settings }: { settings: Settings | null }
                 </>
               }
             >
-              <NumberInput name="work_start_enable_hours_before" defaultValue={settings?.work_start_enable_hours_before ?? 1} unit="hrs before" />
+              <NumberInput name="work_start_enable_hours_before" defaultValue={settings?.work_start_enable_hours_before ?? 1} unit="hrs before" inputRef={refWorkStartEnableHours} />
             </SettingRow>
 
             <SettingRow
@@ -260,7 +326,7 @@ export default function SettingsForm({ settings }: { settings: Settings | null }
                 </>
               }
             >
-              <NumberInput name="min_booking_hours" defaultValue={settings?.min_booking_hours ?? 2} unit="hours" />
+              <NumberInput name="min_booking_hours" defaultValue={settings?.min_booking_hours ?? 2} unit="hours" inputRef={refMinBookingHours} />
             </SettingRow>
 
             <SettingRow
@@ -273,7 +339,7 @@ export default function SettingsForm({ settings }: { settings: Settings | null }
                 </>
               }
             >
-              <NumberInput name="min_advance_hours" defaultValue={settings?.min_advance_hours ?? 2} unit="hours before" />
+              <NumberInput name="min_advance_hours" defaultValue={settings?.min_advance_hours ?? 2} unit="hours before" inputRef={refMinAdvanceHours} />
             </SettingRow>
 
             <SettingRow
@@ -286,7 +352,7 @@ export default function SettingsForm({ settings }: { settings: Settings | null }
                 </>
               }
             >
-              <NumberInput name="max_advance_days" defaultValue={settings?.max_advance_days ?? 30} unit="days ahead" />
+              <NumberInput name="max_advance_days" defaultValue={settings?.max_advance_days ?? 30} unit="days ahead" inputRef={refMaxAdvanceDays} />
             </SettingRow>
 
             <SettingRow
@@ -302,7 +368,7 @@ export default function SettingsForm({ settings }: { settings: Settings | null }
                 </>
               }
             >
-              <NumberInput name="payment_deadline_hours" defaultValue={settings?.payment_deadline_hours ?? 24} unit="hours (0 = off)" />
+              <NumberInput name="payment_deadline_hours" defaultValue={settings?.payment_deadline_hours ?? 24} unit="hours (0 = off)" inputRef={refPaymentDeadline} />
             </SettingRow>
 
             <SettingRow
@@ -310,6 +376,21 @@ export default function SettingsForm({ settings }: { settings: Settings | null }
               description="Patients can request same-day urgent bookings outside regular scheduling"
             >
               <Toggle checked={emergencyBookings} onChange={setEmergencyBookings} />
+            </SettingRow>
+
+            <SettingRow
+              label="Share Provider Phone Number"
+              description={
+                <>
+                  When <strong>ON</strong>: patient can see the nurse's phone number on the booking detail page.
+                  <br />
+                  <span style={{ color: sharePhone ? 'var(--teal)' : '#E04A4A', fontWeight: 600 }}>
+                    {sharePhone ? '✓ Nurse phone number is visible to patients' : '✕ Phone number hidden from patients (contact via chat only)'}
+                  </span>
+                </>
+              }
+            >
+              <Toggle checked={sharePhone} onChange={setSharePhone} />
             </SettingRow>
 
             <SettingRow
@@ -323,7 +404,7 @@ export default function SettingsForm({ settings }: { settings: Settings | null }
                 </>
               }
             >
-              <NumberInput name="free_cancellation_hours" defaultValue={settings?.free_cancellation_hours ?? 24} unit="hours" />
+              <NumberInput name="free_cancellation_hours" defaultValue={settings?.free_cancellation_hours ?? 24} unit="hours" inputRef={refFreeCancellation} />
             </SettingRow>
 
             <SettingRow
@@ -338,7 +419,7 @@ export default function SettingsForm({ settings }: { settings: Settings | null }
               }
               last
             >
-              <NumberInput name="auto_complete_hours" defaultValue={settings?.auto_complete_hours ?? 24} unit="hours" />
+              <NumberInput name="auto_complete_hours" defaultValue={settings?.auto_complete_hours ?? 24} unit="hours" inputRef={refAutoComplete} />
             </SettingRow>
           </div>
         </div>
@@ -370,22 +451,49 @@ export default function SettingsForm({ settings }: { settings: Settings | null }
                   <span style={{ color: 'var(--teal)' }}>e.g. 30 days → hospitals cannot schedule more than 30 days into the future</span>
                 </>
               }
-              last
             >
               <NumberInput name="max_advance_days" defaultValue={settings?.max_advance_days ?? 30} unit="days ahead" />
+            </SettingRow>
+          </div>
+
+          <SectionHeader icon="📄" title="Privacy & Visibility" sub="Control what hospitals and patients can see" />
+          <div style={{ padding: '0 1.2rem' }}>
+            <SettingRow
+              label="Show Contract Details to Hospital"
+              description={
+                <>
+                  When <strong>ON</strong>: hospitals can view nurse contract documents and agreement details.
+                  <br />
+                  <span style={{ color: showContracts ? 'var(--teal)' : '#E04A4A', fontWeight: 600 }}>
+                    {showContracts ? '✓ Contract details visible to hospitals' : '✕ Contract details hidden from hospitals'}
+                  </span>
+                </>
+              }
+            >
+              <Toggle checked={showContracts} onChange={setShowContracts} />
+            </SettingRow>
+
+            <SettingRow
+              label="Show Final Price (with Commission)"
+              description={
+                <>
+                  Controls whether hospitals and patients see the <strong>base nurse rate</strong> or the <strong>total price including platform commission</strong>.
+                  <br />
+                  <span style={{ color: showCommission ? '#7B2FBE' : 'var(--teal)', fontWeight: 600 }}>
+                    {showCommission
+                      ? '💰 Showing final price (base rate + commission) — e.g. SAR 550'
+                      : '💰 Showing base rate only (commission hidden) — e.g. SAR 500'}
+                  </span>
+                </>
+              }
+              last
+            >
+              <Toggle checked={showCommission} onChange={setShowCommission} />
             </SettingRow>
           </div>
         </div>
       )}
 
-      {/* Hidden inputs for toggles that aren't in active tab — ensure they always submit */}
-      <input type="hidden" name="allow_emergency_bookings"             value={String(emergencyBookings)} />
-      <input type="hidden" name="require_work_start_confirmation"       value={String(requireWorkStart)} />
-      <input type="hidden" name="require_work_completion_confirmation"  value={String(requireWorkDone)} />
-      <input type="hidden" name="chat_enabled"                          value={String(chatEnabled)} />
-      <input type="hidden" name="email_notifications"                   value={String(email)} />
-      <input type="hidden" name="whatsapp_notifications"                value={String(whatsapp)} />
-      <input type="hidden" name="sms_notifications"                     value={String(sms)} />
     </form>
   )
 }
@@ -425,10 +533,11 @@ function SettingRow({ label, description, children, last }: {
   )
 }
 
-function NumberInput({ name, defaultValue, unit }: { name: string; defaultValue: number; unit: string }) {
+function NumberInput({ name, defaultValue, unit, inputRef }: { name: string; defaultValue: number; unit: string; inputRef?: React.RefObject<HTMLInputElement | null> }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
       <input
+        ref={inputRef}
         type="number"
         name={name}
         defaultValue={defaultValue}

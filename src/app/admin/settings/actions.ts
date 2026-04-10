@@ -1,6 +1,6 @@
 'use server'
 
-import { createSupabaseServerClient } from '@/lib/supabase-server'
+import { createSupabaseServerClient, createSupabaseServiceRoleClient } from '@/lib/supabase-server'
 import { requireRole } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
 
@@ -41,34 +41,40 @@ export async function uploadLogo(formData: FormData): Promise<{ url?: string; er
 
 /* ── Platform Settings ─────────────────────────────────────────── */
 
-export async function savePlatformSettings(formData: FormData) {
+export type PlatformSettingsInput = {
+  platform_name: string
+  logo_url: string | null
+  default_commission: number
+  vat_rate: number
+  free_cancellation_hours: number
+  auto_complete_hours: number
+  min_booking_hours: number
+  min_advance_hours: number
+  max_advance_days: number
+  payment_deadline_hours: number
+  work_start_enable_hours_before: number
+  allow_emergency_bookings: boolean
+  require_work_start_confirmation: boolean
+  require_work_completion_confirmation: boolean
+  chat_enabled: boolean
+  email_notifications: boolean
+  whatsapp_notifications: boolean
+  sms_notifications: boolean
+  share_provider_phone_with_patient: boolean
+  show_hospital_contracts: boolean
+  show_price_with_commission: boolean
+}
+
+export async function savePlatformSettings(input: PlatformSettingsInput) {
   const admin = await requireRole('admin')
-  const supabase = await createSupabaseServerClient()
+  const supabase = createSupabaseServiceRoleClient()
 
   const values = {
-    platform_name:            (formData.get('platform_name') as string)?.trim() || 'NurseCare+',
-    logo_url:                 (formData.get('logo_url') as string)?.trim() || null,
-    default_commission:       parseFloat(formData.get('default_commission') as string) || 10,
-    vat_rate:                 parseFloat(formData.get('vat_rate') as string) || 15,
-    free_cancellation_hours:  parseInt(formData.get('free_cancellation_hours') as string) || 24,
-    auto_complete_hours:      parseInt(formData.get('auto_complete_hours') as string) || 24,
-    min_booking_hours:        parseInt(formData.get('min_booking_hours') as string) || 2,
-    min_advance_hours:        parseInt(formData.get('min_advance_hours') as string) || 2,
-    max_advance_days:         parseInt(formData.get('max_advance_days') as string) || 30,
-    payment_deadline_hours:   parseInt(formData.get('payment_deadline_hours') as string) ?? 24,
-    allow_emergency_bookings:            formData.get('allow_emergency_bookings') === 'true',
-    require_work_start_confirmation:     formData.get('require_work_start_confirmation') === 'true',
-    require_work_completion_confirmation:formData.get('require_work_completion_confirmation') === 'true',
-    work_start_enable_hours_before:      parseInt(formData.get('work_start_enable_hours_before') as string) || 1,
-    chat_enabled:                        formData.get('chat_enabled') === 'true',
-    email_notifications:      formData.get('email_notifications') === 'true',
-    whatsapp_notifications:   formData.get('whatsapp_notifications') === 'true',
-    sms_notifications:        formData.get('sms_notifications') === 'true',
-    updated_by:               admin.id,
-    updated_at:               new Date().toISOString(),
+    ...input,
+    updated_by: admin.id,
+    updated_at: new Date().toISOString(),
   }
 
-  // Upsert single row — fetch existing id first
   const { data: existing } = await supabase
     .from('platform_settings')
     .select('id')
@@ -76,9 +82,11 @@ export async function savePlatformSettings(formData: FormData) {
     .single()
 
   if (existing) {
-    await supabase.from('platform_settings').update(values).eq('id', existing.id)
+    const { error } = await supabase.from('platform_settings').update(values).eq('id', existing.id)
+    if (error) console.error('[savePlatformSettings] error:', error.message)
   } else {
-    await supabase.from('platform_settings').insert(values)
+    const { error } = await supabase.from('platform_settings').insert(values)
+    if (error) console.error('[savePlatformSettings] insert error:', error.message)
   }
 
   revalidatePath('/admin/settings')
@@ -88,7 +96,7 @@ export async function savePlatformSettings(formData: FormData) {
 
 export async function saveProfessionCommission(formData: FormData) {
   await requireRole('admin')
-  const supabase = await createSupabaseServerClient()
+  const supabase = createSupabaseServiceRoleClient()
 
   const id                 = formData.get('id') as string
   const commission_percent = parseFloat(formData.get('commission_percent') as string)
@@ -105,7 +113,7 @@ export async function saveProfessionCommission(formData: FormData) {
 
 export async function addProfessionCommission(formData: FormData): Promise<{ error?: string }> {
   await requireRole('admin')
-  const supabase = await createSupabaseServerClient()
+  const supabase = createSupabaseServiceRoleClient()
 
   const profession         = (formData.get('profession') as string)?.trim()
   const commission_percent = parseFloat(formData.get('commission_percent') as string)
@@ -125,7 +133,7 @@ export async function addProfessionCommission(formData: FormData): Promise<{ err
 
 export async function deleteProfessionCommission(formData: FormData) {
   await requireRole('admin')
-  const supabase = await createSupabaseServerClient()
+  const supabase = createSupabaseServiceRoleClient()
 
   const id = formData.get('id') as string
   if (!id) return
@@ -138,7 +146,7 @@ export async function deleteProfessionCommission(formData: FormData) {
 
 export async function createPromoCode(formData: FormData) {
   await requireRole('admin')
-  const supabase = await createSupabaseServerClient()
+  const supabase = createSupabaseServiceRoleClient()
 
   const code           = (formData.get('code') as string)?.trim().toUpperCase()
   const discount_type  = formData.get('discount_type') as string
@@ -162,7 +170,7 @@ export async function createPromoCode(formData: FormData) {
 
 export async function updatePromoCode(formData: FormData) {
   await requireRole('admin')
-  const supabase = await createSupabaseServerClient()
+  const supabase = createSupabaseServiceRoleClient()
 
   const id             = formData.get('id') as string
   const discount_value = parseFloat(formData.get('discount_value') as string)
@@ -185,7 +193,7 @@ export async function updatePromoCode(formData: FormData) {
 
 export async function disablePromoCode(formData: FormData) {
   await requireRole('admin')
-  const supabase = await createSupabaseServerClient()
+  const supabase = createSupabaseServiceRoleClient()
 
   const id = formData.get('id') as string
   if (!id) return
@@ -200,7 +208,7 @@ export async function disablePromoCode(formData: FormData) {
 
 export async function enablePromoCode(formData: FormData) {
   await requireRole('admin')
-  const supabase = await createSupabaseServerClient()
+  const supabase = createSupabaseServiceRoleClient()
 
   const id = formData.get('id') as string
   if (!id) return
