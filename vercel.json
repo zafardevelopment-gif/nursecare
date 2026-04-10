@@ -1,12 +1,1 @@
-{
-  "crons": [
-    {
-      "path": "/api/cron/cancel-unpaid-bookings",
-      "schedule": "*/30 * * * *"
-    },
-    {
-      "path": "/api/cron/auto-confirm-work-done",
-      "schedule": "*/30 * * * *"
-    }
-  ]
-}
+{}
