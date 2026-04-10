@@ -3,6 +3,7 @@
 import { createSupabaseServiceRoleClient } from '@/lib/supabase-server'
 import { recalcShiftAvailability } from '@/app/provider/availability/actions'
 import type { ShiftKey } from '@/app/provider/availability/shiftConstants'
+import { sendNotifications } from '@/lib/notifications'
 
 // Generate all dates for a recurring booking
 function generateDates(
@@ -54,6 +55,14 @@ export async function submitBookingAction(formData: FormData): Promise<{ booking
   }
 
   const supabase = createSupabaseServiceRoleClient()
+
+  // Fetch payment deadline setting
+  const { data: settings } = await supabase
+    .from('platform_settings')
+    .select('payment_deadline_hours')
+    .limit(1)
+    .single()
+  const paymentDeadlineHours: number = settings?.payment_deadline_hours ?? 24
 
   // Read form fields
   const service_type      = (formData.get('service_type')      as string) || ''
@@ -108,6 +117,10 @@ export async function submitBookingAction(formData: FormData): Promise<{ booking
       nurse_id:          nurse_user_id || null,
       nurse_name:        nurse_name    || null,
       status:            'pending',
+      payment_status:    'unpaid',
+      payment_deadline_at: paymentDeadlineHours > 0
+        ? new Date(Date.now() + paymentDeadlineHours * 60 * 60 * 1000).toISOString()
+        : null,
     })
     .select('id')
     .single()
@@ -165,6 +178,33 @@ export async function submitBookingAction(formData: FormData): Promise<{ booking
       }
     }
   }
+
+  // Send notifications
+  const deadlineFmt = paymentDeadlineHours > 0
+    ? ` Please complete payment within ${paymentDeadlineHours} hour${paymentDeadlineHours !== 1 ? 's' : ''} to confirm your booking.`
+    : ''
+
+  const notifPayloads = [
+    {
+      userId: userId,
+      type: 'payment_reminder' as const,
+      title: '📋 Booking Submitted',
+      body: `Your booking for ${nurse_name || 'a nurse'} on ${start_date} has been submitted.${deadlineFmt}`,
+      data: { bookingId: request.id, deadlineHours: paymentDeadlineHours },
+    },
+  ]
+
+  if (nurse_user_id) {
+    notifPayloads.push({
+      userId: nurse_user_id,
+      type: 'booking_accepted' as const,
+      title: '🔔 New Booking Request',
+      body: `You have a new booking request from ${userName} for ${start_date}. Awaiting payment confirmation.`,
+      data: { bookingId: request.id },
+    })
+  }
+
+  await sendNotifications(notifPayloads)
 
   return { bookingRef: request.id, sessions: dates.length }
   } catch (e: any) {

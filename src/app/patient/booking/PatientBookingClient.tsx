@@ -4,6 +4,7 @@ import { useState, useTransition, useRef, useEffect, useCallback } from 'react'
 import { submitBookingAction } from './actions'
 import { getShiftAvailability } from '@/app/provider/availability/actions'
 import type { ShiftKey } from '@/app/provider/availability/shiftConstants'
+import { validateBookingDate, getBookingDateBounds } from '@/lib/bookingDateValidation'
 
 type ShiftAvailMap = Record<string, Record<ShiftKey, { status: 'available'|'partial'|'booked'|'off'; bookedHours: number; remainingHours: number }>>
 
@@ -100,6 +101,7 @@ const AI_FALLBACK = "I'm here to help! Tell me what kind of care you need, your 
 // ── Main Component ────────────────────────────────────────────────────────────
 export default function PatientBookingClient({
   userId, userName, userEmail, nurses, vatRate, commission = 10, minBookingHours = 2,
+  minAdvanceHours = 2, maxAdvanceDays = 30, paymentDeadlineHours = 24,
   availableGenders, availableNationalities, availableLanguages,
 }: {
   userId: string
@@ -109,10 +111,16 @@ export default function PatientBookingClient({
   vatRate: number
   commission?: number
   minBookingHours?: number
+  minAdvanceHours?: number
+  maxAdvanceDays?: number
+  paymentDeadlineHours?: number
   availableGenders: string[]
   availableNationalities: string[]
   availableLanguages: string[]
 }) {
+  // Date bounds from admin settings
+  const { minDate: dateMin, maxDate: dateMax } = getBookingDateBounds(minAdvanceHours, maxAdvanceDays)
+
   // Apply commission to nurse base rate → patient-facing rate
   const patientRate = (nurseRate: number) => Math.ceil(nurseRate * (1 + commission / 100))
 
@@ -236,6 +244,9 @@ export default function PatientBookingClient({
       setError(`Minimum booking duration is ${minBookingHours} hours. You selected ${selectedHours}h — please adjust the time slot.`)
       return
     }
+    // Validate advance booking window
+    const dateErr = validateBookingDate(smartStart, smartStartTime, minAdvanceHours, maxAdvanceDays)
+    if (dateErr) { setError(dateErr.message); return }
     setError('')
     setSmartMatchLoading(true)
 
@@ -327,20 +338,44 @@ export default function PatientBookingClient({
 
   // ── SUCCESS ───────────────────────────────────────────────────────────────
   if (success) {
+    const deadlineEnabled = paymentDeadlineHours > 0
+    const deadlineTime = deadlineEnabled
+      ? new Date(Date.now() + paymentDeadlineHours * 60 * 60 * 1000).toLocaleString('en-GB', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' })
+      : null
+
     return (
-      <div style={{ textAlign:'center', padding:'5rem 2rem' }}>
+      <div style={{ textAlign:'center', padding:'4rem 2rem', maxWidth: 520, margin: '0 auto' }}>
         <div style={{ width:90,height:90,borderRadius:'50%',background:'#E6F7F1',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'2.5rem',margin:'0 auto 1.5rem',boxShadow:'0 0 0 14px rgba(26,122,74,0.08)' }}>✅</div>
-        <h2 style={{ fontFamily:'Georgia,serif',fontSize:'1.9rem',color:'var(--ink)',fontWeight:400,marginBottom:'0.5rem' }}>Booking Saved!</h2>
-        <p style={{ color:'var(--muted)',fontSize:'0.9rem',maxWidth:440,margin:'0 auto 1.5rem',lineHeight:1.7 }}>
+        <h2 style={{ fontFamily:'Georgia,serif',fontSize:'1.9rem',color:'var(--ink)',fontWeight:400,marginBottom:'0.5rem' }}>Booking Submitted!</h2>
+        <p style={{ color:'var(--muted)',fontSize:'0.9rem',maxWidth:440,margin:'0 auto 1rem',lineHeight:1.7 }}>
           {sessions > 1
-            ? `${sessions} sessions have been submitted. Once a nurse accepts your booking, you will see a Pay Now button in My Bookings.`
-            : 'Your booking has been submitted. Once a nurse accepts, you will see a Pay Now button in My Bookings to complete payment.'}
+            ? `${sessions} sessions have been submitted successfully.`
+            : 'Your booking request has been submitted successfully.'}
         </p>
-        <div style={{ display:'inline-flex',alignItems:'center',gap:8,background:'rgba(14,123,140,0.06)',border:'1px solid rgba(14,123,140,0.15)',borderRadius:10,padding:'10px 20px',fontFamily:'monospace',fontSize:'0.95rem',fontWeight:700,color:'#0E7B8C',marginBottom:'1.5rem' }}>
-          📋 Booking Ref: {bookingRef || `NC-${new Date().getFullYear()}-${Math.floor(10000 + Math.random()*90000)}`}
+
+        {/* Payment deadline warning */}
+        {deadlineEnabled && deadlineTime && (
+          <div style={{ background:'rgba(245,132,42,0.07)', border:'1.5px solid rgba(245,132,42,0.35)', borderRadius:12, padding:'14px 18px', marginBottom:'1.25rem', textAlign:'left' }}>
+            <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
+              <span style={{ fontSize:'1.2rem' }}>⏳</span>
+              <span style={{ fontWeight:700, color:'#b85e00', fontSize:'0.9rem' }}>Payment Required</span>
+            </div>
+            <p style={{ fontSize:'0.83rem', color:'var(--ink)', lineHeight:1.6, margin:0 }}>
+              Please complete your payment by <strong style={{ color:'#b85e00' }}>{deadlineTime}</strong>.
+              <br />
+              If payment is not received within <strong>{paymentDeadlineHours} hour{paymentDeadlineHours !== 1 ? 's' : ''}</strong>, your booking will be <strong style={{ color:'#E04A4A' }}>automatically cancelled</strong>.
+            </p>
+          </div>
+        )}
+
+        <div style={{ display:'inline-flex',alignItems:'center',gap:8,background:'rgba(14,123,140,0.06)',border:'1px solid rgba(14,123,140,0.15)',borderRadius:10,padding:'10px 20px',fontFamily:'monospace',fontSize:'0.88rem',fontWeight:700,color:'#0E7B8C',marginBottom:'1.5rem' }}>
+          📋 Ref: {bookingRef ? bookingRef.slice(0,8).toUpperCase() : `NC-${new Date().getFullYear()}`}
         </div>
+
         <div style={{ display:'flex',gap:'0.8rem',justifyContent:'center',flexWrap:'wrap' }}>
-          <a href="/patient/bookings" style={{ background:'linear-gradient(135deg,#0E7B8C,#0ABFCC)',color:'#fff',padding:'11px 24px',borderRadius:10,fontWeight:700,textDecoration:'none',fontSize:'0.9rem' }}>View My Bookings</a>
+          <a href="/patient/bookings" style={{ background:'linear-gradient(135deg,#0E7B8C,#0ABFCC)',color:'#fff',padding:'11px 24px',borderRadius:10,fontWeight:700,textDecoration:'none',fontSize:'0.9rem' }}>
+            {deadlineEnabled ? '💳 Pay Now' : 'View My Bookings'}
+          </a>
           <button onClick={() => { setSuccess(false); setMode(null); setStep(1) }} style={{ background:'var(--shell-bg)',color:'var(--ink)',padding:'11px 24px',borderRadius:10,fontWeight:600,border:'1px solid var(--border)',cursor:'pointer',fontSize:'0.9rem',fontFamily:'inherit' }}>Book Another</button>
         </div>
       </div>
@@ -482,12 +517,12 @@ export default function PatientBookingClient({
                     </Field>
 
                     <div style={{ display:'grid',gridTemplateColumns:bookingType==='one_time'?'1fr':'1fr 1fr',gap:14,marginBottom:20 }}>
-                      <Field label="Start Date">
-                        <input type="date" className="form-input" value={smartStart} min={nxt(1)} onChange={e=>{ setSmartStart(e.target.value); if(e.target.value>=smartEnd)setSmartEnd(e.target.value) }} />
+                      <Field label="Start Date" hint={`Min ${minAdvanceHours}h advance · up to ${maxAdvanceDays} days ahead`}>
+                        <input type="date" className="form-input" value={smartStart} min={dateMin} max={dateMax} onChange={e=>{ setSmartStart(e.target.value); if(e.target.value>=smartEnd)setSmartEnd(e.target.value) }} />
                       </Field>
                       {bookingType!=='one_time' && (
                         <Field label="End Date">
-                          <input type="date" className="form-input" value={smartEnd} min={smartStart} onChange={e=>setSmartEnd(e.target.value)} />
+                          <input type="date" className="form-input" value={smartEnd} min={smartStart} max={dateMax} onChange={e=>setSmartEnd(e.target.value)} />
                         </Field>
                       )}
                     </div>
@@ -688,12 +723,12 @@ export default function PatientBookingClient({
                     </Field>
 
                     <div style={{ display:'grid',gridTemplateColumns:bookingType==='one_time'?'1fr':'1fr 1fr',gap:14,marginBottom:20 }}>
-                      <Field label="Start Date">
-                        <input type="date" className="form-input" value={browseStart} min={nxt(1)} onChange={e=>{ setBrowseStart(e.target.value); if(e.target.value>=browseEnd)setBrowseEnd(e.target.value) }} />
+                      <Field label="Start Date" hint={`Min ${minAdvanceHours}h advance · up to ${maxAdvanceDays} days ahead`}>
+                        <input type="date" className="form-input" value={browseStart} min={dateMin} max={dateMax} onChange={e=>{ setBrowseStart(e.target.value); if(e.target.value>=browseEnd)setBrowseEnd(e.target.value) }} />
                       </Field>
                       {bookingType!=='one_time' && (
                         <Field label="End Date">
-                          <input type="date" className="form-input" value={browseEnd} min={browseStart} onChange={e=>setBrowseEnd(e.target.value)} />
+                          <input type="date" className="form-input" value={browseEnd} min={browseStart} max={dateMax} onChange={e=>setBrowseEnd(e.target.value)} />
                         </Field>
                       )}
                     </div>
@@ -999,6 +1034,8 @@ export default function PatientBookingClient({
                     else if(step===2){
                       const bHours = calcHours(browseStartTime, browseEndTime, browseShift)
                       if(bHours < minBookingHours){ setError(`Minimum booking duration is ${minBookingHours} hours. You selected ${bHours}h — please adjust the time slot.`); return }
+                      const bDateErr = validateBookingDate(browseStart, browseStartTime, minAdvanceHours, maxAdvanceDays)
+                      if(bDateErr){ setError(bDateErr.message); return }
                       setError('')
                       setStep(3)
                     }
@@ -1337,10 +1374,13 @@ function LocationBtn({ onAddress }: { onAddress: (addr: string) => void }) {
   )
 }
 
-function Field({ label, children }: { label:string;children:React.ReactNode }) {
+function Field({ label, children, hint }: { label:string;children:React.ReactNode;hint?:string }) {
   return (
     <div style={{ display:'flex',flexDirection:'column',gap:5 }}>
-      <div style={{ fontSize:'0.68rem',fontWeight:700,color:'var(--muted)',textTransform:'uppercase',letterSpacing:'0.08em' }}>{label}</div>
+      <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',gap:6 }}>
+        <div style={{ fontSize:'0.68rem',fontWeight:700,color:'var(--muted)',textTransform:'uppercase',letterSpacing:'0.08em' }}>{label}</div>
+        {hint && <div style={{ fontSize:'0.62rem',color:'var(--teal)',fontWeight:600,opacity:0.85 }}>{hint}</div>}
+      </div>
       {children}
     </div>
   )

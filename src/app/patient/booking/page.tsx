@@ -12,13 +12,16 @@ export default async function PatientBookingPage() {
 
   const { data: settings } = await serviceSupabase
     .from('platform_settings')
-    .select('vat_rate, default_commission, min_booking_hours')
+    .select('vat_rate, default_commission, min_booking_hours, min_advance_hours, max_advance_days, payment_deadline_hours')
     .limit(1)
     .single()
 
   const vatRate         = settings?.vat_rate ?? 15
   const minBookingHours = settings?.min_booking_hours ?? 2
   const commission      = settings?.default_commission ?? 10
+  const minAdvanceHours       = settings?.min_advance_hours ?? 2
+  const maxAdvanceDays        = settings?.max_advance_days ?? 30
+  const paymentDeadlineHours  = settings?.payment_deadline_hours ?? 24
 
   // ── 2. Fetch nurses with photo ────────────────────────────────────────────
   const { data: nursesRaw } = await serviceSupabase
@@ -77,6 +80,9 @@ export default async function PatientBookingPage() {
       vatRate={vatRate}
       commission={commission}
       minBookingHours={minBookingHours}
+      minAdvanceHours={minAdvanceHours}
+      maxAdvanceDays={maxAdvanceDays}
+      paymentDeadlineHours={paymentDeadlineHours}
       availableGenders={genders}
       availableNationalities={nationalities}
       availableLanguages={languages}

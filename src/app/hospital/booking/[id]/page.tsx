@@ -8,38 +8,54 @@ export const dynamic = 'force-dynamic'
 type NurseSelection = {
   deptId: string; deptName: string; shift: string
   nurseId: string; nurseName: string; nurseSpecialization: string
-  approvedBy?: string; approvedAt?: string; status?: 'pending' | 'approved' | 'rejected'
+  approvedBy?: string; approvedAt?: string
+  status?: 'pending' | 'approved' | 'rejected'
 }
 
-const SHIFT_META: Record<string, { icon: string; color: string; label: string }> = {
-  morning: { icon: '☀️', color: '#b85e00', label: 'Morning' },
-  evening: { icon: '🌤️', color: '#DD6B20', label: 'Evening' },
-  night:   { icon: '🌙', color: '#7B2FBE', label: 'Night' },
+const SHIFT_META: Record<string, { icon: string; color: string; bg: string; label: string; time: string }> = {
+  morning: { icon: '☀️', color: '#b85e00', bg: '#FFF8E8', label: 'Morning',  time: '07:00–14:00' },
+  evening: { icon: '🌤️', color: '#DD6B20', bg: '#FFF3E0', label: 'Evening',  time: '14:00–21:00' },
+  night:   { icon: '🌙', color: '#7B2FBE', bg: '#EDE9FE', label: 'Night',    time: '21:00–07:00' },
 }
 
-const STATUS_META: Record<string, { bg: string; color: string; label: string }> = {
-  pending:    { bg: '#FFF8F0', color: '#b85e00', label: '⏳ Pending' },
-  reviewing:  { bg: '#EFF6FF', color: '#3B82F6', label: '🔍 Reviewing' },
-  matched:    { bg: 'rgba(14,123,140,0.08)', color: '#0E7B8C', label: '✅ Matched' },
-  confirmed:  { bg: 'rgba(26,122,74,0.08)', color: '#1A7A4A', label: '✅ Confirmed' },
-  cancelled:  { bg: 'rgba(224,74,74,0.06)', color: '#E04A4A', label: '✕ Cancelled' },
+const BOOKING_STATUS: Record<string, { bg: string; color: string; label: string; step: number }> = {
+  pending:   { bg: 'rgba(181,94,0,0.08)',    color: '#b85e00', label: 'Pending Review',  step: 1 },
+  reviewing: { bg: 'rgba(59,130,246,0.08)',  color: '#3B82F6', label: 'Under Review',    step: 2 },
+  matched:   { bg: 'rgba(14,123,140,0.08)',  color: '#0E7B8C', label: 'Nurses Matched',  step: 3 },
+  confirmed: { bg: 'rgba(26,122,74,0.08)',   color: '#1A7A4A', label: 'Confirmed',        step: 4 },
+  cancelled: { bg: 'rgba(224,74,74,0.06)',   color: '#E04A4A', label: 'Cancelled',        step: 0 },
 }
 
-export default async function HospitalBookingDetailPage({ params }: { params: Promise<{ id: string }> }) {
+const NURSE_STATUS: Record<string, { bg: string; color: string; label: string; dot: string }> = {
+  pending:  { bg: 'rgba(181,94,0,0.08)',   color: '#b85e00', label: 'Awaiting Approval', dot: '#f5a623' },
+  approved: { bg: 'rgba(26,122,74,0.08)',  color: '#1A7A4A', label: 'Approved',           dot: '#27A869' },
+  rejected: { bg: 'rgba(224,74,74,0.06)', color: '#E04A4A', label: 'Rejected',            dot: '#E04A4A' },
+}
+
+const TIMELINE_STEPS = [
+  { key: 'pending',   icon: '📋', label: 'Submitted' },
+  { key: 'reviewing', icon: '🔍', label: 'Reviewing' },
+  { key: 'matched',   icon: '✅', label: 'Matched' },
+  { key: 'confirmed', icon: '🎉', label: 'Confirmed' },
+]
+
+export default async function HospitalBookingDetailPage({
+  params,
+}: {
+  params: Promise<{ id: string }>
+}) {
   const { id } = await params
   const user = await requireRole('hospital')
   const supabase = createSupabaseServiceRoleClient()
 
-  // Get hospital
   const { data: hospital } = await supabase
     .from('hospitals')
-    .select('id, hospital_name')
+    .select('id, hospital_name, city')
     .eq('user_id', user.id)
     .single()
 
   if (!hospital) notFound()
 
-  // Get booking
   const { data: booking } = await supabase
     .from('hospital_booking_requests')
     .select('*')
@@ -50,147 +66,386 @@ export default async function HospitalBookingDetailPage({ params }: { params: Pr
   if (!booking) notFound()
 
   const nurseSelections: NurseSelection[] = booking.nurse_selections ?? []
-  const deptBreakdown = booking.dept_breakdown ?? []
-  const statusMeta = STATUS_META[booking.status] ?? STATUS_META.pending
+  const deptBreakdown: any[]              = booking.dept_breakdown ?? []
+  const bStatus = BOOKING_STATUS[booking.status] ?? BOOKING_STATUS.pending
+  const isCancelled = booking.status === 'cancelled'
+  const canEdit = booking.status === 'pending' || booking.status === 'reviewing'
 
-  // Group nurse selections by dept
-  const byDept: Record<string, { deptName: string; nurses: NurseSelection[] }> = {}
-  for (const ns of nurseSelections) {
+  // Stats
+  const approvedCount = nurseSelections.filter(n => n.status === 'approved').length
+  const rejectedCount = nurseSelections.filter(n => n.status === 'rejected').length
+  const pendingCount  = nurseSelections.filter(n => !n.status || n.status === 'pending').length
+
+  // Group by dept for the nurse table
+  const byDept: Record<string, { deptName: string; nurses: (NurseSelection & { idx: number })[] }> = {}
+  nurseSelections.forEach((ns, idx) => {
     if (!byDept[ns.deptId]) byDept[ns.deptId] = { deptName: ns.deptName, nurses: [] }
-    byDept[ns.deptId].nurses.push(ns)
-  }
+    byDept[ns.deptId].nurses.push({ ...ns, idx })
+  })
+
+  // Approval rate %
+  const total = nurseSelections.length
+  const approvalPct = total > 0 ? Math.round((approvedCount / total) * 100) : 0
 
   return (
     <div className="dash-shell">
-      <div className="dash-header">
-        <div>
-          <Link href="/hospital/booking" style={{ fontSize: '0.8rem', color: 'var(--teal)', textDecoration: 'none', fontWeight: 600 }}>
-            ← Back to Bookings
-          </Link>
-          <h1 className="dash-title" style={{ marginTop: 6 }}>Booking Request</h1>
-          <p className="dash-sub">Submitted {new Date(booking.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
+
+      {/* ── Page header ── */}
+      <div style={{ marginBottom: '1.5rem' }}>
+        <Link href="/hospital/booking" style={{ fontSize: '0.78rem', color: 'var(--teal)', textDecoration: 'none', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+          ← Back to Bookings
+        </Link>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginTop: 10, flexWrap: 'wrap', gap: 12 }}>
+          <div>
+            <h1 style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--ink)', margin: 0 }}>
+              Booking Request
+            </h1>
+            <p style={{ fontSize: '0.82rem', color: 'var(--muted)', margin: '4px 0 0' }}>
+              {hospital.hospital_name} · Submitted {new Date(booking.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}
+            </p>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{
+              background: bStatus.bg, color: bStatus.color,
+              padding: '7px 18px', borderRadius: 50, fontWeight: 700, fontSize: '0.82rem',
+              border: `1px solid ${bStatus.color}30`,
+            }}>
+              {bStatus.label}
+            </span>
+            {canEdit && (
+              <Link href={`/hospital/booking/${id}/edit`} style={{
+                background: 'var(--card)', color: 'var(--ink)',
+                padding: '7px 16px', borderRadius: 8, fontWeight: 700, fontSize: '0.82rem',
+                textDecoration: 'none', border: '1px solid var(--border)',
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+              }}>
+                ✏️ Edit
+              </Link>
+            )}
+          </div>
         </div>
-        <span style={{
-          background: statusMeta.bg, color: statusMeta.color,
-          padding: '8px 18px', borderRadius: 50, fontWeight: 700, fontSize: '0.85rem',
-        }}>
-          {statusMeta.label}
-        </span>
       </div>
 
-      {/* Summary cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px,1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
+      {/* ── Status Timeline ── */}
+      {!isCancelled && (
+        <div className="dash-card" style={{ marginBottom: '1.5rem', padding: '1.2rem 1.5rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', position: 'relative' }}>
+            {TIMELINE_STEPS.map((step, i) => {
+              const currentStep = bStatus.step
+              const isDone      = currentStep > i + 1
+              const isActive    = currentStep === i + 1
+              const isFuture    = currentStep < i + 1
+              return (
+                <div key={step.key} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative' }}>
+                  {/* connector line */}
+                  {i < TIMELINE_STEPS.length - 1 && (
+                    <div style={{
+                      position: 'absolute', top: 18, left: '50%', width: '100%', height: 3,
+                      background: isDone ? 'var(--teal)' : 'var(--border)',
+                      transition: 'background 0.3s',
+                      zIndex: 0,
+                    }} />
+                  )}
+                  {/* circle */}
+                  <div style={{
+                    width: 36, height: 36, borderRadius: '50%', zIndex: 1,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: '1rem',
+                    background: isDone ? 'var(--teal)' : isActive ? 'var(--teal)' : 'var(--border)',
+                    boxShadow: isActive ? '0 0 0 4px rgba(14,123,140,0.18)' : 'none',
+                    transition: 'all 0.3s',
+                  }}>
+                    {isDone ? (
+                      <span style={{ color: '#fff', fontWeight: 800, fontSize: '0.85rem' }}>✓</span>
+                    ) : (
+                      <span style={{ fontSize: '0.95rem', opacity: isFuture ? 0.4 : 1 }}>{step.icon}</span>
+                    )}
+                  </div>
+                  <div style={{ marginTop: 8, fontSize: '0.7rem', fontWeight: isActive ? 800 : 600, color: isActive ? 'var(--teal)' : isFuture ? 'var(--muted)' : 'var(--ink)', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                    {step.label}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ── Cancelled banner ── */}
+      {isCancelled && (
+        <div style={{ background: 'rgba(224,74,74,0.06)', border: '1.5px solid rgba(224,74,74,0.2)', borderRadius: 12, padding: '14px 20px', marginBottom: '1.5rem', display: 'flex', gap: 12, alignItems: 'center' }}>
+          <span style={{ fontSize: '1.4rem' }}>❌</span>
+          <div>
+            <div style={{ fontWeight: 700, color: '#E04A4A', fontSize: '0.9rem' }}>Booking Cancelled</div>
+            <div style={{ fontSize: '0.8rem', color: 'var(--muted)', marginTop: 2 }}>This booking request has been cancelled. Please create a new request if needed.</div>
+          </div>
+        </div>
+      )}
+
+      {/* ── KPI row ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px,1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
         {[
-          { icon: '📅', label: 'Period', value: `${new Date(booking.start_date).toLocaleDateString('en-GB')} – ${new Date(booking.end_date).toLocaleDateString('en-GB')}` },
-          { icon: '⏱️', label: 'Duration', value: `${booking.duration_days} days` },
-          { icon: '👩‍⚕️', label: 'Total Nurses', value: booking.total_nurses },
-          { icon: '✅', label: 'Selected', value: nurseSelections.length },
+          {
+            icon: '📅', label: 'Service Period',
+            value: `${new Date(booking.start_date).toLocaleDateString('en-GB', { day:'numeric', month:'short' })} – ${new Date(booking.end_date).toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric' })}`,
+            color: '#0E7B8C', bg: 'rgba(14,123,140,0.07)', small: true,
+          },
+          { icon: '⏱️', label: 'Duration',       value: `${booking.duration_days} days`,  color: '#7B2FBE', bg: 'rgba(123,47,190,0.07)' },
+          { icon: '👩‍⚕️', label: 'Nurses Required', value: booking.total_nurses,              color: '#0E7B8C', bg: 'rgba(14,123,140,0.07)' },
+          { icon: '✅', label: 'Approved',        value: approvedCount,                      color: '#1A7A4A', bg: 'rgba(26,122,74,0.07)'  },
+          { icon: '⏳', label: 'Pending',         value: pendingCount,                       color: '#b85e00', bg: 'rgba(181,94,0,0.07)'   },
+          { icon: '✕',  label: 'Rejected',        value: rejectedCount,                      color: '#E04A4A', bg: 'rgba(224,74,74,0.07)'  },
         ].map(k => (
-          <div key={k.label} className="dash-card" style={{ padding: '1rem' }}>
-            <div style={{ fontSize: '1.3rem', marginBottom: 6 }}>{k.icon}</div>
-            <div style={{ fontWeight: 800, fontSize: '1.1rem', color: 'var(--ink)' }}>{k.value}</div>
-            <div style={{ fontSize: '0.72rem', color: 'var(--muted)', fontWeight: 700, textTransform: 'uppercase' }}>{k.label}</div>
+          <div key={k.label} className="dash-card" style={{ padding: '1rem', borderTop: `3px solid ${k.color}` }}>
+            <div style={{ width: 34, height: 34, borderRadius: 9, background: k.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem', marginBottom: 8 }}>{k.icon}</div>
+            <div style={{ fontWeight: 800, fontSize: (k as any).small ? '0.82rem' : '1.5rem', color: k.color, lineHeight: 1.2 }}>{k.value}</div>
+            <div style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginTop: 4 }}>{k.label}</div>
           </div>
         ))}
       </div>
 
+      {/* ── Main 2-col grid ── */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
+
         {/* Booking Details */}
         <div className="dash-card">
-          <div className="dash-card-header"><span className="dash-card-title">Booking Details</span></div>
+          <div className="dash-card-header">
+            <span className="dash-card-title">📋 Booking Details</span>
+          </div>
           <div className="dash-card-body">
-            <Row label="Booking Mode" value={booking.booking_mode === 'smart' ? '🤖 Smart Match' : '🔍 Browse'} />
-            <Row label="Shifts" value={(booking.shifts ?? []).map((s: string) => `${SHIFT_META[s]?.icon ?? ''} ${SHIFT_META[s]?.label ?? s}`).join(', ')} />
-            {booking.specializations?.length > 0 && <Row label="Specializations" value={booking.specializations.join(', ')} />}
-            {booking.language_preference?.length > 0 && <Row label="Language Pref." value={booking.language_preference.join(', ')} />}
-            {booking.gender_preference && booking.gender_preference !== 'any' && <Row label="Gender Pref." value={booking.gender_preference} />}
-            {booking.special_instructions && <Row label="Instructions" value={booking.special_instructions} />}
-            {booking.admin_notes && <Row label="Admin Notes" value={booking.admin_notes} />}
+            <InfoRow label="Hospital"           value={hospital.hospital_name} />
+            <InfoRow label="City"               value={hospital.city ?? '—'} />
+            <InfoRow label="Start Date"         value={new Date(booking.start_date).toLocaleDateString('en-GB', { weekday:'short', day:'numeric', month:'long', year:'numeric' })} />
+            <InfoRow label="End Date"           value={new Date(booking.end_date).toLocaleDateString('en-GB', { weekday:'short', day:'numeric', month:'long', year:'numeric' })} />
+            <InfoRow label="Duration"           value={`${booking.duration_days} days`} />
+            <InfoRow label="Total Nurses"       value={booking.total_nurses} />
+            {booking.gender_preference && booking.gender_preference !== 'any' && (
+              <InfoRow label="Gender Preference" value={booking.gender_preference} />
+            )}
+            {booking.language_preference?.length > 0 && (
+              <InfoRow label="Language" value={booking.language_preference.join(', ')} />
+            )}
+            {booking.special_instructions && (
+              <InfoRow label="Instructions" value={booking.special_instructions} />
+            )}
+            {booking.admin_notes && (
+              <InfoRow label="Admin Notes" value={booking.admin_notes} highlight />
+            )}
           </div>
         </div>
 
-        {/* Dept Breakdown */}
+        {/* Shifts & Specializations */}
         <div className="dash-card">
-          <div className="dash-card-header"><span className="dash-card-title">Department Breakdown</span></div>
-          <div className="dash-card-body" style={{ padding: 0 }}>
-            {deptBreakdown.length === 0 ? (
-              <p style={{ padding: '1rem', color: 'var(--muted)', fontSize: '0.85rem' }}>No department breakdown</p>
-            ) : deptBreakdown.map((row: any, i: number) => (
-              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 16px', borderBottom: i < deptBreakdown.length - 1 ? '1px solid var(--border)' : 'none' }}>
-                <span style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--ink)' }}>{row.deptName}</span>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  {row.morning > 0 && <Tag label={`☀️ ${row.morning}`} color="#b85e00" />}
-                  {row.evening > 0 && <Tag label={`🌤️ ${row.evening}`} color="#DD6B20" />}
-                  {row.night   > 0 && <Tag label={`🌙 ${row.night}`}   color="#7B2FBE" />}
-                </div>
-              </div>
-            ))}
+          <div className="dash-card-header">
+            <span className="dash-card-title">🕐 Shifts & Requirements</span>
           </div>
-        </div>
-      </div>
-
-      {/* Selected Nurses */}
-      <div className="dash-card">
-        <div className="dash-card-header">
-          <span className="dash-card-title">Selected Nurses ({nurseSelections.length})</span>
-        </div>
-        <div className="dash-card-body" style={{ padding: 0 }}>
-          {nurseSelections.length === 0 ? (
-            <p style={{ padding: '1.5rem', color: 'var(--muted)', fontSize: '0.85rem', textAlign: 'center' }}>No nurses selected yet</p>
-          ) : (
-            Object.entries(byDept).map(([deptId, { deptName, nurses }]) => (
-              <div key={deptId}>
-                <div style={{ padding: '10px 16px', background: 'var(--shell-bg)', borderBottom: '1px solid var(--border)', fontWeight: 700, fontSize: '0.8rem', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                  {deptName}
-                </div>
-                {nurses.map((ns, i) => {
-                  const shiftMeta = SHIFT_META[ns.shift] ?? { icon: '', color: '#666', label: ns.shift }
-                  const nStatus = ns.status ?? 'pending'
-                  const nsMeta = STATUS_META[nStatus] ?? STATUS_META.pending
+          <div className="dash-card-body">
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>Shifts Required</div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {(booking.shifts ?? []).map((s: string) => {
+                  const sm = SHIFT_META[s]
+                  if (!sm) return null
                   return (
-                    <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: i < nurses.length - 1 ? '1px solid var(--border)' : 'none' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                        <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'rgba(14,123,140,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem' }}>👩‍⚕️</div>
-                        <div>
-                          <div style={{ fontWeight: 700, fontSize: '0.88rem', color: 'var(--ink)' }}>{ns.nurseName}</div>
-                          <div style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>{ns.nurseSpecialization} · {shiftMeta.icon} {shiftMeta.label}</div>
-                        </div>
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        {ns.approvedAt && (
-                          <span style={{ fontSize: '0.7rem', color: 'var(--muted)' }}>
-                            {ns.approvedBy ? `by ${ns.approvedBy}` : ''} {new Date(ns.approvedAt).toLocaleDateString('en-GB')}
-                          </span>
-                        )}
-                        <span style={{ background: nsMeta.bg, color: nsMeta.color, fontSize: '0.7rem', fontWeight: 700, padding: '3px 10px', borderRadius: 50, whiteSpace: 'nowrap' }}>
-                          {nsMeta.label}
-                        </span>
+                    <div key={s} style={{ background: sm.bg, border: `1px solid ${sm.color}25`, borderRadius: 9, padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ fontSize: '1rem' }}>{sm.icon}</span>
+                      <div>
+                        <div style={{ fontWeight: 700, fontSize: '0.8rem', color: sm.color }}>{sm.label}</div>
+                        <div style={{ fontSize: '0.65rem', color: 'var(--muted)' }}>{sm.time}</div>
                       </div>
                     </div>
                   )
                 })}
               </div>
-            ))
-          )}
+            </div>
+
+            {booking.specializations?.length > 0 && (
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>Specializations</div>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {booking.specializations.map((s: string) => (
+                    <span key={s} style={{ background: 'rgba(14,123,140,0.07)', color: 'var(--teal)', padding: '4px 10px', borderRadius: 50, fontSize: '0.75rem', fontWeight: 600 }}>{s}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Approval progress bar */}
+            {total > 0 && (
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, fontSize: '0.75rem' }}>
+                  <span style={{ fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em', fontSize: '0.68rem' }}>Approval Progress</span>
+                  <span style={{ fontWeight: 700, color: approvalPct === 100 ? '#1A7A4A' : 'var(--teal)' }}>{approvedCount}/{total} approved</span>
+                </div>
+                <div style={{ height: 8, borderRadius: 4, background: 'var(--border)', overflow: 'hidden' }}>
+                  <div style={{ height: '100%', borderRadius: 4, width: `${approvalPct}%`, background: approvalPct === 100 ? '#1A7A4A' : 'var(--teal)', transition: 'width 0.4s' }} />
+                </div>
+                <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
+                  <span style={{ fontSize: '0.7rem', color: '#1A7A4A', fontWeight: 700 }}>✅ {approvedCount} approved</span>
+                  <span style={{ fontSize: '0.7rem', color: '#b85e00', fontWeight: 700 }}>⏳ {pendingCount} pending</span>
+                  {rejectedCount > 0 && <span style={{ fontSize: '0.7rem', color: '#E04A4A', fontWeight: 700 }}>✕ {rejectedCount} rejected</span>}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
+
+      {/* ── Department Breakdown ── */}
+      {deptBreakdown.length > 0 && (
+        <div className="dash-card" style={{ marginBottom: '1.5rem' }}>
+          <div className="dash-card-header">
+            <span className="dash-card-title">🏢 Department Breakdown</span>
+          </div>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.83rem' }}>
+              <thead>
+                <tr style={{ background: 'var(--shell-bg)', borderBottom: '1px solid var(--border)' }}>
+                  {['Department', '☀️ Morning', '🌤️ Evening', '🌙 Night', 'Total'].map(h => (
+                    <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontWeight: 700, color: 'var(--muted)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {deptBreakdown.map((row: any, i: number) => {
+                  const rowTotal = (row.morning || 0) + (row.evening || 0) + (row.night || 0)
+                  return (
+                    <tr key={i} style={{ borderBottom: i < deptBreakdown.length - 1 ? '1px solid var(--border)' : 'none' }}>
+                      <td style={{ padding: '11px 16px', fontWeight: 700, color: 'var(--ink)' }}>{row.deptName}</td>
+                      <td style={{ padding: '11px 16px' }}>
+                        {row.morning > 0 ? <span style={{ background: '#FFF8E8', color: '#b85e00', padding: '3px 10px', borderRadius: 6, fontWeight: 700, fontSize: '0.78rem' }}>{row.morning}</span> : <span style={{ color: 'var(--muted)' }}>—</span>}
+                      </td>
+                      <td style={{ padding: '11px 16px' }}>
+                        {row.evening > 0 ? <span style={{ background: '#FFF3E0', color: '#DD6B20', padding: '3px 10px', borderRadius: 6, fontWeight: 700, fontSize: '0.78rem' }}>{row.evening}</span> : <span style={{ color: 'var(--muted)' }}>—</span>}
+                      </td>
+                      <td style={{ padding: '11px 16px' }}>
+                        {row.night > 0 ? <span style={{ background: '#EDE9FE', color: '#7B2FBE', padding: '3px 10px', borderRadius: 6, fontWeight: 700, fontSize: '0.78rem' }}>{row.night}</span> : <span style={{ color: 'var(--muted)' }}>—</span>}
+                      </td>
+                      <td style={{ padding: '11px 16px', fontWeight: 800, color: 'var(--teal)' }}>{rowTotal}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+              <tfoot>
+                <tr style={{ borderTop: '2px solid var(--border)', background: 'var(--shell-bg)' }}>
+                  <td style={{ padding: '10px 16px', fontWeight: 800, color: 'var(--ink)', fontSize: '0.8rem' }}>TOTAL</td>
+                  {(['morning', 'evening', 'night'] as const).map(shift => {
+                    const sum = deptBreakdown.reduce((acc: number, r: any) => acc + (r[shift] || 0), 0)
+                    return <td key={shift} style={{ padding: '10px 16px', fontWeight: 800, color: 'var(--muted)' }}>{sum > 0 ? sum : '—'}</td>
+                  })}
+                  <td style={{ padding: '10px 16px', fontWeight: 800, color: 'var(--teal)' }}>
+                    {deptBreakdown.reduce((acc: number, r: any) => acc + (r.morning || 0) + (r.evening || 0) + (r.night || 0), 0)}
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* ── Nurse Roster ── */}
+      <div className="dash-card">
+        <div className="dash-card-header" style={{ flexWrap: 'wrap', gap: 8 }}>
+          <span className="dash-card-title">👩‍⚕️ Nurse Roster ({nurseSelections.length})</span>
+          <div style={{ display: 'flex', gap: 6 }}>
+            {[
+              { label: `${approvedCount} Approved`, color: '#1A7A4A', bg: 'rgba(26,122,74,0.08)' },
+              { label: `${pendingCount} Pending`,   color: '#b85e00', bg: 'rgba(181,94,0,0.08)'  },
+              ...(rejectedCount > 0 ? [{ label: `${rejectedCount} Rejected`, color: '#E04A4A', bg: 'rgba(224,74,74,0.06)' }] : []),
+            ].map(t => (
+              <span key={t.label} style={{ background: t.bg, color: t.color, fontSize: '0.7rem', fontWeight: 700, padding: '3px 10px', borderRadius: 50 }}>{t.label}</span>
+            ))}
+          </div>
+        </div>
+
+        {nurseSelections.length === 0 ? (
+          <div style={{ padding: '3rem', textAlign: 'center' }}>
+            <div style={{ fontSize: '2rem', marginBottom: 10 }}>👩‍⚕️</div>
+            <div style={{ fontWeight: 700, color: 'var(--muted)', fontSize: '0.88rem' }}>No nurses selected yet</div>
+            <div style={{ fontSize: '0.78rem', color: 'var(--muted)', marginTop: 4 }}>Nurses will appear here once selected during booking</div>
+          </div>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.83rem' }}>
+              <thead>
+                <tr style={{ background: 'var(--shell-bg)', borderBottom: '1px solid var(--border)' }}>
+                  {['#', 'Nurse', 'Specialization', 'Department', 'Shift', 'Approval Status', 'Reviewed By', 'Review Date'].map(h => (
+                    <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 700, color: 'var(--muted)', fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {nurseSelections.map((ns, i) => {
+                  const shiftMeta  = SHIFT_META[ns.shift] ?? { icon: '', color: '#666', bg: '#f9f9f9', label: ns.shift, time: '' }
+                  const nsMeta     = NURSE_STATUS[ns.status ?? 'pending']
+                  return (
+                    <tr key={i} style={{ borderBottom: '1px solid var(--border)', background: i % 2 === 0 ? 'transparent' : 'rgba(14,123,140,0.01)' }}>
+                      <td style={{ padding: '12px 14px' }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 26, height: 26, borderRadius: 7, background: 'var(--shell-bg)', border: '1px solid var(--border)', fontSize: '0.7rem', fontWeight: 800, color: 'var(--muted)' }}>{i + 1}</span>
+                      </td>
+                      <td style={{ padding: '12px 14px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <div style={{ width: 34, height: 34, borderRadius: '50%', background: 'rgba(14,123,140,0.08)', border: '2px solid rgba(14,123,140,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', flexShrink: 0 }}>
+                            👩‍⚕️
+                          </div>
+                          <div>
+                            <div style={{ fontWeight: 700, color: 'var(--ink)', fontSize: '0.85rem' }}>{ns.nurseName}</div>
+                            <div style={{ fontSize: '0.68rem', color: 'var(--muted)', marginTop: 1 }}>ID: {ns.nurseId.slice(0, 8).toUpperCase()}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td style={{ padding: '12px 14px' }}>
+                        <span style={{ background: 'rgba(14,123,140,0.07)', color: 'var(--teal)', padding: '3px 9px', borderRadius: 50, fontSize: '0.72rem', fontWeight: 600 }}>
+                          {ns.nurseSpecialization}
+                        </span>
+                      </td>
+                      <td style={{ padding: '12px 14px', fontWeight: 600, color: 'var(--ink)', fontSize: '0.82rem' }}>{ns.deptName}</td>
+                      <td style={{ padding: '12px 14px' }}>
+                        <span style={{ background: shiftMeta.bg, color: shiftMeta.color, padding: '4px 10px', borderRadius: 6, fontSize: '0.72rem', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                          {shiftMeta.icon} {shiftMeta.label}
+                        </span>
+                      </td>
+                      <td style={{ padding: '12px 14px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <div style={{ width: 7, height: 7, borderRadius: '50%', background: nsMeta.dot, flexShrink: 0 }} />
+                          <span style={{ background: nsMeta.bg, color: nsMeta.color, padding: '4px 10px', borderRadius: 50, fontSize: '0.7rem', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                            {nsMeta.label}
+                          </span>
+                        </div>
+                      </td>
+                      <td style={{ padding: '12px 14px', fontSize: '0.78rem', color: ns.approvedBy ? 'var(--ink)' : 'var(--muted)', fontWeight: ns.approvedBy ? 600 : 400 }}>
+                        {ns.approvedBy ?? '—'}
+                      </td>
+                      <td style={{ padding: '12px 14px', fontSize: '0.75rem', color: 'var(--muted)', whiteSpace: 'nowrap' }}>
+                        {ns.approvedAt ? new Date(ns.approvedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
     </div>
   )
 }
 
-function Row({ label, value }: { label: string; value: string | number }) {
+/* ── Helper components ── */
+function InfoRow({ label, value, highlight }: { label: string; value: string | number; highlight?: boolean }) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 10 }}>
-      <span style={{ fontSize: '0.82rem', color: 'var(--muted)', minWidth: 110 }}>{label}</span>
-      <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--ink)', textAlign: 'right' }}>{value}</span>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, marginBottom: 10, paddingBottom: 10, borderBottom: '1px solid var(--border)' }}>
+      <span style={{ fontSize: '0.78rem', color: 'var(--muted)', flexShrink: 0, minWidth: 120, paddingTop: 1 }}>{label}</span>
+      <span style={{
+        fontSize: '0.82rem', fontWeight: 600, textAlign: 'right',
+        color: highlight ? 'var(--teal)' : 'var(--ink)',
+        background: highlight ? 'rgba(14,123,140,0.06)' : 'transparent',
+        padding: highlight ? '2px 8px' : '0',
+        borderRadius: highlight ? 6 : 0,
+      }}>
+        {value}
+      </span>
     </div>
-  )
-}
-
-function Tag({ label, color }: { label: string; color: string }) {
-  return (
-    <span style={{ background: color + '15', color, fontSize: '0.72rem', fontWeight: 700, padding: '3px 8px', borderRadius: 6 }}>
-      {label}
-    </span>
   )
 }

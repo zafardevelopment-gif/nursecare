@@ -45,6 +45,15 @@ export default async function HospitalBookingPage() {
     )
   }
 
+  const { data: settings } = await supabase
+    .from('platform_settings')
+    .select('min_advance_hours, max_advance_days')
+    .limit(1)
+    .single()
+
+  const minAdvanceHours = settings?.min_advance_hours ?? 2
+  const maxAdvanceDays  = settings?.max_advance_days ?? 30
+
   const [{ data: departments }, { data: nursesRaw }, { data: pastBookings }] = await Promise.all([
     supabase
       .from('hospital_departments')
@@ -142,6 +151,8 @@ export default async function HospitalBookingPage() {
         departments={departments ?? []}
         requestedBy={user.full_name}
         nurses={nurses}
+        minAdvanceHours={minAdvanceHours}
+        maxAdvanceDays={maxAdvanceDays}
       />
     </div>
   )

@@ -48,11 +48,12 @@ export default async function PatientBookingsPage({ searchParams }: Props) {
 
   const { data: settings } = await serviceSupabase
     .from('platform_settings')
-    .select('require_work_start_confirmation, require_work_completion_confirmation')
+    .select('require_work_start_confirmation, require_work_completion_confirmation, payment_deadline_hours')
     .limit(1)
     .single()
 
-  const requireWorkDone = settings?.require_work_completion_confirmation ?? true
+  const requireWorkDone       = settings?.require_work_completion_confirmation ?? true
+  const paymentDeadlineHours  = settings?.payment_deadline_hours ?? 24
 
   // Filtered + paginated query
   let query = supabase
@@ -147,10 +148,15 @@ export default async function PatientBookingsPage({ searchParams }: Props) {
         </div>
       </div>
 
-      {/* Payment alert */}
+      {/* Payment alert with deadline context */}
       {unpaidCount > 0 && (
-        <div style={{ background: 'rgba(245,132,42,0.06)', border: '1px solid rgba(245,132,42,0.25)', borderRadius: 10, padding: '0.75rem 1.2rem', fontSize: '0.85rem', color: '#b85e00', fontWeight: 600, marginBottom: '1rem' }}>
-          💳 {unpaidCount} booking{unpaidCount > 1 ? 's' : ''} with pending payment — scroll down to pay
+        <div style={{ background: 'rgba(245,132,42,0.06)', border: '1.5px solid rgba(245,132,42,0.3)', borderRadius: 10, padding: '12px 18px', fontSize: '0.85rem', color: '#b85e00', fontWeight: 600, marginBottom: '1rem', lineHeight: 1.6 }}>
+          ⏳ {unpaidCount} booking{unpaidCount > 1 ? 's' : ''} with pending payment.
+          {paymentDeadlineHours > 0 && (
+            <span style={{ fontWeight: 400 }}> Bookings are automatically cancelled if payment is not received within <strong>{paymentDeadlineHours} hour{paymentDeadlineHours !== 1 ? 's' : ''}</strong>.</span>
+          )}
+          <span> </span>
+          <Link href="/patient/bookings?status=accepted" style={{ color: '#b85e00', fontWeight: 700, textDecoration: 'underline' }}>Pay now →</Link>
         </div>
       )}
 
@@ -216,6 +222,11 @@ export default async function PatientBookingsPage({ searchParams }: Props) {
                     const needsPayment = PAYMENT_STATUSES.includes(b.status) && b.payment_status !== 'paid'
                     const isPaid = b.payment_status === 'paid'
                     const showPayment = PAYMENT_STATUSES.includes(b.status)
+                    const deadlineAt: string | null = b.payment_deadline_at ?? null
+                    const isOverdue = deadlineAt && new Date(deadlineAt) < new Date()
+                    const deadlineFmt = deadlineAt && !isPaid
+                      ? new Date(deadlineAt).toLocaleString('en-GB', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' })
+                      : null
                     const needsConfirm = b.status === 'work_done' && requireWorkDone
 
                     return (
@@ -254,12 +265,21 @@ export default async function PatientBookingsPage({ searchParams }: Props) {
                               <span style={{ background: 'rgba(39,168,105,0.1)', color: '#27A869', fontSize: '0.65rem', fontWeight: 700, padding: '3px 9px', borderRadius: 50 }}>✅ Paid</span>
                             ) : (
                               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                                <span style={{ background: 'rgba(245,132,42,0.1)', color: '#F5842A', fontSize: '0.65rem', fontWeight: 700, padding: '3px 9px', borderRadius: 50, whiteSpace: 'nowrap' }}>⚠️ Unpaid</span>
-                                <PayNowBtn
-                                  requestId={b.id}
-                                  amount={b.total_amount ?? (b.hourly_rate && b.duration_hours ? Math.round(b.hourly_rate * b.duration_hours * 1.15) : 0)}
-                                  compact
-                                />
+                                <span style={{ background: isOverdue ? 'rgba(224,74,74,0.1)' : 'rgba(245,132,42,0.1)', color: isOverdue ? '#E04A4A' : '#F5842A', fontSize: '0.65rem', fontWeight: 700, padding: '3px 9px', borderRadius: 50, whiteSpace: 'nowrap' }}>
+                                  {isOverdue ? '❌ Overdue' : '⚠️ Unpaid'}
+                                </span>
+                                {deadlineFmt && !isOverdue && (
+                                  <span style={{ fontSize: '0.62rem', color: '#b85e00', fontWeight: 600 }}>
+                                    ⏳ Pay by {deadlineFmt}
+                                  </span>
+                                )}
+                                {!isOverdue && (
+                                  <PayNowBtn
+                                    requestId={b.id}
+                                    amount={b.total_amount ?? (b.hourly_rate && b.duration_hours ? Math.round(b.hourly_rate * b.duration_hours * 1.15) : 0)}
+                                    compact
+                                  />
+                                )}
                               </div>
                             )
                           ) : (

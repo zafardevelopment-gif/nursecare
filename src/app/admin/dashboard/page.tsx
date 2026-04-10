@@ -145,7 +145,7 @@ export default async function AdminDashboardPage() {
           <QuickLink href="/admin/nurse-updates" color={(updatePendingNurses ?? 0) + (pendingUpdateRequests ?? 0) > 0 ? '#b85e00' : undefined} badge={(updatePendingNurses ?? 0) + (pendingUpdateRequests ?? 0)} badgeColor="#b85e00">
             🔄 Profile Updates
           </QuickLink>
-          <QuickLink href="/admin/bookings" color={pendingBookings ? '#0E7B8C' : undefined} badge={pendingBookings ?? 0} badgeColor="#0E7B8C">
+          <QuickLink href="/admin/bookings?type=patient" color={pendingBookings ? '#0E7B8C' : undefined} badge={pendingBookings ?? 0} badgeColor="#0E7B8C">
             📋 All Bookings
           </QuickLink>
           <QuickLink href="/admin/users">

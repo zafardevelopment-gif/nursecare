@@ -4,6 +4,7 @@ import { useState, useTransition, useEffect } from 'react'
 import { submitHospitalBookingAction } from './actions'
 import { getShiftAvailability } from '@/app/provider/availability/actions'
 import type { ShiftKey } from '@/app/provider/availability/shiftConstants'
+import { validateBookingDate, getBookingDateBounds } from '@/lib/bookingDateValidation'
 
 type Dept = { id: string; name: string; icon: string; color: string; nurses_needed: number; nurses_active: number }
 type Hospital = { id: string; name: string; city: string }
@@ -40,11 +41,14 @@ function nurseEmoji(gender: string) { return gender === 'male' ? '👨‍⚕️'
 
 export default function HospitalBookingClient({
   hospital, departments, requestedBy, nurses,
+  minAdvanceHours = 2, maxAdvanceDays = 30,
 }: {
   hospital: Hospital
   departments: Dept[]
   requestedBy: string
   nurses: Nurse[]
+  minAdvanceHours?: number
+  maxAdvanceDays?: number
 }) {
   const [step, setStep]           = useState(1)
   const [isPending, startTx]      = useTransition()
@@ -52,11 +56,15 @@ export default function HospitalBookingClient({
   const [submittedId, setSubmittedId] = useState<string | null>(null)
   const [error, setError]         = useState<string | null>(null)
 
+  // Date bounds from admin settings
+  const { minDate: dateMin, maxDate: dateMax } = getBookingDateBounds(minAdvanceHours, maxAdvanceDays)
+
   // ── Step 1: Requirements ──────────────────────────────────────────────
   const today    = new Date().toISOString().split('T')[0]
   const nextWeek = nxt(7)
-  const [startDate, setStartDate]   = useState(today)
-  const [endDate, setEndDate]       = useState(nextWeek)
+  // Default start: use minDate if it's later than today
+  const [startDate, setStartDate]   = useState(dateMin > today ? dateMin : nxt(1))
+  const [endDate, setEndDate]       = useState(nxt(7))
   const [selectedShifts, setSelectedShifts] = useState<Set<string>>(new Set(['morning']))
   const [specs, setSpecs]           = useState<Set<string>>(new Set())
   const [totalNurses, setTotalNurses] = useState(2)
@@ -167,6 +175,9 @@ export default function HospitalBookingClient({
 
   function handleSubmit() {
     setError(null)
+    // Validate advance booking window
+    const dateErr = validateBookingDate(startDate, undefined, minAdvanceHours, maxAdvanceDays)
+    if (dateErr) { setError(dateErr.message); return }
     const fd = new FormData()
     fd.set('hospital_id', hospital.id)
     fd.set('start_date', startDate)
@@ -263,11 +274,11 @@ export default function HospitalBookingClient({
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
-              <FG label="START DATE">
-                <input type="date" className="form-input" value={startDate} onChange={e => setStartDate(e.target.value)} />
+              <FG label="START DATE" hint={`Min ${minAdvanceHours}h advance · up to ${maxAdvanceDays}d ahead`}>
+                <input type="date" className="form-input" value={startDate} min={dateMin} max={dateMax} onChange={e => { setStartDate(e.target.value); if (e.target.value >= endDate) setEndDate(e.target.value) }} />
               </FG>
               <FG label="END DATE">
-                <input type="date" className="form-input" value={endDate} onChange={e => setEndDate(e.target.value)} />
+                <input type="date" className="form-input" value={endDate} min={startDate} max={dateMax} onChange={e => setEndDate(e.target.value)} />
               </FG>
             </div>
 
@@ -525,7 +536,14 @@ export default function HospitalBookingClient({
             <button onClick={() => setStep(s => s - 1)} style={{ background: 'var(--cream)', color: 'var(--ink)', border: '1px solid var(--border)', padding: '9px 20px', borderRadius: 9, fontWeight: 600, fontSize: '0.85rem', cursor: 'pointer', fontFamily: 'inherit' }}>← Back</button>
           )}
           {step < 3 ? (
-            <button onClick={() => { if (step === 1 && selectedShifts.size === 0) { setError('Please select at least one shift'); return } setError(null); setStep(s => s + 1) }}
+            <button onClick={() => {
+              if (step === 1) {
+                if (selectedShifts.size === 0) { setError('Please select at least one shift'); return }
+                const dateErr = validateBookingDate(startDate, undefined, minAdvanceHours, maxAdvanceDays)
+                if (dateErr) { setError(dateErr.message); return }
+              }
+              setError(null); setStep(s => s + 1)
+            }}
               style={{ background: 'linear-gradient(135deg,#0E7B8C,#0ABFCC)', color: '#fff', border: 'none', padding: '9px 24px', borderRadius: 9, fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer', fontFamily: 'inherit' }}>
               Continue →
             </button>
@@ -589,10 +607,13 @@ function Section({ icon, title, sub, children }: { icon: string; title: string; 
   )
 }
 
-function FG({ label, children, style }: { label: string; children: React.ReactNode; style?: React.CSSProperties }) {
+function FG({ label, children, style, hint }: { label: string; children: React.ReactNode; style?: React.CSSProperties; hint?: string }) {
   return (
     <div style={style}>
-      <div style={{ fontSize: '0.63rem', fontWeight: 700, color: '#0E7B8C', letterSpacing: '0.08em', marginBottom: 5 }}>{label}</div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 5 }}>
+        <div style={{ fontSize: '0.63rem', fontWeight: 700, color: '#0E7B8C', letterSpacing: '0.08em' }}>{label}</div>
+        {hint && <div style={{ fontSize: '0.6rem', color: 'var(--teal)', fontWeight: 600, opacity: 0.85 }}>{hint}</div>}
+      </div>
       {children}
     </div>
   )

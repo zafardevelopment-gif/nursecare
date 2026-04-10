@@ -41,8 +41,8 @@ export default async function AdminBookingDetailPage({ params }: Props) {
     <div className="dash-shell">
       <div className="dash-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          <Link href="/admin/bookings" style={{ color: 'var(--muted)', textDecoration: 'none', fontSize: '0.85rem', fontWeight: 600 }}>
-            ← All Bookings
+          <Link href="/admin/bookings?type=patient" style={{ color: 'var(--muted)', textDecoration: 'none', fontSize: '0.85rem', fontWeight: 600 }}>
+            ← Patient Bookings
           </Link>
         </div>
       </div>
@@ -83,7 +83,13 @@ export default async function AdminBookingDetailPage({ params }: Props) {
             {b.patient_phone && <DetailRow icon="📞" label="Phone" value={b.patient_phone} />}
           </Section>
           <Section label="Nurse Info">
-            <DetailRow icon="👩‍⚕️" label="Nurse"  value={b.nurse_name ?? '⚠️ Not assigned'} />
+            {b.nurse_id
+              ? <Link href={`/admin/nurses/${b.nurse_id}`} style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none', color: '#0E7B8C', fontWeight: 600, fontSize: '0.85rem', padding: '6px 0' }}>
+                  <span style={{ width: 32, height: 32, borderRadius: '50%', background: 'rgba(14,123,140,0.08)', border: '1.5px solid rgba(14,123,140,0.2)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem' }}>👩‍⚕️</span>
+                  <span style={{ borderBottom: '1px dashed #0E7B8C' }}>{b.nurse_name ?? 'View Nurse Profile'}</span>
+                </Link>
+              : <DetailRow icon="👩‍⚕️" label="Nurse" value="⚠️ Not assigned" />
+            }
             {b.nurse_email && <DetailRow icon="✉️" label="Email" value={b.nurse_email} />}
           </Section>
           <Section label="Booking Details">

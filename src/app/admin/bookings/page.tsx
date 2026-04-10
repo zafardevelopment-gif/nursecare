@@ -17,7 +17,15 @@ const STATUS_MAP: Record<string, { bg: string; color: string; label: string }> =
   cancelled:   { bg: 'rgba(138,155,170,0.1)', color: '#8A9BAA', label: 'Cancelled' },
 }
 
-const FILTER_TABS = [
+const HOSP_STATUS_MAP: Record<string, { bg: string; color: string; label: string }> = {
+  pending:   { bg: 'rgba(181,94,0,0.08)',   color: '#b85e00', label: '⏳ Pending Review' },
+  reviewing: { bg: 'rgba(59,130,246,0.08)', color: '#3B82F6', label: '🔍 Reviewing' },
+  matched:   { bg: 'rgba(14,123,140,0.08)', color: '#0E7B8C', label: '✅ Matched' },
+  confirmed: { bg: 'rgba(26,122,74,0.08)',  color: '#1A7A4A', label: '🎉 Confirmed' },
+  cancelled: { bg: 'rgba(224,74,74,0.06)', color: '#E04A4A', label: '✕ Cancelled' },
+}
+
+const PATIENT_FILTER_TABS = [
   { key: '',            label: 'All' },
   { key: 'pending',     label: '⏳ Pending' },
   { key: 'accepted',    label: '✓ Active' },
@@ -27,8 +35,17 @@ const FILTER_TABS = [
   { key: 'declined',    label: '✕ Declined' },
 ]
 
+const HOSP_FILTER_TABS = [
+  { key: '',          label: 'All' },
+  { key: 'pending',   label: '⏳ Pending' },
+  { key: 'reviewing', label: '🔍 Reviewing' },
+  { key: 'matched',   label: '✅ Matched' },
+  { key: 'confirmed', label: '🎉 Confirmed' },
+  { key: 'cancelled', label: '✕ Cancelled' },
+]
+
 interface Props {
-  searchParams: Promise<{ status?: string; page?: string; q?: string }>
+  searchParams: Promise<{ type?: string; status?: string; page?: string; q?: string }>
 }
 
 export default async function AdminBookingsPage({ searchParams }: Props) {
@@ -36,53 +53,84 @@ export default async function AdminBookingsPage({ searchParams }: Props) {
   const supabase = createSupabaseServiceRoleClient()
   const params = await searchParams
 
+  const bookingType  = params.type === 'hospital' ? 'hospital' : 'patient'
   const filterStatus = params.status ?? ''
   const page         = Math.max(1, parseInt(params.page ?? '1'))
   const search       = (params.q ?? '').trim()
   const offset       = (page - 1) * PAGE_SIZE
 
-  // Build query
-  let query = supabase.from('booking_requests').select('*', { count: 'exact' })
-
-  if (filterStatus) {
+  // ── Patient bookings ──────────────────────────────────────────────────────
+  let patientQuery = supabase.from('booking_requests').select('*', { count: 'exact' })
+  if (filterStatus && bookingType === 'patient') {
     if (filterStatus === 'accepted') {
-      query = query.in('status', ['accepted', 'confirmed'])
+      patientQuery = patientQuery.in('status', ['accepted', 'confirmed'])
     } else {
-      query = query.eq('status', filterStatus)
+      patientQuery = patientQuery.eq('status', filterStatus)
     }
   }
-  if (search) {
-    query = query.or(`patient_name.ilike.%${search}%,nurse_name.ilike.%${search}%,service_type.ilike.%${search}%,city.ilike.%${search}%`)
+  if (search && bookingType === 'patient') {
+    patientQuery = patientQuery.or(`patient_name.ilike.%${search}%,nurse_name.ilike.%${search}%,service_type.ilike.%${search}%,city.ilike.%${search}%`)
   }
 
-  const { data: bookings, count } = await query
-    .order('created_at', { ascending: false })
-    .range(offset, offset + PAGE_SIZE - 1)
+  // ── Hospital bookings ─────────────────────────────────────────────────────
+  let hospQuery = supabase
+    .from('hospital_booking_requests')
+    .select('id, status, start_date, end_date, duration_days, total_nurses, shifts, created_at, nurse_selections, dept_breakdown, hospital_id, specializations, gender_preference, language_preference', { count: 'exact' })
+  if (filterStatus && bookingType === 'hospital') {
+    hospQuery = hospQuery.eq('status', filterStatus)
+  }
+  if (search && bookingType === 'hospital') {
+    hospQuery = hospQuery.ilike('status', `%${search}%`)
+  }
 
-  const all = bookings ?? []
-  const totalCount = count ?? 0
+  const [
+    { data: patientBookings, count: patientCount },
+    { data: hospBookings,    count: hospCount },
+    { data: allPatient },
+    { data: allHosp },
+    { data: hospitals },
+  ] = await Promise.all([
+    bookingType === 'patient'
+      ? patientQuery.order('created_at', { ascending: false }).range(offset, offset + PAGE_SIZE - 1)
+      : Promise.resolve({ data: [], count: 0 }),
+    bookingType === 'hospital'
+      ? hospQuery.order('created_at', { ascending: false }).range(offset, offset + PAGE_SIZE - 1)
+      : Promise.resolve({ data: [], count: 0 }),
+    supabase.from('booking_requests').select('status, payment_status'),
+    supabase.from('hospital_booking_requests').select('status'),
+    supabase.from('hospitals').select('id, hospital_name'),
+  ])
+
+  const allPatientRows = (allPatient ?? []) as any[]
+  const allHospRows    = (allHosp ?? []) as any[]
+  const hospitalMap    = Object.fromEntries((hospitals ?? []).map((h: any) => [h.id, h.hospital_name]))
+
+  const patientCounts = {
+    total:       allPatientRows.length,
+    pending:     allPatientRows.filter(b => b.status === 'pending').length,
+    active:      allPatientRows.filter(b => b.status === 'accepted' || b.status === 'confirmed').length,
+    in_progress: allPatientRows.filter(b => b.status === 'in_progress').length,
+    work_done:   allPatientRows.filter(b => b.status === 'work_done').length,
+    completed:   allPatientRows.filter(b => b.status === 'completed').length,
+    paid:        allPatientRows.filter(b => b.payment_status === 'paid').length,
+    unpaid:      allPatientRows.filter(b => b.payment_status !== 'paid' && !['pending','declined','cancelled'].includes(b.status)).length,
+  }
+
+  const hospCounts = {
+    total:     allHospRows.length,
+    pending:   allHospRows.filter(b => b.status === 'pending').length,
+    reviewing: allHospRows.filter(b => b.status === 'reviewing').length,
+    matched:   allHospRows.filter(b => b.status === 'matched').length,
+    confirmed: allHospRows.filter(b => b.status === 'confirmed').length,
+    cancelled: allHospRows.filter(b => b.status === 'cancelled').length,
+  }
+
+  const totalCount = bookingType === 'patient' ? (patientCount ?? 0) : (hospCount ?? 0)
   const totalPages = Math.ceil(totalCount / PAGE_SIZE)
-
-  // KPI counts (all, no filter)
-  const { data: allForCounts } = await supabase
-    .from('booking_requests')
-    .select('status')
-
-  const allRows = allForCounts ?? []
-  const counts = {
-    total:       allRows.length,
-    pending:     allRows.filter(b => b.status === 'pending').length,
-    active:      allRows.filter(b => b.status === 'accepted' || b.status === 'confirmed').length,
-    in_progress: allRows.filter(b => b.status === 'in_progress').length,
-    work_done:   allRows.filter(b => b.status === 'work_done').length,
-    completed:   allRows.filter(b => b.status === 'completed').length,
-    declined:    allRows.filter(b => b.status === 'declined').length,
-    paid:        allRows.filter(b => (b as any).payment_status === 'paid').length,
-    unpaid:      allRows.filter(b => (b as any).payment_status !== 'paid' && b.status !== 'pending' && b.status !== 'declined' && b.status !== 'cancelled').length,
-  }
 
   function pageUrl(p: number) {
     const sp = new URLSearchParams()
+    sp.set('type', bookingType)
     if (filterStatus) sp.set('status', filterStatus)
     if (search) sp.set('q', search)
     sp.set('page', String(p))
@@ -91,9 +139,14 @@ export default async function AdminBookingsPage({ searchParams }: Props) {
 
   function filterUrl(s: string) {
     const sp = new URLSearchParams()
+    sp.set('type', bookingType)
     if (s) sp.set('status', s)
     if (search) sp.set('q', search)
-    return `/admin/bookings${sp.toString() ? '?' + sp.toString() : ''}`
+    return `/admin/bookings?${sp.toString()}`
+  }
+
+  function typeUrl(t: string) {
+    return `/admin/bookings?type=${t}`
   }
 
   return (
@@ -105,202 +158,303 @@ export default async function AdminBookingsPage({ searchParams }: Props) {
         </div>
       </div>
 
-      {/* KPI row */}
-      <div className="dash-kpi-row" style={{ marginBottom: '1.5rem' }}>
-        {[
-          { label: 'Total',             count: counts.total,       bg: '#EBF5FF', color: 'var(--ink)', icon: '📋', key: '',            isStatus: true },
-          { label: 'Awaiting Nurse',    count: counts.pending,     bg: '#FFF3E0', color: '#F5842A',    icon: '⏳', key: 'pending',     isStatus: true },
-          { label: 'Active / Accepted', count: counts.active,      bg: '#E8F9F0', color: '#27A869',    icon: '✅', key: 'accepted',    isStatus: true },
-          { label: 'In Progress',       count: counts.in_progress, bg: 'rgba(14,123,140,0.08)', color: '#0E7B8C', icon: '🔄', key: 'in_progress', isStatus: true },
-          { label: 'Awaiting Confirm',  count: counts.work_done,   bg: 'rgba(107,63,160,0.08)', color: '#6B3FA0', icon: '🎉', key: 'work_done',   isStatus: true },
-          { label: 'Completed',         count: counts.completed,   bg: '#F0FFF4', color: '#27A869',    icon: '🏁', key: 'completed',   isStatus: true },
-          { label: '💳 Paid',           count: counts.paid,        bg: 'rgba(39,168,105,0.08)', color: '#27A869', icon: '✅', key: 'paid',        isStatus: false },
-          { label: '💳 Unpaid',         count: counts.unpaid,      bg: 'rgba(245,132,42,0.08)', color: '#F5842A', icon: '⚠️', key: 'unpaid',      isStatus: false },
-        ].map(k => (
-          k.isStatus
-            ? <Link key={k.key} href={filterUrl(k.key)} style={{ textDecoration: 'none' }}>
+      {/* Type toggle — Patient / Hospital */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: '1.5rem' }}>
+        <Link href={typeUrl('patient')} style={{
+          padding: '10px 24px', borderRadius: 10, fontWeight: 700, fontSize: '0.88rem',
+          textDecoration: 'none',
+          background: bookingType === 'patient' ? 'var(--teal)' : 'var(--card)',
+          color: bookingType === 'patient' ? '#fff' : 'var(--muted)',
+          border: bookingType === 'patient' ? 'none' : '1px solid var(--border)',
+        }}>
+          🧑‍⚕️ Patient Bookings
+          <span style={{ marginLeft: 8, background: bookingType === 'patient' ? 'rgba(255,255,255,0.25)' : 'var(--border)', color: bookingType === 'patient' ? '#fff' : 'var(--muted)', padding: '2px 8px', borderRadius: 50, fontSize: '0.72rem', fontWeight: 800 }}>
+            {patientCounts.total}
+          </span>
+        </Link>
+        <Link href={typeUrl('hospital')} style={{
+          padding: '10px 24px', borderRadius: 10, fontWeight: 700, fontSize: '0.88rem',
+          textDecoration: 'none',
+          background: bookingType === 'hospital' ? 'var(--teal)' : 'var(--card)',
+          color: bookingType === 'hospital' ? '#fff' : 'var(--muted)',
+          border: bookingType === 'hospital' ? 'none' : '1px solid var(--border)',
+        }}>
+          🏥 Hospital Bookings
+          <span style={{ marginLeft: 8, background: bookingType === 'hospital' ? 'rgba(255,255,255,0.25)' : 'var(--border)', color: bookingType === 'hospital' ? '#fff' : 'var(--muted)', padding: '2px 8px', borderRadius: 50, fontSize: '0.72rem', fontWeight: 800 }}>
+            {hospCounts.total}
+          </span>
+        </Link>
+      </div>
+
+      {/* ── PATIENT BOOKINGS ─────────────────────────────────────────────────── */}
+      {bookingType === 'patient' && (
+        <>
+          {/* KPI row */}
+          <div className="dash-kpi-row" style={{ marginBottom: '1.5rem' }}>
+            {[
+              { label: 'Total',             count: patientCounts.total,       bg: '#EBF5FF', color: 'var(--ink)', icon: '📋', key: '',            isStatus: true },
+              { label: 'Awaiting Nurse',    count: patientCounts.pending,     bg: '#FFF3E0', color: '#F5842A',    icon: '⏳', key: 'pending',     isStatus: true },
+              { label: 'Active',            count: patientCounts.active,      bg: '#E8F9F0', color: '#27A869',    icon: '✅', key: 'accepted',    isStatus: true },
+              { label: 'In Progress',       count: patientCounts.in_progress, bg: 'rgba(14,123,140,0.08)', color: '#0E7B8C', icon: '🔄', key: 'in_progress', isStatus: true },
+              { label: 'Awaiting Confirm',  count: patientCounts.work_done,   bg: 'rgba(107,63,160,0.08)', color: '#6B3FA0', icon: '🎉', key: 'work_done',   isStatus: true },
+              { label: 'Completed',         count: patientCounts.completed,   bg: '#F0FFF4', color: '#27A869',    icon: '🏁', key: 'completed',   isStatus: true },
+              { label: '💳 Paid',           count: patientCounts.paid,        bg: 'rgba(39,168,105,0.08)', color: '#27A869', icon: '💳', key: '', isStatus: false },
+              { label: '⚠️ Unpaid',         count: patientCounts.unpaid,      bg: 'rgba(245,132,42,0.08)', color: '#F5842A', icon: '⚠️', key: '', isStatus: false },
+            ].map((k, idx) => (
+              k.isStatus
+                ? <Link key={idx} href={filterUrl(k.key)} style={{ textDecoration: 'none' }}>
+                    <div className="dash-kpi" style={{ border: filterStatus === k.key ? `1.5px solid ${k.color}` : '1px solid var(--border)', cursor: 'pointer' }}>
+                      <div className="dash-kpi-icon" style={{ background: k.bg }}>{k.icon}</div>
+                      <div className="dash-kpi-num" style={{ color: k.count > 0 ? k.color : 'var(--ink)' }}>{k.count}</div>
+                      <div className="dash-kpi-label">{k.label}</div>
+                    </div>
+                  </Link>
+                : <div key={idx} className="dash-kpi" style={{ border: '1px solid var(--border)' }}>
+                    <div className="dash-kpi-icon" style={{ background: k.bg }}>{k.icon}</div>
+                    <div className="dash-kpi-num" style={{ color: k.count > 0 ? k.color : 'var(--ink)' }}>{k.count}</div>
+                    <div className="dash-kpi-label">{k.label}</div>
+                  </div>
+            ))}
+          </div>
+
+          {patientCounts.work_done > 0 && (
+            <div style={{ background: 'rgba(107,63,160,0.06)', border: '1px solid rgba(107,63,160,0.25)', borderRadius: 10, padding: '0.75rem 1.2rem', fontSize: '0.85rem', color: '#6B3FA0', fontWeight: 600, marginBottom: '1rem' }}>
+              ✅ {patientCounts.work_done} booking{patientCounts.work_done > 1 ? 's' : ''} — nurse marked done, awaiting patient confirmation
+            </div>
+          )}
+
+          <div className="dash-card" style={{ marginBottom: 0 }}>
+            <div style={{ padding: '0.85rem 1.2rem', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem' }}>
+              <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                {PATIENT_FILTER_TABS.map(tab => (
+                  <Link key={tab.key} href={filterUrl(tab.key)} style={{
+                    padding: '5px 12px', borderRadius: 7, fontSize: '0.75rem', fontWeight: 600,
+                    textDecoration: 'none',
+                    background: filterStatus === tab.key ? 'var(--teal)' : 'var(--cream)',
+                    color: filterStatus === tab.key ? '#fff' : 'var(--muted)',
+                    border: filterStatus === tab.key ? 'none' : '1px solid var(--border)',
+                  }}>{tab.label}</Link>
+                ))}
+              </div>
+              <form method="GET" action="/admin/bookings" style={{ display: 'flex', gap: '0.5rem' }}>
+                <input type="hidden" name="type" value="patient" />
+                {filterStatus && <input type="hidden" name="status" value={filterStatus} />}
+                <input type="text" name="q" defaultValue={search} placeholder="Search patient, nurse, city…"
+                  style={{ padding: '6px 10px', borderRadius: 7, border: '1px solid var(--border)', fontSize: '0.8rem', fontFamily: 'inherit', background: 'var(--cream)', width: 220 }} />
+                <button type="submit" style={{ padding: '6px 12px', borderRadius: 7, border: 'none', background: 'var(--teal)', color: '#fff', fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Search</button>
+                {search && <Link href={filterUrl(filterStatus)} style={{ padding: '6px 10px', borderRadius: 7, border: '1px solid var(--border)', background: 'var(--cream)', color: 'var(--muted)', fontSize: '0.8rem', textDecoration: 'none', display: 'flex', alignItems: 'center' }}>✕</Link>}
+              </form>
+            </div>
+
+            <div style={{ padding: '0.6rem 1.2rem', borderBottom: '1px solid var(--border)', fontSize: '0.75rem', color: 'var(--muted)' }}>
+              {totalCount} result{totalCount !== 1 ? 's' : ''}
+              {search ? ` for "${search}"` : ''}
+              {filterStatus ? ` · ${filterStatus}` : ''}
+              {totalPages > 1 ? ` · Page ${page} of ${totalPages}` : ''}
+            </div>
+
+            {!(patientBookings ?? []).length ? (
+              <div style={{ textAlign: 'center', color: 'var(--muted)', padding: '3rem', fontSize: '0.9rem' }}>No bookings found</div>
+            ) : (
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+                  <thead>
+                    <tr style={{ background: 'var(--cream)', borderBottom: '1px solid var(--border)' }}>
+                      <Th>#</Th><Th>Patient</Th><Th>Service</Th><Th>Nurse</Th>
+                      <Th>Date / Shift</Th><Th>Type</Th><Th>City</Th>
+                      <Th>Status</Th><Th>Payment</Th><Th>Created</Th><Th>Action</Th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(patientBookings ?? []).map((b: any, i: number) => {
+                      const s = STATUS_MAP[b.status] ?? STATUS_MAP.pending
+                      const isPaid = b.payment_status === 'paid'
+                      const showPayment = !['pending','declined','cancelled'].includes(b.status)
+                      const serial = offset + i + 1
+                      return (
+                        <tr key={b.id} style={{ borderBottom: '1px solid var(--border)', background: i % 2 === 0 ? '#fff' : 'rgba(14,123,140,0.015)' }}>
+                          <Td>
+                            <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 26, height: 26, borderRadius: 7, background: 'var(--cream)', border: '1px solid var(--border)', fontSize: '0.7rem', fontWeight: 700, color: 'var(--muted)' }}>{serial}</span>
+                          </Td>
+                          <Td>
+                            <div style={{ fontWeight: 700, color: 'var(--ink)' }}>{b.patient_name ?? '—'}</div>
+                            {b.patient_email && <div style={{ color: 'var(--muted)', fontSize: '0.7rem', marginTop: 1 }}>{b.patient_email}</div>}
+                          </Td>
+                          <Td>{b.service_type ?? '—'}</Td>
+                          <Td>
+                            {b.nurse_id
+                              ? <Link href={`/admin/nurses/${b.nurse_id}`} style={{ color: '#0E7B8C', fontWeight: 600, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                  <span style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(14,123,140,0.08)', border: '1.5px solid rgba(14,123,140,0.2)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.9rem', flexShrink: 0 }}>👩‍⚕️</span>
+                                  <span style={{ borderBottom: '1px dashed #0E7B8C' }}>{b.nurse_name ?? 'View Nurse'}</span>
+                                </Link>
+                              : <span style={{ color: '#F5842A', fontSize: '0.7rem' }}>⚠️ Unassigned</span>
+                            }
+                          </Td>
+                          <Td>
+                            {b.start_date && <div>{b.start_date}{b.end_date && b.end_date !== b.start_date ? ` → ${b.end_date}` : ''}</div>}
+                            <div style={{ color: 'var(--muted)', fontSize: '0.7rem' }}>
+                              {[b.shift, shiftTimeRange(b.shift, b.duration_hours), b.duration_hours ? `${b.duration_hours}h` : null].filter(Boolean).join(' · ')}
+                            </div>
+                          </Td>
+                          <Td>{b.booking_type === 'weekly' ? '🔁 Weekly' : b.booking_type === 'monthly' ? '📆 Monthly' : '📅 One-Time'}</Td>
+                          <Td>{b.city ?? '—'}</Td>
+                          <Td>
+                            <span style={{ background: s.bg, color: s.color, fontSize: '0.65rem', fontWeight: 700, padding: '3px 9px', borderRadius: 50, whiteSpace: 'nowrap' }}>{s.label}</span>
+                          </Td>
+                          <Td>
+                            {showPayment
+                              ? isPaid
+                                ? <span style={{ background:'rgba(39,168,105,0.1)', color:'#27A869', fontSize:'0.65rem', fontWeight:700, padding:'3px 9px', borderRadius:50 }}>💳 Paid</span>
+                                : <span style={{ background:'rgba(245,132,42,0.1)', color:'#F5842A', fontSize:'0.65rem', fontWeight:700, padding:'3px 9px', borderRadius:50 }}>⚠️ Unpaid</span>
+                              : <span style={{ color: 'var(--muted)', fontSize: '0.7rem' }}>—</span>
+                            }
+                          </Td>
+                          <Td>
+                            <div>{new Date(b.created_at).toLocaleDateString('en-SA', { day: '2-digit', month: 'short', year: 'numeric' })}</div>
+                            <div style={{ color: 'var(--muted)', fontSize: '0.7rem' }}>{new Date(b.created_at).toLocaleTimeString('en-SA', { hour: '2-digit', minute: '2-digit' })}</div>
+                          </Td>
+                          <Td>
+                            <Link href={`/admin/bookings/${b.id}`} style={{ padding: '5px 12px', borderRadius: 7, border: '1px solid var(--border)', background: 'var(--cream)', color: 'var(--teal)', fontSize: '0.72rem', fontWeight: 700, textDecoration: 'none', whiteSpace: 'nowrap' }}>View →</Link>
+                          </Td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            <Pagination page={page} totalPages={totalPages} totalCount={totalCount} offset={offset} pageSize={PAGE_SIZE} pageUrl={pageUrl} />
+          </div>
+        </>
+      )}
+
+      {/* ── HOSPITAL BOOKINGS ─────────────────────────────────────────────────── */}
+      {bookingType === 'hospital' && (
+        <>
+          {/* KPI row */}
+          <div className="dash-kpi-row" style={{ marginBottom: '1.5rem' }}>
+            {[
+              { label: 'Total',      count: hospCounts.total,     bg: '#EBF5FF', color: 'var(--ink)', icon: '📋', key: '' },
+              { label: 'Pending',    count: hospCounts.pending,   bg: '#FFF8F0', color: '#b85e00',    icon: '⏳', key: 'pending' },
+              { label: 'Reviewing',  count: hospCounts.reviewing, bg: '#EFF6FF', color: '#3B82F6',    icon: '🔍', key: 'reviewing' },
+              { label: 'Matched',    count: hospCounts.matched,   bg: 'rgba(14,123,140,0.08)', color: '#0E7B8C', icon: '✅', key: 'matched' },
+              { label: 'Confirmed',  count: hospCounts.confirmed, bg: 'rgba(26,122,74,0.08)',  color: '#1A7A4A', icon: '🎉', key: 'confirmed' },
+              { label: 'Cancelled',  count: hospCounts.cancelled, bg: 'rgba(224,74,74,0.06)', color: '#E04A4A', icon: '✕',  key: 'cancelled' },
+            ].map((k, idx) => (
+              <Link key={idx} href={filterUrl(k.key)} style={{ textDecoration: 'none' }}>
                 <div className="dash-kpi" style={{ border: filterStatus === k.key ? `1.5px solid ${k.color}` : '1px solid var(--border)', cursor: 'pointer' }}>
                   <div className="dash-kpi-icon" style={{ background: k.bg }}>{k.icon}</div>
                   <div className="dash-kpi-num" style={{ color: k.count > 0 ? k.color : 'var(--ink)' }}>{k.count}</div>
                   <div className="dash-kpi-label">{k.label}</div>
                 </div>
               </Link>
-            : <div key={k.key} className="dash-kpi" style={{ border: '1px solid var(--border)' }}>
-                <div className="dash-kpi-icon" style={{ background: k.bg }}>{k.icon}</div>
-                <div className="dash-kpi-num" style={{ color: k.count > 0 ? k.color : 'var(--ink)' }}>{k.count}</div>
-                <div className="dash-kpi-label">{k.label}</div>
-              </div>
-        ))}
-      </div>
-
-      {/* Alert banners */}
-      {counts.work_done > 0 && (
-        <div style={{ background: 'rgba(107,63,160,0.06)', border: '1px solid rgba(107,63,160,0.25)', borderRadius: 10, padding: '0.75rem 1.2rem', fontSize: '0.85rem', color: '#6B3FA0', fontWeight: 600, marginBottom: '1rem' }}>
-          ✅ {counts.work_done} booking{counts.work_done > 1 ? 's' : ''} — nurse marked done, awaiting patient confirmation
-        </div>
-      )}
-      {counts.pending > 0 && (
-        <div style={{ background: 'rgba(245,132,42,0.06)', border: '1px solid rgba(245,132,42,0.25)', borderRadius: 10, padding: '0.75rem 1.2rem', fontSize: '0.85rem', color: '#b85e00', fontWeight: 600, marginBottom: '1rem' }}>
-          ⏳ {counts.pending} booking{counts.pending > 1 ? 's' : ''} waiting for a nurse to accept
-        </div>
-      )}
-
-      {/* Filter tabs + search */}
-      <div className="dash-card" style={{ marginBottom: 0 }}>
-        <div style={{ padding: '0.85rem 1.2rem', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem' }}>
-          {/* Tabs */}
-          <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
-            {FILTER_TABS.map(tab => (
-              <Link key={tab.key} href={filterUrl(tab.key)} style={{
-                padding: '5px 12px', borderRadius: 7, fontSize: '0.75rem', fontWeight: 600,
-                textDecoration: 'none',
-                background: filterStatus === tab.key ? 'var(--teal)' : 'var(--cream)',
-                color: filterStatus === tab.key ? '#fff' : 'var(--muted)',
-                border: filterStatus === tab.key ? 'none' : '1px solid var(--border)',
-              }}>
-                {tab.label}
-              </Link>
             ))}
           </div>
-          {/* Search form */}
-          <form method="GET" action="/admin/bookings" style={{ display: 'flex', gap: '0.5rem' }}>
-            {filterStatus && <input type="hidden" name="status" value={filterStatus} />}
-            <input
-              type="text"
-              name="q"
-              defaultValue={search}
-              placeholder="Search patient, nurse, city…"
-              style={{ padding: '6px 10px', borderRadius: 7, border: '1px solid var(--border)', fontSize: '0.8rem', fontFamily: 'inherit', background: 'var(--cream)', width: 220 }}
-            />
-            <button type="submit" style={{ padding: '6px 12px', borderRadius: 7, border: 'none', background: 'var(--teal)', color: '#fff', fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
-              Search
-            </button>
-            {search && (
-              <Link href={filterUrl(filterStatus)} style={{ padding: '6px 10px', borderRadius: 7, border: '1px solid var(--border)', background: 'var(--cream)', color: 'var(--muted)', fontSize: '0.8rem', textDecoration: 'none', display: 'flex', alignItems: 'center' }}>
-                ✕
-              </Link>
-            )}
-          </form>
-        </div>
 
-        {/* Results count */}
-        <div style={{ padding: '0.6rem 1.2rem', borderBottom: '1px solid var(--border)', fontSize: '0.75rem', color: 'var(--muted)' }}>
-          {totalCount} result{totalCount !== 1 ? 's' : ''}
-          {search ? ` for "${search}"` : ''}
-          {filterStatus ? ` · ${filterStatus}` : ''}
-          {totalPages > 1 ? ` · Page ${page} of ${totalPages}` : ''}
-        </div>
+          <div className="dash-card" style={{ marginBottom: 0 }}>
+            <div style={{ padding: '0.85rem 1.2rem', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem' }}>
+              <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                {HOSP_FILTER_TABS.map(tab => (
+                  <Link key={tab.key} href={filterUrl(tab.key)} style={{
+                    padding: '5px 12px', borderRadius: 7, fontSize: '0.75rem', fontWeight: 600,
+                    textDecoration: 'none',
+                    background: filterStatus === tab.key ? 'var(--teal)' : 'var(--cream)',
+                    color: filterStatus === tab.key ? '#fff' : 'var(--muted)',
+                    border: filterStatus === tab.key ? 'none' : '1px solid var(--border)',
+                  }}>{tab.label}</Link>
+                ))}
+              </div>
+            </div>
 
-        {!all.length ? (
-          <div style={{ textAlign: 'center', color: 'var(--muted)', padding: '3rem', fontSize: '0.9rem' }}>
-            No bookings found
-          </div>
-        ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
-              <thead>
-                <tr style={{ background: 'var(--cream)', borderBottom: '1px solid var(--border)' }}>
-                  <Th>#</Th>
-                  <Th>Patient</Th>
-                  <Th>Service</Th>
-                  <Th>Nurse</Th>
-                  <Th>Date / Shift</Th>
-                  <Th>Type</Th>
-                  <Th>City</Th>
-                  <Th>Status</Th>
-                  <Th>Payment</Th>
-                  <Th>Created</Th>
-                  <Th>Action</Th>
-                </tr>
-              </thead>
-              <tbody>
-                {all.map((b: any, i: number) => {
-                  const s = STATUS_MAP[b.status] ?? STATUS_MAP.pending
-                  const isPaid = b.payment_status === 'paid'
-                  const showPayment = b.status !== 'pending' && b.status !== 'declined' && b.status !== 'cancelled'
-                  const serial = offset + i + 1
-                  return (
-                    <tr key={b.id} style={{ borderBottom: i < all.length - 1 ? '1px solid var(--border)' : 'none', background: i % 2 === 0 ? '#fff' : 'rgba(14,123,140,0.015)' }}>
-                      <Td>
-                        <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 26, height: 26, borderRadius: 7, background: 'var(--cream)', border: '1px solid var(--border)', fontSize: '0.7rem', fontWeight: 700, color: 'var(--muted)' }}>
-                          {serial}
-                        </span>
-                      </Td>
-                      <Td>
-                        <div style={{ fontWeight: 700, color: 'var(--ink)' }}>{b.patient_name ?? '—'}</div>
-                        {b.patient_email && <div style={{ color: 'var(--muted)', fontSize: '0.7rem', marginTop: 1 }}>{b.patient_email}</div>}
-                      </Td>
-                      <Td>{b.service_type ?? '—'}</Td>
-                      <Td>
-                        {b.nurse_name
-                          ? <span style={{ color: '#0E7B8C', fontWeight: 600 }}>{b.nurse_name}</span>
-                          : <span style={{ color: '#F5842A', fontSize: '0.7rem' }}>⚠️ Unassigned</span>
-                        }
-                      </Td>
-                      <Td>
-                        {b.start_date && <div>{b.start_date}{b.end_date && b.end_date !== b.start_date ? ` → ${b.end_date}` : ''}</div>}
-                        <div style={{ color: 'var(--muted)', fontSize: '0.7rem' }}>
-                          {[b.shift, shiftTimeRange(b.shift, b.duration_hours), b.duration_hours ? `${b.duration_hours}h` : null].filter(Boolean).join(' · ')}
-                        </div>
-                      </Td>
-                      <Td>
-                        {b.booking_type === 'weekly' ? '🔁 Weekly' : b.booking_type === 'monthly' ? '📆 Monthly' : '📅 One-Time'}
-                      </Td>
-                      <Td>{b.city ?? '—'}</Td>
-                      <Td>
-                        <span style={{ background: s.bg, color: s.color, fontSize: '0.65rem', fontWeight: 700, padding: '3px 9px', borderRadius: 50, whiteSpace: 'nowrap' }}>{s.label}</span>
-                      </Td>
-                      <Td>
-                        {showPayment
-                          ? isPaid
-                            ? <span style={{ background:'rgba(39,168,105,0.1)', color:'#27A869', fontSize:'0.65rem', fontWeight:700, padding:'3px 9px', borderRadius:50 }}>💳 Paid</span>
-                            : <span style={{ background:'rgba(245,132,42,0.1)', color:'#F5842A', fontSize:'0.65rem', fontWeight:700, padding:'3px 9px', borderRadius:50 }}>⚠️ Unpaid</span>
-                          : <span style={{ color: 'var(--muted)', fontSize: '0.7rem' }}>—</span>
-                        }
-                      </Td>
-                      <Td>
-                        <div>{new Date(b.created_at).toLocaleDateString('en-SA', { day: '2-digit', month: 'short', year: 'numeric' })}</div>
-                        <div style={{ color: 'var(--muted)', fontSize: '0.7rem' }}>{new Date(b.created_at).toLocaleTimeString('en-SA', { hour: '2-digit', minute: '2-digit' })}</div>
-                      </Td>
-                      <Td>
-                        <Link href={`/admin/bookings/${b.id}`} style={{
-                          padding: '5px 12px', borderRadius: 7, border: '1px solid var(--border)',
-                          background: 'var(--cream)', color: 'var(--teal)', fontSize: '0.72rem',
-                          fontWeight: 700, textDecoration: 'none', whiteSpace: 'nowrap',
-                        }}>
-                          View →
-                        </Link>
-                      </Td>
+            <div style={{ padding: '0.6rem 1.2rem', borderBottom: '1px solid var(--border)', fontSize: '0.75rem', color: 'var(--muted)' }}>
+              {totalCount} result{totalCount !== 1 ? 's' : ''}
+              {filterStatus ? ` · ${filterStatus}` : ''}
+              {totalPages > 1 ? ` · Page ${page} of ${totalPages}` : ''}
+            </div>
+
+            {!(hospBookings ?? []).length ? (
+              <div style={{ textAlign: 'center', color: 'var(--muted)', padding: '3rem', fontSize: '0.9rem' }}>No hospital bookings found</div>
+            ) : (
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+                  <thead>
+                    <tr style={{ background: 'var(--cream)', borderBottom: '1px solid var(--border)' }}>
+                      <Th>#</Th><Th>Hospital</Th><Th>Period</Th><Th>Duration</Th>
+                      <Th>Nurses Req.</Th><Th>Selected</Th><Th>Shifts</Th>
+                      <Th>Status</Th><Th>Submitted</Th><Th>Action</Th>
                     </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+                  </thead>
+                  <tbody>
+                    {(hospBookings ?? []).map((b: any, i: number) => {
+                      const hs = HOSP_STATUS_MAP[b.status] ?? HOSP_STATUS_MAP.pending
+                      const nurseCount = (b.nurse_selections as any[])?.length ?? 0
+                      const serial = offset + i + 1
+                      const hospitalName = hospitalMap[b.hospital_id] ?? '—'
+                      return (
+                        <tr key={b.id} style={{ borderBottom: '1px solid var(--border)', background: i % 2 === 0 ? '#fff' : 'rgba(14,123,140,0.015)' }}>
+                          <Td>
+                            <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 26, height: 26, borderRadius: 7, background: 'var(--cream)', border: '1px solid var(--border)', fontSize: '0.7rem', fontWeight: 700, color: 'var(--muted)' }}>{serial}</span>
+                          </Td>
+                          <Td>
+                            <div style={{ fontWeight: 700, color: 'var(--ink)' }}>{hospitalName}</div>
+                            <div style={{ fontSize: '0.7rem', color: 'var(--muted)', marginTop: 1 }}>ID: {b.hospital_id?.slice(0, 8)}</div>
+                          </Td>
+                          <Td>
+                            <div>{new Date(b.start_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} – {new Date(b.end_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</div>
+                          </Td>
+                          <Td>{b.duration_days} days</Td>
+                          <Td style={{ fontWeight: 700, color: '#0E7B8C' }}>{b.total_nurses}</Td>
+                          <Td>
+                            <span style={{ fontWeight: 700, color: nurseCount > 0 ? '#27A869' : 'var(--muted)' }}>{nurseCount}</span>
+                            {nurseCount > 0 && <span style={{ fontSize: '0.65rem', color: 'var(--muted)', marginLeft: 4 }}>/ {b.total_nurses}</span>}
+                          </Td>
+                          <Td>
+                            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                              {(b.shifts as string[] ?? []).map((s: string) => (
+                                <span key={s} style={{ background: 'rgba(14,123,140,0.07)', color: 'var(--teal)', padding: '2px 7px', borderRadius: 5, fontSize: '0.65rem', fontWeight: 600 }}>{s}</span>
+                              ))}
+                            </div>
+                          </Td>
+                          <Td>
+                            <span style={{ background: hs.bg, color: hs.color, fontSize: '0.65rem', fontWeight: 700, padding: '3px 9px', borderRadius: 50, whiteSpace: 'nowrap' }}>{hs.label}</span>
+                          </Td>
+                          <Td>
+                            <div>{new Date(b.created_at).toLocaleDateString('en-SA', { day: '2-digit', month: 'short', year: 'numeric' })}</div>
+                            <div style={{ color: 'var(--muted)', fontSize: '0.7rem' }}>{new Date(b.created_at).toLocaleTimeString('en-SA', { hour: '2-digit', minute: '2-digit' })}</div>
+                          </Td>
+                          <Td>
+                            <Link href={`/admin/hospital-bookings/${b.id}`} style={{ padding: '5px 12px', borderRadius: 7, border: '1px solid var(--border)', background: 'var(--cream)', color: 'var(--teal)', fontSize: '0.72rem', fontWeight: 700, textDecoration: 'none', whiteSpace: 'nowrap' }}>Review →</Link>
+                          </Td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
 
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div style={{ padding: '1rem 1.5rem', borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem' }}>
-            <div style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>
-              Showing {offset + 1}–{Math.min(offset + PAGE_SIZE, totalCount)} of {totalCount}
-            </div>
-            <div style={{ display: 'flex', gap: '0.4rem' }}>
-              {page > 1 && (
-                <Link href={pageUrl(page - 1)} style={paginBtn(false)}>← Prev</Link>
-              )}
-              {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
-                const p = i + 1
-                return (
-                  <Link key={p} href={pageUrl(p)} style={paginBtn(p === page)}>{p}</Link>
-                )
-              })}
-              {page < totalPages && (
-                <Link href={pageUrl(page + 1)} style={paginBtn(false)}>Next →</Link>
-              )}
-            </div>
+            <Pagination page={page} totalPages={totalPages} totalCount={totalCount} offset={offset} pageSize={PAGE_SIZE} pageUrl={pageUrl} />
           </div>
-        )}
+        </>
+      )}
+    </div>
+  )
+}
+
+function Pagination({ page, totalPages, totalCount, offset, pageSize, pageUrl }: { page: number; totalPages: number; totalCount: number; offset: number; pageSize: number; pageUrl: (p: number) => string }) {
+  if (totalPages <= 1) return null
+  return (
+    <div style={{ padding: '1rem 1.5rem', borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem' }}>
+      <div style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>
+        Showing {offset + 1}–{Math.min(offset + pageSize, totalCount)} of {totalCount}
+      </div>
+      <div style={{ display: 'flex', gap: '0.4rem' }}>
+        {page > 1 && <Link href={pageUrl(page - 1)} style={paginBtn(false)}>← Prev</Link>}
+        {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => (
+          <Link key={i + 1} href={pageUrl(i + 1)} style={paginBtn(i + 1 === page)}>{i + 1}</Link>
+        ))}
+        {page < totalPages && <Link href={pageUrl(page + 1)} style={paginBtn(false)}>Next →</Link>}
       </div>
     </div>
   )
@@ -324,9 +478,9 @@ function Th({ children }: { children: React.ReactNode }) {
   )
 }
 
-function Td({ children }: { children: React.ReactNode }) {
+function Td({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
   return (
-    <td style={{ padding: '10px 14px', verticalAlign: 'middle', color: 'var(--ink)' }}>
+    <td style={{ padding: '10px 14px', verticalAlign: 'middle', color: 'var(--ink)', ...style }}>
       {children}
     </td>
   )

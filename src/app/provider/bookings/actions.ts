@@ -79,16 +79,26 @@ export async function markWorkDone(requestId: string) {
 
   const { data: settings } = await serviceSupabase
     .from('platform_settings')
-    .select('require_work_completion_confirmation')
+    .select('require_work_completion_confirmation, auto_complete_hours')
     .limit(1)
     .single()
 
-  const requirePatient = settings?.require_work_completion_confirmation ?? true
+  const requirePatient   = settings?.require_work_completion_confirmation ?? true
+  const autoCompleteHours: number = (settings as any)?.auto_complete_hours ?? 24
   const newStatus = requirePatient ? 'work_done' : 'completed'
+
+  const now = new Date()
+  const autoConfirmAt = requirePatient && autoCompleteHours > 0
+    ? new Date(now.getTime() + autoCompleteHours * 60 * 60 * 1000).toISOString()
+    : null
 
   const { error } = await serviceSupabase
     .from('booking_requests')
-    .update({ status: newStatus })
+    .update({
+      status:          newStatus,
+      work_done_at:    now.toISOString(),
+      auto_confirm_at: autoConfirmAt,
+    })
     .eq('id', requestId)
     .eq('status', 'in_progress')
 

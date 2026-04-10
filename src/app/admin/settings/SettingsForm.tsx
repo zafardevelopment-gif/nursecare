@@ -11,6 +11,9 @@ interface Settings {
   free_cancellation_hours?: number
   auto_complete_hours?: number
   min_booking_hours?: number
+  min_advance_hours?: number
+  max_advance_days?: number
+  payment_deadline_hours?: number
   allow_emergency_bookings?: boolean
   require_work_start_confirmation?: boolean
   require_work_completion_confirmation?: boolean
@@ -261,6 +264,48 @@ export default function SettingsForm({ settings }: { settings: Settings | null }
             </SettingRow>
 
             <SettingRow
+              label="Minimum Advance Booking Time"
+              description={
+                <>
+                  How many hours <strong>before</strong> the booking start time a booking must be placed.
+                  <br />
+                  <span style={{ color: 'var(--teal)' }}>e.g. 2 hrs → booking starting at 10 AM must be created by 8 AM at the latest</span>
+                </>
+              }
+            >
+              <NumberInput name="min_advance_hours" defaultValue={settings?.min_advance_hours ?? 2} unit="hours before" />
+            </SettingRow>
+
+            <SettingRow
+              label="Maximum Advance Booking Limit"
+              description={
+                <>
+                  How many days <strong>in advance</strong> a booking can be placed.
+                  <br />
+                  <span style={{ color: 'var(--teal)' }}>e.g. 30 days → patients cannot book more than 30 days into the future</span>
+                </>
+              }
+            >
+              <NumberInput name="max_advance_days" defaultValue={settings?.max_advance_days ?? 30} unit="days ahead" />
+            </SettingRow>
+
+            <SettingRow
+              label="Payment Deadline"
+              description={
+                <>
+                  Hours after booking is placed within which the patient must complete payment.
+                  If unpaid, the booking is <strong>automatically cancelled</strong> and both patient &amp; nurse are notified.
+                  <br />
+                  <span style={{ color: '#E04A4A', fontWeight: 600 }}>Set to 0 to disable auto-cancellation.</span>
+                  <br />
+                  <span style={{ color: 'var(--teal)' }}>e.g. 24 hrs → patient has 24 hours to pay after booking is confirmed</span>
+                </>
+              }
+            >
+              <NumberInput name="payment_deadline_hours" defaultValue={settings?.payment_deadline_hours ?? 24} unit="hours (0 = off)" />
+            </SettingRow>
+
+            <SettingRow
               label="Allow Emergency Bookings"
               description="Patients can request same-day urgent bookings outside regular scheduling"
             >
@@ -302,16 +347,33 @@ export default function SettingsForm({ settings }: { settings: Settings | null }
       {/* ── HOSPITAL TAB ── */}
       {activeTab === 'hospital' && (
         <div className="dash-card">
-          <SectionHeader icon="🏨" title="Hospital Settings" sub="Configuration for hospital and institutional clients" />
-          <div style={{ padding: '0 1.2rem 1.2rem' }}>
-            <div style={{ textAlign: 'center', padding: '3rem 1rem', color: 'var(--muted)' }}>
-              <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem' }}>🏨</div>
-              <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--ink)', marginBottom: 6 }}>Hospital Module</div>
-              <div style={{ fontSize: '0.82rem', lineHeight: 1.6 }}>
-                Hospital-specific settings such as ward management, bulk booking rules,<br />
-                and institutional billing will appear here once the hospital module is enabled.
-              </div>
-            </div>
+          <SectionHeader icon="📅" title="Bulk Booking Rules" sub="Control how hospitals can schedule nurse bookings" />
+          <div style={{ padding: '0 1.2rem' }}>
+            <SettingRow
+              label="Minimum Advance Booking Time"
+              description={
+                <>
+                  How many hours <strong>before</strong> the booking start date a hospital booking must be placed.
+                  <br />
+                  <span style={{ color: 'var(--teal)' }}>e.g. 2 hrs → booking starting today must be created at least 2 hours before start time</span>
+                </>
+              }
+            >
+              <NumberInput name="min_advance_hours" defaultValue={settings?.min_advance_hours ?? 2} unit="hours before" />
+            </SettingRow>
+            <SettingRow
+              label="Maximum Advance Booking Limit"
+              description={
+                <>
+                  How many days <strong>in advance</strong> a hospital bulk booking can be placed.
+                  <br />
+                  <span style={{ color: 'var(--teal)' }}>e.g. 30 days → hospitals cannot schedule more than 30 days into the future</span>
+                </>
+              }
+              last
+            >
+              <NumberInput name="max_advance_days" defaultValue={settings?.max_advance_days ?? 30} unit="days ahead" />
+            </SettingRow>
           </div>
         </div>
       )}

@@ -10,7 +10,7 @@ const adminMenu = [
   { icon: '🏠', label: 'Dashboard',        href: '/admin/dashboard' },
   { icon: '👩‍⚕️', label: 'Nurse Approvals',  href: '/admin/nurses' },
   { icon: '🔄', label: 'Profile Updates',  href: '/admin/nurse-updates' },
-  { icon: '📋', label: 'Bookings',          href: '/admin/bookings' },
+  { icon: '📋', label: 'Bookings',          href: '/admin/bookings?type=patient' },
   { icon: '🏥', label: 'Hospitals',          href: '/admin/hospitals' },
   { icon: '👩‍⚕️', label: 'Hospital Bookings', href: '/admin/hospital-bookings' },
   { icon: '📄', label: 'Agreements',        href: '/admin/agreements' },

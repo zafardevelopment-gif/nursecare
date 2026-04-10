@@ -55,11 +55,12 @@ export default async function ProviderDashboardPage({ searchParams }: Props) {
 
   const { data: settings } = await serviceSupabase
     .from('platform_settings')
-    .select('work_start_enable_hours_before')
+    .select('work_start_enable_hours_before, auto_complete_hours')
     .limit(1)
     .single()
 
   const hoursBeforeEnabled = (settings as any)?.work_start_enable_hours_before ?? 1
+  const autoCompleteHours: number = (settings as any)?.auto_complete_hours ?? 24
   const nurseStatus = nurse?.status ?? null
 
   // Build my bookings query
@@ -86,6 +87,7 @@ export default async function ProviderDashboardPage({ searchParams }: Props) {
     { data: pendingAgreements },
     { data: pendingRequests },
     { data: myBookings, count: myBookingsTotal },
+    { data: allHospBookingsRaw },
   ] = await Promise.all([
     serviceSupabase.from('booking_requests').select('*', { count: 'exact', head: true })
       .eq('nurse_id', user.id).in('status', ['accepted', 'confirmed']),
@@ -103,12 +105,23 @@ export default async function ProviderDashboardPage({ searchParams }: Props) {
     nurseStatus === 'approved'
       ? serviceSupabase.from('booking_requests')
           .select('id, patient_name, service_type, start_date, shift, city, status, created_at')
+          .eq('nurse_id', user.id)
           .eq('status', 'pending')
           .order('created_at', { ascending: false }).limit(5)
       : Promise.resolve({ data: [] }),
     myBookingsQuery.order('created_at', { ascending: false })
       .range(offset, offset + PAGE_SIZE - 1),
+    // Hospital bookings where this nurse is in nurse_selections
+    serviceSupabase.from('hospital_booking_requests')
+      .select('id, status, start_date, end_date, hospital_id, nurse_selections')
+      .order('created_at', { ascending: false }),
   ])
+
+  // Filter hospital bookings to only those containing this nurse
+  const myHospBookings = (allHospBookingsRaw ?? []).filter((b: any) =>
+    (b.nurse_selections ?? []).some((ns: any) => ns.nurseId === user.id)
+  )
+  const hospBookingCount = myHospBookings.length
 
   const pendingCount        = (pendingRequests ?? []).length
   const hasPendingAgreements = (pendingAgreements ?? []).length > 0
@@ -200,6 +213,13 @@ export default async function ProviderDashboardPage({ searchParams }: Props) {
             <span style={{ position: 'absolute', top: 10, right: 10, width: 10, height: 10, borderRadius: '50%', background: '#E8831A' }} />
           )}
         </div>
+        <Link href="/provider/bookings?type=hospital" style={{ textDecoration: 'none' }}>
+          <div className="dash-kpi" style={{ cursor: 'pointer', border: hospBookingCount > 0 ? '1px solid rgba(14,123,140,0.25)' : '1px solid var(--border)' }}>
+            <div className="dash-kpi-icon" style={{ background: 'rgba(14,123,140,0.08)' }}>🏥</div>
+            <div className="dash-kpi-num" style={{ color: hospBookingCount > 0 ? 'var(--teal)' : 'var(--ink)' }}>{hospBookingCount}</div>
+            <div className="dash-kpi-label">Hospital</div>
+          </div>
+        </Link>
       </div>
 
       {/* Agreements */}
@@ -378,7 +398,7 @@ export default async function ProviderDashboardPage({ searchParams }: Props) {
                       <DashTd>
                         {canMarkStarted && <WorkStartedBtn requestId={req.id} startDate={req.start_date} startTime={SHIFT_START_TIMES[req.shift] ?? null} isPaid={req.payment_status === 'paid'} hoursBeforeEnabled={hoursBeforeEnabled} />}
                         {canMarkDone    && <WorkDoneBtn requestId={req.id} />}
-                        {isWorkDone && <span style={{ fontSize: '0.7rem', color: '#6B3FA0', fontStyle: 'italic' }}>⏳ Awaiting patient…</span>}
+                        {isWorkDone && <WorkDoneStatus autoConfirmAt={(req as any).auto_confirm_at} autoCompleteHours={autoCompleteHours} />}
                         {!canMarkStarted && !canMarkDone && !isWorkDone && <span style={{ color: 'var(--muted)', fontSize: '0.7rem' }}>—</span>}
                       </DashTd>
                       <DashTd>
@@ -478,6 +498,36 @@ export default async function ProviderDashboardPage({ searchParams }: Props) {
           </>
         )}
       </div>
+    </div>
+  )
+}
+
+function WorkDoneStatus({ autoConfirmAt, autoCompleteHours }: { autoConfirmAt?: string | null; autoCompleteHours: number }) {
+  const now = new Date()
+  if (!autoConfirmAt) {
+    return <span style={{ fontSize: '0.7rem', color: '#6B3FA0', fontStyle: 'italic' }}>⏳ Awaiting patient confirmation…</span>
+  }
+  const deadline = new Date(autoConfirmAt)
+  const isOverdue = now >= deadline
+  if (isOverdue) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <span style={{ fontSize: '0.7rem', color: '#0E7B8C', fontWeight: 700 }}>🤖 Auto-confirming soon…</span>
+        <span style={{ fontSize: '0.62rem', color: 'var(--muted)' }}>System will confirm shortly</span>
+      </div>
+    )
+  }
+  const diffMs  = deadline.getTime() - now.getTime()
+  const diffHrs = Math.floor(diffMs / (1000 * 60 * 60))
+  const diffMin = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60))
+  const deadlineFmt = deadline.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) + ' ' + deadline.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+      <span style={{ fontSize: '0.7rem', color: '#6B3FA0', fontWeight: 600 }}>⏳ Awaiting patient…</span>
+      <span style={{ fontSize: '0.62rem', color: 'var(--muted)' }}>
+        Auto-confirms in {diffHrs > 0 ? `${diffHrs}h ` : ''}{diffMin}m
+      </span>
+      <span style={{ fontSize: '0.6rem', color: 'var(--muted)' }}>by {deadlineFmt}</span>
     </div>
   )
 }
