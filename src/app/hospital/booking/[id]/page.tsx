@@ -66,6 +66,8 @@ export default async function HospitalBookingDetailPage({
   const showWithCommission = platformSettings?.show_price_with_commission ?? true
   const showContracts      = platformSettings?.show_hospital_contracts ?? true
   const sharePhone         = platformSettings?.share_provider_phone_with_patient ?? false
+  // Hospital sees nurse phone when "Show Contract Details to Hospital" is ON
+  const hospitalSeePhone   = showContracts
 
   const nurseSelections: NurseSelection[] = booking.nurse_selections ?? []
   const deptBreakdown: any[]              = booking.dept_breakdown ?? []
@@ -475,7 +477,7 @@ export default async function HospitalBookingDetailPage({
                     <tr key={i} style={{ borderBottom: '1px solid var(--border)', background: i % 2 === 0 ? 'transparent' : 'rgba(14,123,140,0.01)' }}>
                       <td style={{ padding: '10px 14px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <NurseAvatarBtn nurse={{ nurseId: ns.nurseId, nurseName: ns.nurseName, nurseSpecialization: ns.nurseSpecialization, shift: ns.shift, deptName: ns.deptName, bio: rate.bio, city: rate.city, nationality: rate.nationality, gender: rate.gender, experienceYears: rate.experience_years, phone: sharePhone ? rate.phone : null, licenseNo: rate.license_no, dailyRate: rate.daily_rate, finalDailyPrice: rate.final_daily_price, commissionPercent: rate.commission_percent, photoUrl: rate.photo_url }} showPrice showCommission={showWithCommission} />
+                          <NurseAvatarBtn nurse={{ nurseId: ns.nurseId, nurseName: ns.nurseName, nurseSpecialization: ns.nurseSpecialization, shift: ns.shift, deptName: ns.deptName, bio: rate.bio, city: rate.city, nationality: rate.nationality, gender: rate.gender, experienceYears: rate.experience_years, phone: hospitalSeePhone ? rate.phone : null, licenseNo: rate.license_no, dailyRate: rate.daily_rate, finalDailyPrice: rate.final_daily_price, commissionPercent: rate.commission_percent, photoUrl: rate.photo_url }} showPrice showCommission={showWithCommission} />
                           <span style={{ fontWeight: 700, color: 'var(--ink)' }}>{ns.nurseName}</span>
                         </div>
                       </td>
@@ -562,7 +564,7 @@ export default async function HospitalBookingDetailPage({
                                 ...(rate ? {
                                   bio: rate.bio, city: rate.city, nationality: rate.nationality,
                                   gender: rate.gender, experienceYears: rate.experience_years,
-                                  phone: sharePhone ? rate.phone : null, licenseNo: rate.license_no,
+                                  phone: hospitalSeePhone ? rate.phone : null, licenseNo: rate.license_no,
                                   dailyRate: rate.daily_rate, finalDailyPrice: rate.final_daily_price,
                                   commissionPercent: rate.commission_percent, photoUrl: rate.photo_url,
                                 } : {}),
