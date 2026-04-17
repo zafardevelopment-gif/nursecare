@@ -76,13 +76,14 @@ export default async function ProviderBookingsPage({ searchParams }: Props) {
 
   const { data: settings } = await serviceSupabase
     .from('platform_settings')
-    .select('require_work_start_confirmation, work_start_enable_hours_before, auto_complete_hours')
+    .select('require_work_start_confirmation, work_start_enable_hours_before, auto_complete_hours, require_nurse_approval')
     .limit(1)
     .single()
 
-  const requireWorkStart   = settings?.require_work_start_confirmation ?? true
-  const hoursBeforeEnabled = (settings as any)?.work_start_enable_hours_before ?? 1
+  const requireWorkStart      = settings?.require_work_start_confirmation ?? true
+  const hoursBeforeEnabled    = (settings as any)?.work_start_enable_hours_before ?? 1
   const autoCompleteHours: number = (settings as any)?.auto_complete_hours ?? 24
+  const requireNurseApproval  = (settings as any)?.require_nurse_approval ?? true
 
   const { data: nurse } = await supabase
     .from('nurses')
@@ -292,12 +293,16 @@ export default async function ProviderBookingsPage({ searchParams }: Props) {
                         </Td>
                         <Td>
                           <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
-                            <form action={acceptBooking.bind(null, req.id)}>
-                              <button type="submit" style={{ background: '#27A869', color: '#fff', border: 'none', padding: '6px 12px', borderRadius: 7, fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>✓ Accept</button>
-                            </form>
-                            <form action={declineBooking.bind(null, req.id)}>
-                              <button type="submit" style={{ background: 'rgba(224,74,74,0.1)', color: '#E04A4A', border: '1px solid rgba(224,74,74,0.25)', padding: '6px 12px', borderRadius: 7, fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>✕ Decline</button>
-                            </form>
+                            {requireNurseApproval && (
+                              <>
+                                <form action={acceptBooking.bind(null, req.id)}>
+                                  <button type="submit" style={{ background: '#27A869', color: '#fff', border: 'none', padding: '6px 12px', borderRadius: 7, fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>✓ Accept</button>
+                                </form>
+                                <form action={declineBooking.bind(null, req.id)}>
+                                  <button type="submit" style={{ background: 'rgba(224,74,74,0.1)', color: '#E04A4A', border: '1px solid rgba(224,74,74,0.25)', padding: '6px 12px', borderRadius: 7, fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>✕ Decline</button>
+                                </form>
+                              </>
+                            )}
                             <Link href={`/provider/bookings/${req.id}`} style={{ padding: '6px 10px', borderRadius: 7, border: '1px solid var(--border)', background: 'var(--cream)', color: 'var(--teal)', fontSize: '0.72rem', fontWeight: 700, textDecoration: 'none' }}>
                               View →
                             </Link>

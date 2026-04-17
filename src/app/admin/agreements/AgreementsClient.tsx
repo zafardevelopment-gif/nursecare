@@ -11,6 +11,7 @@ const STATUS_LABELS: Record<string, { label: string; color: string; bg: string }
   nurse_approved:    { label: 'Nurse Approved',    color: '#0E7B8C', bg: '#E8F4FD' },
   hospital_approved: { label: 'Hospital Approved', color: '#0E7B8C', bg: '#E8F4FD' },
   fully_approved:    { label: 'Fully Executed',    color: '#1A7A4A', bg: '#E8F9F0' },
+  rejected:          { label: 'Rejected by Nurse', color: '#C0392B', bg: '#FEF2F2' },
 }
 
 type Agreement = {

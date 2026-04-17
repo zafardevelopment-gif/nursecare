@@ -11,6 +11,10 @@ const SENSITIVE_FIELDS = [
   'specialization',
   'experience_years',
   'license_no',
+  'license_expiry',
+  'id_type',
+  'id_number',
+  'id_expiry',
 ] as const
 
 export async function updateProfileAction(formData: FormData) {
@@ -20,7 +24,7 @@ export async function updateProfileAction(formData: FormData) {
   // Fetch current nurse record
   const { data: nurse, error: fetchError } = await supabase
     .from('nurses')
-    .select('id, status, hourly_rate, daily_rate, specialization, experience_years, license_no, phone, city, bio, nationality, gender, languages')
+    .select('id, status, hourly_rate, daily_rate, specialization, experience_years, license_no, license_expiry, id_type, id_number, id_expiry, phone, city, bio, nationality, gender, languages')
     .eq('user_id', user.id)
     .single()
 
@@ -39,6 +43,10 @@ export async function updateProfileAction(formData: FormData) {
     specialization:   (formData.get('specialization') as string) || null,
     experience_years: parseInt(formData.get('experience_years') as string) || 0,
     license_no:       (formData.get('license_no') as string) || null,
+    license_expiry:   (formData.get('license_expiry') as string) || null,
+    id_type:          (formData.get('id_type') as string) || null,
+    id_number:        (formData.get('id_number') as string) || null,
+    id_expiry:        (formData.get('id_expiry') as string) || null,
     hourly_rate:      parseFloat(formData.get('hourly_rate') as string) || null,
     daily_rate:       parseFloat(formData.get('daily_rate') as string) || null,
   }

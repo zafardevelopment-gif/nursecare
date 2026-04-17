@@ -58,6 +58,22 @@ export async function declineBooking(requestId: string) {
   revalidatePath('/provider/dashboard')
 }
 
+export async function markOnTheWay(requestId: string) {
+  const serviceSupabase = createSupabaseServiceRoleClient()
+
+  const { error } = await serviceSupabase
+    .from('booking_requests')
+    .update({ status: 'on_the_way' })
+    .eq('id', requestId)
+    .in('status', ['accepted', 'confirmed'])
+
+  if (error) console.error('[markOnTheWay]', error.message)
+
+  revalidatePath('/provider/bookings')
+  revalidatePath('/provider/dashboard')
+  revalidatePath('/patient/bookings')
+}
+
 export async function markWorkStarted(requestId: string) {
   const serviceSupabase = createSupabaseServiceRoleClient()
 

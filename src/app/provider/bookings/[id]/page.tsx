@@ -2,7 +2,7 @@ import { requireRole } from '@/lib/auth'
 import { createSupabaseServiceRoleClient } from '@/lib/supabase-server'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { WorkStartedBtn, WorkDoneBtn } from '../WorkActions'
+import { OnTheWayBtn, WorkStartedBtn, WorkDoneBtn } from '../WorkActions'
 import { ProviderReportIssueBtn, DisputeBanner } from '@/app/components/ReportIssueModal'
 
 export const dynamic = 'force-dynamic'
@@ -12,6 +12,7 @@ const STATUS_MAP: Record<string, { bg: string; color: string; label: string }> =
   accepted:    { bg: 'rgba(39,168,105,0.1)',  color: '#27A869', label: '✓ Accepted' },
   confirmed:   { bg: 'rgba(39,168,105,0.1)',  color: '#27A869', label: '✓ Confirmed' },
   declined:    { bg: 'rgba(224,74,74,0.1)',   color: '#E04A4A', label: '✕ Declined' },
+  on_the_way:  { bg: 'rgba(245,132,42,0.1)',  color: '#F5842A', label: '🚗 On The Way' },
   in_progress: { bg: 'rgba(14,123,140,0.12)', color: '#0E7B8C', label: '🔄 In Progress' },
   work_done:   { bg: 'rgba(107,63,160,0.1)',  color: '#6B3FA0', label: '✅ Work Done' },
   completed:   { bg: 'rgba(14,123,140,0.1)',  color: '#0E7B8C', label: '✓ Completed' },
@@ -31,12 +32,14 @@ export default async function ProviderBookingDetailPage({ params }: Props) {
 
   const { data: settings } = await supabase
     .from('platform_settings')
-    .select('require_work_start_confirmation, require_work_completion_confirmation, work_start_enable_hours_before')
+    .select('require_work_start_confirmation, require_work_completion_confirmation, work_start_enable_hours_before, on_the_way_enabled, require_nurse_approval')
     .limit(1)
     .single()
 
-  const requireWorkStart   = settings?.require_work_start_confirmation ?? true
-  const hoursBeforeEnabled = (settings as any)?.work_start_enable_hours_before ?? 1
+  const requireWorkStart      = settings?.require_work_start_confirmation ?? true
+  const hoursBeforeEnabled    = (settings as any)?.work_start_enable_hours_before ?? 1
+  const onTheWayEnabled       = (settings as any)?.on_the_way_enabled ?? true
+  const requireNurseApproval  = (settings as any)?.require_nurse_approval ?? true
 
   const { data: b } = await supabase
     .from('booking_requests')
@@ -48,12 +51,15 @@ export default async function ProviderBookingDetailPage({ params }: Props) {
   if (!b) notFound()
   if (b.nurse_id && b.nurse_id !== user.id) notFound()
 
-  const s = statusStyle(b.status)
+  // When nurse approval is off, pending = auto-accepted — show as accepted to nurse
+  const effectiveStatus = (!requireNurseApproval && b.status === 'pending') ? 'accepted' : b.status
+  const s = statusStyle(effectiveStatus)
   const typeLabel = b.booking_type === 'weekly' ? '🔁 Weekly' : b.booking_type === 'monthly' ? '📆 Monthly' : '📅 One-Time'
 
-  const canMarkStarted = requireWorkStart && (b.status === 'accepted' || b.status === 'confirmed')
-  const canMarkDone    = b.status === 'in_progress'
-  const isWorkDone     = b.status === 'work_done'
+  const canMarkOnTheWay = onTheWayEnabled && (effectiveStatus === 'accepted' || effectiveStatus === 'confirmed')
+  const canMarkStarted  = requireWorkStart && (effectiveStatus === 'accepted' || effectiveStatus === 'confirmed' || b.status === 'on_the_way')
+  const canMarkDone     = b.status === 'in_progress'
+  const isWorkDone      = b.status === 'work_done'
 
   return (
     <div className="dash-shell">
@@ -88,14 +94,17 @@ export default async function ProviderBookingDetailPage({ params }: Props) {
         </div>
 
         {/* Work action banner */}
-        {(canMarkStarted || canMarkDone || isWorkDone) && (
-          <div style={{ padding: '1rem 1.5rem', borderBottom: '1px solid var(--border)', background: canMarkStarted ? 'rgba(39,168,105,0.04)' : canMarkDone ? 'rgba(14,123,140,0.04)' : 'rgba(107,63,160,0.04)', display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+        {(canMarkOnTheWay || canMarkStarted || canMarkDone || isWorkDone || b.status === 'on_the_way') && (
+          <div style={{ padding: '1rem 1.5rem', borderBottom: '1px solid var(--border)', background: canMarkOnTheWay || b.status === 'on_the_way' ? 'rgba(245,132,42,0.04)' : canMarkStarted ? 'rgba(39,168,105,0.04)' : canMarkDone ? 'rgba(14,123,140,0.04)' : 'rgba(107,63,160,0.04)', display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
             <div style={{ flex: 1 }}>
-              {canMarkStarted && <div style={{ fontWeight: 700, fontSize: '0.88rem', color: '#27A869' }}>✅ Booking Accepted — Ready to start work?</div>}
-              {canMarkDone    && <div style={{ fontWeight: 700, fontSize: '0.88rem', color: '#0E7B8C' }}>🔄 Work in progress — Mark done when complete</div>}
-              {isWorkDone     && <div style={{ fontWeight: 700, fontSize: '0.88rem', color: '#6B3FA0' }}>✅ Work marked done — Waiting for patient confirmation</div>}
+              {canMarkOnTheWay                && <div style={{ fontWeight: 700, fontSize: '0.88rem', color: '#27A869' }}>✅ Booking Accepted — Head to patient location?</div>}
+              {b.status === 'on_the_way'      && <div style={{ fontWeight: 700, fontSize: '0.88rem', color: '#F5842A' }}>🚗 On the way — Mark work started when you arrive</div>}
+              {canMarkStarted && b.status !== 'on_the_way' && <div style={{ fontWeight: 700, fontSize: '0.88rem', color: '#27A869' }}>✅ Booking Accepted — Ready to start work?</div>}
+              {canMarkDone                    && <div style={{ fontWeight: 700, fontSize: '0.88rem', color: '#0E7B8C' }}>🔄 Work in progress — Mark done when complete</div>}
+              {isWorkDone                     && <div style={{ fontWeight: 700, fontSize: '0.88rem', color: '#6B3FA0' }}>✅ Work marked done — Waiting for patient confirmation</div>}
             </div>
-            {canMarkStarted && <WorkStartedBtn requestId={b.id} startDate={b.start_date} startTime={({ morning: '08:00', evening: '16:00', night: '00:00' } as Record<string,string>)[b.shift] ?? null} isPaid={b.payment_status === 'paid'} hoursBeforeEnabled={hoursBeforeEnabled} />}
+            {canMarkOnTheWay && <OnTheWayBtn requestId={b.id} />}
+            {(canMarkStarted || b.status === 'on_the_way') && <WorkStartedBtn requestId={b.id} startDate={b.start_date} startTime={({ morning: '08:00', evening: '16:00', night: '00:00' } as Record<string,string>)[b.shift] ?? null} isPaid={b.payment_status === 'paid'} hoursBeforeEnabled={hoursBeforeEnabled} />}
             {canMarkDone    && <WorkDoneBtn requestId={b.id} />}
           </div>
         )}

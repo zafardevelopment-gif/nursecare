@@ -1,8 +1,9 @@
 import { requireRole } from '@/lib/auth'
-import { createSupabaseServerClient } from '@/lib/supabase-server'
+import { createSupabaseServerClient, createSupabaseServiceRoleClient } from '@/lib/supabase-server'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { PatientReportNoShowBtn, DisputeBanner } from '@/app/components/ReportIssueModal'
+import { CancelBookingBtn } from '../CancelBookingBtn'
 
 export const dynamic = 'force-dynamic'
 
@@ -28,13 +29,17 @@ export default async function BookingDetailPage({ params }: Props) {
   const supabase = await createSupabaseServerClient()
   const { id } = await params
 
+  const serviceSupabase = createSupabaseServiceRoleClient()
+
   const [{ data: b }, { data: platformSettings }] = await Promise.all([
     supabase.from('booking_requests').select('*').eq('id', id).eq('patient_id', user.id).single(),
-    supabase.from('platform_settings').select('share_provider_phone_with_patient').limit(1).single(),
+    serviceSupabase.from('platform_settings').select('share_provider_phone_with_patient, require_nurse_approval, free_cancellation_hours').limit(1).single(),
   ])
 
   if (!b) notFound()
-  const sharePhone = platformSettings?.share_provider_phone_with_patient ?? false
+  const sharePhone           = platformSettings?.share_provider_phone_with_patient ?? false
+  const requireNurseApproval = (platformSettings as any)?.require_nurse_approval ?? true
+  const freeCancelHours: number = (platformSettings as any)?.free_cancellation_hours ?? 24
 
   // Fetch nurse phone if sharing is enabled and a nurse is assigned
   let nursePhone: string | null = null
@@ -43,7 +48,20 @@ export default async function BookingDetailPage({ params }: Props) {
     nursePhone = nurseRow?.phone ?? null
   }
 
-  const s = statusStyle[b.status] ?? statusStyle.pending
+  // When nurse approval is off, pending = auto-accepted — show as confirmed
+  const effectiveStatus = (!requireNurseApproval && b.status === 'pending') ? 'accepted' : b.status
+  const s = statusStyle[effectiveStatus] ?? statusStyle.pending
+
+  // Cancel button: only for pending/accepted/confirmed, within free cancel window
+  const cancellable = ['pending', 'accepted', 'confirmed'].includes(b.status)
+  let cancelAllowed = cancellable
+  if (cancellable && freeCancelHours > 0 && b.start_date) {
+    const SHIFT_H: Record<string, number> = { morning: 8, evening: 16, night: 0 }
+    const sh = SHIFT_H[(b.shift ?? '').toLowerCase()] ?? 0
+    const shiftStart = new Date(`${b.start_date}T${String(sh).padStart(2,'0')}:00:00`)
+    const deadline = new Date(shiftStart.getTime() - freeCancelHours * 60 * 60 * 1000)
+    cancelAllowed = new Date() <= deadline
+  }
   const typeLabel = b.booking_type === 'weekly' ? '🔁 Weekly' : b.booking_type === 'monthly' ? '📆 Monthly' : '📅 One-Time'
 
   return (
@@ -70,7 +88,7 @@ export default async function BookingDetailPage({ params }: Props) {
                 <span style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>{typeLabel}</span>
                 {b.payment_status === 'paid'
                   ? <span style={{ background:'rgba(39,168,105,0.1)', color:'#27A869', fontSize:'0.72rem', fontWeight:700, padding:'3px 10px', borderRadius:50 }}>💳 Paid</span>
-                  : (b.status !== 'pending' && b.status !== 'declined' && b.status !== 'cancelled')
+                  : (effectiveStatus !== 'declined' && effectiveStatus !== 'cancelled')
                     ? <span style={{ background:'rgba(245,132,42,0.1)', color:'#F5842A', fontSize:'0.72rem', fontWeight:700, padding:'3px 10px', borderRadius:50 }}>💳 Payment Pending</span>
                     : null
                 }
@@ -149,7 +167,10 @@ export default async function BookingDetailPage({ params }: Props) {
         )}
 
         {/* Footer */}
-        <div style={{ padding: '1rem 1.5rem', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end' }}>
+        <div style={{ padding: '1rem 1.5rem', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem' }}>
+          <div>
+            {cancelAllowed && <CancelBookingBtn requestId={b.id} />}
+          </div>
           <Link href="/patient/bookings" style={{
             padding: '9px 20px', borderRadius: 8, border: '1px solid var(--border)',
             background: 'var(--cream)', color: 'var(--muted)', fontSize: '0.85rem',

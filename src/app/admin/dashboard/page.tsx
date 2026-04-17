@@ -20,6 +20,7 @@ export default async function AdminDashboardPage() {
     { count: completedBookings },
     { count: totalUsers },
     { count: pendingUpdateRequests },
+    { count: rejectedAgreements },
   ] = await Promise.all([
     supabase.from('nurses').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
     supabase.from('nurses').select('*', { count: 'exact', head: true }).eq('status', 'update_pending'),
@@ -33,9 +34,10 @@ export default async function AdminDashboardPage() {
     serviceSupabase.from('booking_requests').select('*', { count: 'exact', head: true }).eq('status', 'completed'),
     supabase.from('users').select('*', { count: 'exact', head: true }),
     supabase.from('nurse_update_requests').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
+    supabase.from('agreements').select('*', { count: 'exact', head: true }).eq('status', 'rejected'),
   ])
 
-  const totalPendingActions = (pendingNurses ?? 0) + (updatePendingNurses ?? 0) + (pendingUpdateRequests ?? 0)
+  const totalPendingActions = (pendingNurses ?? 0) + (updatePendingNurses ?? 0) + (pendingUpdateRequests ?? 0) + (rejectedAgreements ?? 0)
 
   return (
     <div className="dash-shell">
@@ -126,6 +128,13 @@ export default async function AdminDashboardPage() {
             <div className="dash-kpi-label">Update Reviews</div>
           </div>
         </Link>
+        <Link href="/admin/agreements?status=rejected" style={{ textDecoration: 'none' }}>
+          <div className="dash-kpi" style={{ border: (rejectedAgreements ?? 0) > 0 ? '1px solid rgba(192,57,43,0.3)' : '1px solid var(--border)', cursor: 'pointer' }}>
+            <div className="dash-kpi-icon" style={{ background: 'rgba(192,57,43,0.08)' }}>✕</div>
+            <div className="dash-kpi-num" style={{ color: (rejectedAgreements ?? 0) > 0 ? '#C0392B' : 'var(--ink)' }}>{rejectedAgreements ?? 0}</div>
+            <div className="dash-kpi-label">Rejected Agreements</div>
+          </div>
+        </Link>
         <div className="dash-kpi">
           <div className="dash-kpi-icon" style={{ background: '#FEE8E8' }}>⚖️</div>
           <div className="dash-kpi-num">0</div>
@@ -147,6 +156,9 @@ export default async function AdminDashboardPage() {
           </QuickLink>
           <QuickLink href="/admin/bookings?type=patient" color={pendingBookings ? '#0E7B8C' : undefined} badge={pendingBookings ?? 0} badgeColor="#0E7B8C">
             📋 All Bookings
+          </QuickLink>
+          <QuickLink href="/admin/agreements?status=rejected" color={(rejectedAgreements ?? 0) > 0 ? '#C0392B' : undefined} badge={rejectedAgreements ?? 0} badgeColor="#C0392B">
+            📄 Agreements
           </QuickLink>
           <QuickLink href="/admin/users">
             👥 Users

@@ -93,3 +93,41 @@ export async function approveAgreementAsNurse(formData: FormData) {
   revalidatePath('/provider/agreements')
   return { success: true }
 }
+
+export async function rejectAgreementAsNurse(formData: FormData) {
+  const user = await requireRole('provider')
+  const supabase = await createSupabaseServerClient()
+
+  const agreement_id = formData.get('agreement_id') as string
+  const reason = (formData.get('reason') as string)?.trim() || null
+  if (!agreement_id) return { error: 'Missing agreement ID' }
+
+  const { data: nurse } = await supabase
+    .from('nurses')
+    .select('id')
+    .eq('user_id', user.id)
+    .single()
+  if (!nurse) return { error: 'Nurse profile not found' }
+
+  const { data: agreement } = await supabase
+    .from('agreements')
+    .select('id, nurse_approved_at, status')
+    .eq('id', agreement_id)
+    .eq('nurse_id', nurse.id)
+    .single()
+  if (!agreement) return { error: 'Agreement not found' }
+  if (agreement.nurse_approved_at) return { error: 'Already approved — cannot reject' }
+  if (agreement.status === 'rejected') return { error: 'Already rejected' }
+
+  const serviceClient = createSupabaseServiceRoleClient()
+  const { error } = await serviceClient
+    .from('agreements')
+    .update({ status: 'rejected', rejection_reason: reason })
+    .eq('id', agreement_id)
+
+  if (error) return { error: error.message }
+
+  revalidatePath(`/provider/agreements/${agreement_id}`)
+  revalidatePath('/provider/agreements')
+  return { success: true }
+}

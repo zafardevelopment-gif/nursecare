@@ -12,6 +12,7 @@ const STATUS_LABELS: Record<string, { label: string; color: string; bg: string }
   nurse_approved:    { label: 'Nurse Approved',    color: '#0E7B8C', bg: '#E8F4FD' },
   hospital_approved: { label: 'Hospital Approved', color: '#0E7B8C', bg: '#E8F4FD' },
   fully_approved:    { label: 'Fully Executed',    color: '#1A7A4A', bg: '#E8F9F0' },
+  rejected:          { label: 'Rejected',          color: '#C0392B', bg: '#FEF2F2' },
 }
 
 export default async function AgreementsPage({
@@ -51,7 +52,7 @@ export default async function AgreementsPage({
   const adminMap    = Object.fromEntries((adminRows    ?? []).map(a => [a.id, a]))
 
   const statusCounts: Record<string, number> = {
-    pending: 0, admin_approved: 0, nurse_approved: 0, hospital_approved: 0, fully_approved: 0,
+    pending: 0, admin_approved: 0, nurse_approved: 0, hospital_approved: 0, fully_approved: 0, rejected: 0,
   }
   for (const a of agreements ?? []) {
     if (a.status in statusCounts) statusCounts[a.status as keyof typeof statusCounts]++

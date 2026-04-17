@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { approveAgreementAsNurse } from '../actions'
+import { approveAgreementAsNurse, rejectAgreementAsNurse } from '../actions'
 
 type Agreement = {
   id: string
@@ -12,21 +12,36 @@ type Agreement = {
   generated_at: string
   nurse_approved_at: string | null
   hospital_approved_at: string | null
+  rejection_reason?: string | null
 }
 
 export default function NurseAgreementApproveClient({ agreement }: { agreement: Agreement }) {
   const [isPending, startTransition] = useTransition()
   const [err, setErr] = useState<string | null>(null)
   const [confirmed, setConfirmed] = useState(false)
+  const [showReject, setShowReject] = useState(false)
+  const [rejectReason, setRejectReason] = useState('')
   const router = useRouter()
 
   const alreadyApproved = !!agreement.nurse_approved_at
+  const alreadyRejected = agreement.status === 'rejected'
 
   function handleApprove() {
     const fd = new FormData()
     fd.set('agreement_id', agreement.id)
     startTransition(async () => {
       const res = await approveAgreementAsNurse(fd)
+      if (res?.error) { setErr(res.error); return }
+      router.refresh()
+    })
+  }
+
+  function handleReject() {
+    const fd = new FormData()
+    fd.set('agreement_id', agreement.id)
+    fd.set('reason', rejectReason)
+    startTransition(async () => {
+      const res = await rejectAgreementAsNurse(fd)
       if (res?.error) { setErr(res.error); return }
       router.refresh()
     })
@@ -76,6 +91,14 @@ export default function NurseAgreementApproveClient({ agreement }: { agreement: 
                   {new Date(agreement.nurse_approved_at!).toLocaleString()}
                 </div>
               </div>
+            ) : alreadyRejected ? (
+              <div style={{ background: '#FEE8E8', border: '1px solid rgba(224,74,74,0.25)', borderRadius: 9, padding: '14px 16px', textAlign: 'center' }}>
+                <div style={{ fontSize: '1.5rem', marginBottom: 6 }}>✕</div>
+                <div style={{ fontWeight: 700, color: '#C0392B', fontSize: '0.9rem' }}>You have rejected this agreement</div>
+                {agreement.rejection_reason && (
+                  <div style={{ fontSize: '0.75rem', color: '#C0392B', marginTop: 4 }}>Reason: {agreement.rejection_reason}</div>
+                )}
+              </div>
             ) : (
               <div>
                 <p style={{ fontSize: '0.83rem', color: 'var(--muted)', marginBottom: 14, lineHeight: 1.6 }}>
@@ -98,11 +121,50 @@ export default function NurseAgreementApproveClient({ agreement }: { agreement: 
                     color: confirmed ? '#fff' : 'var(--muted)', border: 'none',
                     padding: '11px 16px', borderRadius: 9, fontWeight: 700,
                     fontSize: '0.88rem', cursor: confirmed ? 'pointer' : 'not-allowed',
-                    transition: 'background 0.2s',
+                    transition: 'background 0.2s', marginBottom: 10,
                   }}
                 >
                   {isPending ? 'Approving…' : '✓ Digitally Approve'}
                 </button>
+
+                {!showReject ? (
+                  <button
+                    onClick={() => setShowReject(true)}
+                    style={{
+                      width: '100%', background: 'transparent', color: '#E04A4A',
+                      border: '1px solid rgba(224,74,74,0.35)', padding: '9px 16px',
+                      borderRadius: 9, fontWeight: 600, fontSize: '0.83rem', cursor: 'pointer',
+                    }}
+                  >
+                    ✕ Reject Agreement
+                  </button>
+                ) : (
+                  <div style={{ background: '#FEF2F2', border: '1px solid rgba(224,74,74,0.25)', borderRadius: 9, padding: '12px 14px' }}>
+                    <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#C0392B', marginBottom: 8 }}>Reason for rejection (optional)</div>
+                    <textarea
+                      value={rejectReason}
+                      onChange={e => setRejectReason(e.target.value)}
+                      rows={3}
+                      placeholder="e.g. Terms not acceptable, incorrect details..."
+                      style={{ width: '100%', padding: '8px 10px', borderRadius: 7, border: '1px solid rgba(224,74,74,0.3)', fontSize: '0.82rem', fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box' }}
+                    />
+                    <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                      <button
+                        onClick={handleReject}
+                        disabled={isPending}
+                        style={{ flex: 1, background: '#E04A4A', color: '#fff', border: 'none', padding: '9px', borderRadius: 8, fontWeight: 700, fontSize: '0.83rem', cursor: 'pointer' }}
+                      >
+                        {isPending ? 'Rejecting…' : 'Confirm Reject'}
+                      </button>
+                      <button
+                        onClick={() => setShowReject(false)}
+                        style={{ flex: 1, background: 'transparent', color: 'var(--muted)', border: '1px solid var(--border)', padding: '9px', borderRadius: 8, fontWeight: 600, fontSize: '0.83rem', cursor: 'pointer' }}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>

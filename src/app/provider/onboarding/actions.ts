@@ -33,6 +33,10 @@ export async function onboardingAction(formData: FormData): Promise<{ error?: st
   const experience     = parseInt(formData.get('experience') as string) || 0
   const specialization = formData.get('specialization') as string
   const license_no     = formData.get('license_no') as string
+  const license_expiry = (formData.get('license_expiry') as string) || null
+  const id_type        = (formData.get('id_type') as string) || null
+  const id_number      = (formData.get('id_number') as string) || null
+  const id_expiry      = (formData.get('id_expiry') as string) || null
   const bio            = formData.get('bio') as string
   const hourly_rate    = parseFloat(formData.get('hourly_rate') as string) || null
   const daily_rate     = parseFloat(formData.get('daily_rate') as string) || null
@@ -67,6 +71,10 @@ export async function onboardingAction(formData: FormData): Promise<{ error?: st
       experience_years: experience,
       specialization,
       license_no,
+      license_expiry,
+      id_type,
+      id_number,
+      id_expiry,
       bio,
       hourly_rate,
       daily_rate,

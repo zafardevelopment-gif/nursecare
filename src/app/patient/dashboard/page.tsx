@@ -1,5 +1,5 @@
 import { requireRole } from '@/lib/auth'
-import { createSupabaseServerClient } from '@/lib/supabase-server'
+import { createSupabaseServerClient, createSupabaseServiceRoleClient } from '@/lib/supabase-server'
 import Link from 'next/link'
 
 export const dynamic = 'force-dynamic'
@@ -7,17 +7,19 @@ export const dynamic = 'force-dynamic'
 export default async function PatientDashboardPage() {
   const user = await requireRole('patient')
   const supabase = await createSupabaseServerClient()
+  const serviceSupabase = createSupabaseServiceRoleClient()
 
-  // Query booking_requests (parent records)
-  const { data: requests } = await supabase
-    .from('booking_requests')
-    .select('*')
-    .eq('patient_id', user.id)
-    .order('created_at', { ascending: false })
+  const [{ data: requests }, { data: platformSettings }] = await Promise.all([
+    supabase.from('booking_requests').select('*').eq('patient_id', user.id).order('created_at', { ascending: false }),
+    serviceSupabase.from('platform_settings').select('require_nurse_approval').limit(1).single(),
+  ])
+
+  const requireNurseApproval = (platformSettings as any)?.require_nurse_approval ?? true
 
   const allItems = requests ?? []
-  const active  = allItems.filter((b: any) => b.status === 'accepted' || b.status === 'confirmed').length
-  const pending = allItems.filter((b: any) => b.status === 'pending').length
+  // When nurse approval is off, pending counts as confirmed
+  const active  = allItems.filter((b: any) => b.status === 'accepted' || b.status === 'confirmed' || (!requireNurseApproval && b.status === 'pending')).length
+  const pending = requireNurseApproval ? allItems.filter((b: any) => b.status === 'pending').length : 0
   const total   = allItems.length
   const unpaid  = allItems.filter((b: any) =>
     ['accepted','confirmed','in_progress','work_done','completed'].includes(b.status) && b.payment_status !== 'paid'
@@ -120,8 +122,9 @@ export default async function PatientDashboardPage() {
               </thead>
               <tbody>
                 {recentBookings.map((b: any, i: number) => {
-                  const s = statusStyle[b.status] ?? statusStyle.pending
-                  const showPayment = ['accepted','confirmed','in_progress','work_done','completed'].includes(b.status)
+                  const effectiveStatus = (!requireNurseApproval && b.status === 'pending') ? 'accepted' : b.status
+                  const s = statusStyle[effectiveStatus] ?? statusStyle.pending
+                  const showPayment = ['accepted','confirmed','in_progress','work_done','completed'].includes(effectiveStatus)
                   const isPaid = b.payment_status === 'paid'
                   return (
                     <tr key={b.id} style={{ borderBottom: i < recentBookings.length - 1 ? '1px solid var(--border)' : 'none', background: i % 2 === 0 ? '#fff' : 'rgba(14,123,140,0.015)' }}>

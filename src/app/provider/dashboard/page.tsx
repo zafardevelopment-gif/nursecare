@@ -63,12 +63,13 @@ export default async function ProviderDashboardPage({ searchParams }: Props) {
 
   const { data: settings } = await serviceSupabase
     .from('platform_settings')
-    .select('work_start_enable_hours_before, auto_complete_hours')
+    .select('work_start_enable_hours_before, auto_complete_hours, require_nurse_approval')
     .limit(1)
     .single()
 
-  const hoursBeforeEnabled = (settings as any)?.work_start_enable_hours_before ?? 1
+  const hoursBeforeEnabled    = (settings as any)?.work_start_enable_hours_before ?? 1
   const autoCompleteHours: number = (settings as any)?.auto_complete_hours ?? 24
+  const requireNurseApproval  = (settings as any)?.require_nurse_approval ?? true
   const nurseStatus = nurse?.status ?? null
 
   // Build my bookings query
@@ -332,11 +333,13 @@ export default async function ProviderDashboardPage({ searchParams }: Props) {
                           background: 'var(--cream)', color: 'var(--teal)', fontSize: '0.72rem',
                           fontWeight: 700, textDecoration: 'none', whiteSpace: 'nowrap',
                         }}>View →</Link>
-                        <Link href="/provider/bookings" style={{
-                          padding: '5px 10px', borderRadius: 7, border: 'none',
-                          background: '#27A869', color: '#fff', fontSize: '0.72rem',
-                          fontWeight: 700, textDecoration: 'none', whiteSpace: 'nowrap',
-                        }}>Respond →</Link>
+                        {requireNurseApproval && (
+                          <Link href="/provider/bookings" style={{
+                            padding: '5px 10px', borderRadius: 7, border: 'none',
+                            background: '#27A869', color: '#fff', fontSize: '0.72rem',
+                            fontWeight: 700, textDecoration: 'none', whiteSpace: 'nowrap',
+                          }}>Respond →</Link>
+                        )}
                       </div>
                     </DashTd>
                   </tr>

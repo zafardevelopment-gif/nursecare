@@ -6,9 +6,11 @@ export const dynamic = 'force-dynamic'
 
 const STATUS_LABELS: Record<string, { label: string; color: string; bg: string }> = {
   pending:           { label: 'Awaiting Approval', color: '#b85e00', bg: '#FFF8F0' },
+  admin_approved:    { label: 'Awaiting Your Sign', color: '#0E5C8C', bg: '#EEF6FD' },
   nurse_approved:    { label: 'You Approved',       color: '#0E7B8C', bg: '#E8F4FD' },
   hospital_approved: { label: 'Hospital Approved',  color: '#0E7B8C', bg: '#E8F4FD' },
   fully_approved:    { label: 'Fully Executed',      color: '#1A7A4A', bg: '#E8F9F0' },
+  rejected:          { label: 'You Rejected',        color: '#C0392B', bg: '#FEF2F2' },
 }
 
 export default async function NurseAgreementsPage() {
@@ -29,7 +31,7 @@ export default async function NurseAgreementsPage() {
         .order('generated_at', { ascending: false })
     : { data: [] }
 
-  const pendingCount = (agreements ?? []).filter(a => !a.nurse_approved_at).length
+  const pendingCount = (agreements ?? []).filter(a => !a.nurse_approved_at && a.status !== 'rejected').length
 
   return (
     <div className="dash-shell">
@@ -86,13 +88,13 @@ export default async function NurseAgreementsPage() {
                       </td>
                       <td style={{ padding: '12px 16px' }}>
                         <Link href={`/provider/agreements/${a.id}`} style={{
-                          background: a.nurse_approved_at ? 'var(--cream)' : '#0E7B8C',
-                          color: a.nurse_approved_at ? 'var(--ink)' : '#fff',
-                          border: a.nurse_approved_at ? '1px solid var(--border)' : 'none',
+                          background: (a.nurse_approved_at || a.status === 'rejected') ? 'var(--cream)' : '#0E7B8C',
+                          color: (a.nurse_approved_at || a.status === 'rejected') ? 'var(--ink)' : '#fff',
+                          border: (a.nurse_approved_at || a.status === 'rejected') ? '1px solid var(--border)' : 'none',
                           padding: '6px 14px', borderRadius: 7, fontSize: '0.78rem',
                           fontWeight: 700, textDecoration: 'none',
                         }}>
-                          {a.nurse_approved_at ? 'View' : 'Review & Approve →'}
+                          {a.status === 'rejected' ? 'View' : a.nurse_approved_at ? 'View' : 'Review & Approve →'}
                         </Link>
                       </td>
                     </tr>

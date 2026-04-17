@@ -59,10 +59,11 @@ export async function submitBookingAction(formData: FormData): Promise<{ booking
   // Fetch payment deadline setting
   const { data: settings } = await supabase
     .from('platform_settings')
-    .select('payment_deadline_hours')
+    .select('payment_deadline_hours, require_nurse_approval')
     .limit(1)
     .single()
   const paymentDeadlineHours: number = settings?.payment_deadline_hours ?? 24
+  const requireNurseApproval: boolean = (settings as any)?.require_nurse_approval ?? true
 
   // Read form fields
   const service_type      = (formData.get('service_type')      as string) || ''
@@ -116,7 +117,7 @@ export async function submitBookingAction(formData: FormData): Promise<{ booking
       total_sessions:    dates.length,
       nurse_id:          nurse_user_id || null,
       nurse_name:        nurse_name    || null,
-      status:            'pending',
+      status:            requireNurseApproval ? 'pending' : 'accepted',
       payment_status:    'unpaid',
       payment_deadline_at: paymentDeadlineHours > 0
         ? new Date(Date.now() + paymentDeadlineHours * 60 * 60 * 1000).toISOString()

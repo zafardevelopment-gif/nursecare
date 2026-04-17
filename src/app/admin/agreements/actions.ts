@@ -200,3 +200,22 @@ export async function deleteAgreement(formData: FormData) {
   await supabase.from('agreements').delete().eq('id', id)
   revalidatePath('/admin/agreements')
 }
+
+export async function resubmitAgreementToNurse(formData: FormData): Promise<{ error?: string }> {
+  await requireRole('admin')
+  const serviceClient = createSupabaseServiceRoleClient()
+  const id = formData.get('id') as string
+  if (!id) return { error: 'Missing agreement ID' }
+
+  const { error } = await serviceClient
+    .from('agreements')
+    .update({ status: 'admin_approved', rejection_reason: null })
+    .eq('id', id)
+    .eq('status', 'rejected')
+
+  if (error) return { error: error.message }
+
+  revalidatePath(`/admin/agreements/${id}`)
+  revalidatePath('/admin/agreements')
+  return {}
+}

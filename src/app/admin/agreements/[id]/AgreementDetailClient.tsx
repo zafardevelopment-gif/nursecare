@@ -15,18 +15,22 @@ type Agreement = {
   hospital_id: string
   nurse_approved_at: string | null
   hospital_approved_at: string | null
+  rejection_reason?: string | null
 }
 
 const STATUS_LABELS: Record<string, { label: string; color: string; bg: string }> = {
   pending:           { label: 'Pending — Awaiting Both Approvals', color: '#b85e00', bg: '#FFF8F0' },
+  admin_approved:    { label: 'Awaiting Nurse Signature',           color: '#0E5C8C', bg: '#EEF6FD' },
   nurse_approved:    { label: 'Nurse Approved — Awaiting Hospital', color: '#0E7B8C', bg: '#E8F4FD' },
   hospital_approved: { label: 'Hospital Approved — Awaiting Nurse', color: '#0E7B8C', bg: '#E8F4FD' },
-  fully_approved:    { label: 'Fully Executed', color: '#1A7A4A', bg: '#E8F9F0' },
+  fully_approved:    { label: 'Fully Executed',                     color: '#1A7A4A', bg: '#E8F9F0' },
+  rejected:          { label: 'Rejected by Nurse',                  color: '#C0392B', bg: '#FEF2F2' },
 }
 
-export default function AgreementDetailClient({ agreement }: { agreement: Agreement }) {
+export default function AgreementDetailClient({ agreement, resubmitAction }: { agreement: Agreement; resubmitAction: (fd: FormData) => Promise<{ error?: string }> }) {
   const [deleteConfirm, setDeleteConfirm] = useState(false)
   const [isPending, startTransition] = useTransition()
+  const [resubmitErr, setResubmitErr] = useState<string | null>(null)
   const router = useRouter()
   const s = STATUS_LABELS[agreement.status] ?? STATUS_LABELS.pending
 
@@ -36,6 +40,17 @@ export default function AgreementDetailClient({ agreement }: { agreement: Agreem
     startTransition(async () => {
       await deleteAgreement(fd)
       router.push('/admin/agreements')
+    })
+  }
+
+  function handleResubmit() {
+    const fd = new FormData()
+    fd.set('id', agreement.id)
+    setResubmitErr(null)
+    startTransition(async () => {
+      const res = await resubmitAction(fd)
+      if (res?.error) { setResubmitErr(res.error); return }
+      router.refresh()
     })
   }
 
@@ -80,6 +95,35 @@ export default function AgreementDetailClient({ agreement }: { agreement: Agreem
             </div>
           </div>
         </div>
+
+        {/* Rejected by nurse — show reason + resubmit */}
+        {agreement.status === 'rejected' && (
+          <div className="dash-card" style={{ borderColor: 'rgba(224,74,74,0.35)' }}>
+            <div className="dash-card-header">
+              <span className="dash-card-title" style={{ color: '#C0392B' }}>Rejected by Nurse</span>
+            </div>
+            <div className="dash-card-body" style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+              {agreement.rejection_reason ? (
+                <div style={{ background: '#FEF2F2', border: '1px solid rgba(224,74,74,0.2)', borderRadius: 8, padding: '10px 12px', fontSize: '0.83rem', color: '#C0392B' }}>
+                  <div style={{ fontSize: '0.68rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Reason given</div>
+                  {agreement.rejection_reason}
+                </div>
+              ) : (
+                <div style={{ fontSize: '0.83rem', color: 'var(--muted)', fontStyle: 'italic' }}>No reason provided.</div>
+              )}
+              {resubmitErr && (
+                <div style={{ background: '#FEE8E8', color: '#C0392B', padding: '8px 12px', borderRadius: 7, fontSize: '0.8rem' }}>{resubmitErr}</div>
+              )}
+              <button
+                onClick={handleResubmit}
+                disabled={isPending}
+                style={{ background: '#0E7B8C', color: '#fff', border: 'none', padding: '10px 16px', borderRadius: 9, fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer', width: '100%' }}
+              >
+                {isPending ? 'Resubmitting…' : '↩ Resubmit to Nurse'}
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Approval timeline */}
         <div className="dash-card">

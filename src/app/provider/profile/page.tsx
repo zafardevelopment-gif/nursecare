@@ -8,6 +8,16 @@ interface Props {
 }
 
 const CITIES = ['Riyadh','Jeddah','Dammam','Mecca','Medina','Khobar','Tabuk','Abha']
+const NATIONALITIES = [
+  'Saudi','Pakistani','Indian','Filipino','Egyptian','Jordanian','Sudanese','Yemeni',
+  'Syrian','Lebanese','Bangladeshi','Nepali','Sri Lankan','Indonesian','Nigerian',
+  'Kenyan','Ethiopian','Ghanaian','British','American','Canadian','Australian','Other',
+]
+const ID_TYPES = [
+  { value: 'iqama',       label: 'Iqama (Resident ID)' },
+  { value: 'national_id', label: 'National ID' },
+  { value: 'passport',    label: 'Passport' },
+]
 
 export default async function ProviderProfilePage({ searchParams }: Props) {
   const user = await requireRole('provider')
@@ -168,9 +178,17 @@ function ViewProfile({ nurse, isUpdatePending }: { nurse: any; isUpdatePending: 
         </div>
         <div className="dash-card-body">
           <div style={gridStyle}>
-            <Field label="Specialization"     value={nurse.specialization} />
+            <Field label="Specialization"      value={nurse.specialization} />
             <Field label="Years of Experience" value={nurse.experience_years != null ? `${nurse.experience_years} years` : null} />
             <Field label="License Number"      value={nurse.license_no} />
+            <Field label="License Expiry"      value={nurse.license_expiry ?? null} />
+            {nurse.id_type && (
+              <>
+                <Field label="ID Type"   value={ID_TYPES.find(t => t.value === nurse.id_type)?.label ?? nurse.id_type} />
+                <Field label="ID Number" value={nurse.id_number ?? null} />
+                <Field label="ID Expiry" value={nurse.id_expiry ?? null} />
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -227,7 +245,10 @@ function EditForm({ nurse }: { nurse: any }) {
             </div>
             <div className="form-group">
               <label className="form-label">Nationality</label>
-              <input type="text" name="nationality" className="form-input" defaultValue={nurse?.nationality ?? ''} placeholder="e.g. Saudi, Pakistani" />
+              <select name="nationality" className="form-input" defaultValue={nurse?.nationality ?? ''}>
+                <option value="">Select nationality</option>
+                {NATIONALITIES.map(n => <option key={n} value={n}>{n}</option>)}
+              </select>
             </div>
           </div>
 
@@ -280,9 +301,34 @@ function EditForm({ nurse }: { nurse: any }) {
             </div>
           </div>
 
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+            <div className="form-group">
+              <label className="form-label">SCHS License Number</label>
+              <input type="text" name="license_no" className="form-input" defaultValue={nurse?.license_no ?? ''} placeholder="SCHS-1234567" />
+            </div>
+            <div className="form-group">
+              <label className="form-label">SCHS License Expiry</label>
+              <input type="date" name="license_expiry" className="form-input" defaultValue={nurse?.license_expiry ?? ''} />
+            </div>
+          </div>
+
           <div className="form-group">
-            <label className="form-label">SCHS License Number</label>
-            <input type="text" name="license_no" className="form-input" defaultValue={nurse?.license_no ?? ''} placeholder="SCHS-1234567" />
+            <label className="form-label">ID Type</label>
+            <select name="id_type" className="form-input" defaultValue={nurse?.id_type ?? ''}>
+              <option value="">Select ID type</option>
+              {ID_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+            </select>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+            <div className="form-group">
+              <label className="form-label">ID Number</label>
+              <input type="text" name="id_number" className="form-input" defaultValue={nurse?.id_number ?? ''} placeholder="Enter ID number" />
+            </div>
+            <div className="form-group">
+              <label className="form-label">ID Expiry Date</label>
+              <input type="date" name="id_expiry" className="form-input" defaultValue={nurse?.id_expiry ?? ''} />
+            </div>
           </div>
 
           <SectionLabel sensitive>Pricing — requires admin approval</SectionLabel>

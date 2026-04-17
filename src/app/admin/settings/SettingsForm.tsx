@@ -25,6 +25,8 @@ interface Settings {
   share_provider_phone_with_patient?: boolean
   show_hospital_contracts?: boolean
   show_price_with_commission?: boolean
+  require_nurse_approval?: boolean
+  on_the_way_enabled?: boolean
 }
 
 type Tab = 'general' | 'provider' | 'patient' | 'hospital'
@@ -49,9 +51,11 @@ export default function SettingsForm({ settings }: { settings: Settings | null }
   const [whatsapp, setWhatsapp] = useState(settings?.whatsapp_notifications ?? false)
   const [sms, setSms]           = useState(settings?.sms_notifications ?? true)
 
-  const [sharePhone, setSharePhone]         = useState(settings?.share_provider_phone_with_patient ?? false)
-  const [showContracts, setShowContracts]   = useState(settings?.show_hospital_contracts ?? true)
-  const [showCommission, setShowCommission] = useState(settings?.show_price_with_commission ?? true)
+  const [sharePhone, setSharePhone]               = useState(settings?.share_provider_phone_with_patient ?? false)
+  const [showContracts, setShowContracts]         = useState(settings?.show_hospital_contracts ?? true)
+  const [showCommission, setShowCommission]       = useState(settings?.show_price_with_commission ?? true)
+  const [requireNurseApproval, setRequireNurseApproval] = useState(settings?.require_nurse_approval ?? true)
+  const [onTheWayEnabled, setOnTheWayEnabled]     = useState(settings?.on_the_way_enabled ?? true)
 
   // Sync all boolean toggles when settings prop changes (server revalidation after save)
   useEffect(() => {
@@ -65,6 +69,8 @@ export default function SettingsForm({ settings }: { settings: Settings | null }
     if (settings?.share_provider_phone_with_patient !== undefined)   setSharePhone(settings.share_provider_phone_with_patient)
     if (settings?.show_hospital_contracts !== undefined)             setShowContracts(settings.show_hospital_contracts)
     if (settings?.show_price_with_commission !== undefined)          setShowCommission(settings.show_price_with_commission)
+    if (settings?.require_nurse_approval !== undefined)              setRequireNurseApproval(settings.require_nurse_approval)
+    if (settings?.on_the_way_enabled !== undefined)                  setOnTheWayEnabled(settings.on_the_way_enabled)
   }, [
     settings?.allow_emergency_bookings,
     settings?.require_work_start_confirmation,
@@ -76,6 +82,8 @@ export default function SettingsForm({ settings }: { settings: Settings | null }
     settings?.share_provider_phone_with_patient,
     settings?.show_hospital_contracts,
     settings?.show_price_with_commission,
+    settings?.require_nurse_approval,
+    settings?.on_the_way_enabled,
   ])
 
   const [logoUrl, setLogoUrl]             = useState<string | null>(settings?.logo_url ?? null)
@@ -127,6 +135,8 @@ export default function SettingsForm({ settings }: { settings: Settings | null }
       share_provider_phone_with_patient:    sharePhone,
       show_hospital_contracts:              showContracts,
       show_price_with_commission:           showCommission,
+      require_nurse_approval:               requireNurseApproval,
+      on_the_way_enabled:                   onTheWayEnabled,
     }
 
     startTransition(async () => {
@@ -243,6 +253,48 @@ export default function SettingsForm({ settings }: { settings: Settings | null }
       {/* ── PROVIDER TAB ── */}
       {activeTab === 'provider' && (
         <div className="dash-card">
+          <SectionHeader icon="✅" title="Booking Approval & Flow" sub="Control whether nurse approval is required before patient pays" />
+          <div style={{ padding: '0 1.2rem' }}>
+            <SettingRow
+              label="Require Nurse Approval Before Payment"
+              description={
+                <>
+                  When <strong>ON</strong>: patient can only pay after nurse accepts the booking.
+                  <br />
+                  When <strong>OFF</strong>: patient pays immediately after booking — no nurse approval needed.
+                  <br />
+                  <span style={{ color: requireNurseApproval ? 'var(--teal)' : '#E04A4A', fontWeight: 600 }}>
+                    {requireNurseApproval
+                      ? '✓ Nurse must accept first — then patient pays'
+                      : '✕ Direct payment — nurse approval skipped'}
+                  </span>
+                </>
+              }
+            >
+              <Toggle checked={requireNurseApproval} onChange={setRequireNurseApproval} />
+            </SettingRow>
+
+            <SettingRow
+              label="Enable On The Way Feature"
+              description={
+                <>
+                  When <strong>ON</strong>: nurse sees <strong>"On The Way to Patient"</strong> button before "Mark Work Started".
+                  <br />
+                  Patient is notified that the nurse is en route.
+                  <br />
+                  <span style={{ color: onTheWayEnabled ? 'var(--teal)' : '#E04A4A', fontWeight: 600 }}>
+                    {onTheWayEnabled
+                      ? '✓ On The Way step is enabled'
+                      : '✕ On The Way step is hidden — nurse goes directly to Mark Work Started'}
+                  </span>
+                </>
+              }
+              last
+            >
+              <Toggle checked={onTheWayEnabled} onChange={setOnTheWayEnabled} />
+            </SettingRow>
+          </div>
+
           <SectionHeader icon="🏃" title="Work Confirmation Flow" sub="Control how nurses mark work start and completion" />
           <div style={{ padding: '0 1.2rem' }}>
             <SettingRow

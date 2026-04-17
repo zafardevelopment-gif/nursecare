@@ -2,7 +2,36 @@
 
 import { useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { markWorkStarted, markWorkDone } from './actions'
+import { markOnTheWay, markWorkStarted, markWorkDone } from './actions'
+
+export function OnTheWayBtn({ requestId }: { requestId: string }) {
+  const [pending, start] = useTransition()
+  const router = useRouter()
+
+  async function handleClick() {
+    start(async () => {
+      await markOnTheWay(requestId)
+      router.refresh()
+    })
+  }
+
+  return (
+    <button
+      disabled={pending}
+      onClick={handleClick}
+      style={{
+        background: pending ? 'var(--cream)' : 'rgba(245,132,42,0.1)',
+        color: '#F5842A',
+        border: '1px solid rgba(245,132,42,0.25)',
+        padding: '7px 14px', borderRadius: 8, fontSize: '0.78rem',
+        fontWeight: 700, cursor: pending ? 'not-allowed' : 'pointer',
+        fontFamily: 'inherit', opacity: pending ? 0.6 : 1,
+      }}
+    >
+      {pending ? '⏳ Updating…' : '🚗 On The Way to Patient'}
+    </button>
+  )
+}
 
 export function WorkStartedBtn({
   requestId,
@@ -13,22 +42,19 @@ export function WorkStartedBtn({
 }: {
   requestId: string
   startDate?: string | null
-  startTime?: string | null   // HH:MM of shift start e.g. "16:00"
+  startTime?: string | null
   isPaid?: boolean
-  hoursBeforeEnabled?: number // from admin setting
+  hoursBeforeEnabled?: number
 }) {
   const [pending, start] = useTransition()
   const router = useRouter()
 
   const paid = isPaid ?? false
 
-  // Build a Date for when button becomes enabled:
-  // shift start time on startDate minus hoursBeforeEnabled
   let timeUnlocked = false
   let unlockMsg = ''
   if (startDate) {
     const now = new Date()
-    // parse start datetime — default to 00:00 if no time
     const [sh, sm] = (startTime ?? '00:00').split(':').map(Number)
     const shiftStart = new Date(`${startDate}T${String(sh).padStart(2,'0')}:${String(sm ?? 0).padStart(2,'0')}:00`)
     const enableAt   = new Date(shiftStart.getTime() - hoursBeforeEnabled * 60 * 60 * 1000)
@@ -39,7 +65,7 @@ export function WorkStartedBtn({
       unlockMsg = `📅 Available ${diffHrs}h before shift (${startDate})`
     }
   } else {
-    timeUnlocked = true // no date set — don't block
+    timeUnlocked = true
   }
 
   const blocked     = !paid || !timeUnlocked

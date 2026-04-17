@@ -2,6 +2,7 @@ import { requireRole } from '@/lib/auth'
 import { createSupabaseServerClient, createSupabaseServiceRoleClient } from '@/lib/supabase-server'
 import { ConfirmCompletionBtn } from './ConfirmBtn'
 import { PayNowBtn } from './PayNowBtn'
+import { CancelBookingBtn } from './CancelBookingBtn'
 import Link from 'next/link'
 
 export const dynamic = 'force-dynamic'
@@ -17,6 +18,7 @@ const statusStyle: Record<string, { bg: string; color: string; label: string }> 
   accepted:    { bg: 'rgba(39,168,105,0.1)',  color: '#27A869', label: '✓ Nurse Confirmed' },
   confirmed:   { bg: 'rgba(39,168,105,0.1)',  color: '#27A869', label: '✓ Confirmed' },
   declined:    { bg: 'rgba(224,74,74,0.1)',   color: '#E04A4A', label: '✕ Declined' },
+  on_the_way:  { bg: 'rgba(245,132,42,0.1)',  color: '#F5842A', label: '🚗 Nurse On The Way' },
   in_progress: { bg: 'rgba(14,123,140,0.12)', color: '#0E7B8C', label: '🔄 In Progress' },
   work_done:   { bg: 'rgba(107,63,160,0.1)',  color: '#6B3FA0', label: '✅ Work Done' },
   completed:   { bg: 'rgba(14,123,140,0.1)',  color: '#0E7B8C', label: '✓ Completed' },
@@ -33,8 +35,10 @@ const FILTER_TABS = [
   { key: 'declined',    label: '✕ Declined' },
 ]
 
-// Statuses where payment is required
-const PAYMENT_STATUSES = ['accepted', 'confirmed', 'in_progress', 'work_done', 'completed']
+// Statuses where payment is required (when nurse approval required)
+const PAYMENT_STATUSES_POST_APPROVAL = ['accepted', 'confirmed', 'on_the_way', 'in_progress', 'work_done', 'completed']
+// Statuses where payment is required (when nurse approval NOT required — pay immediately on pending)
+const PAYMENT_STATUSES_NO_APPROVAL   = ['pending', 'accepted', 'confirmed', 'on_the_way', 'in_progress', 'work_done', 'completed']
 
 export default async function PatientBookingsPage({ searchParams }: Props) {
   const user = await requireRole('patient')
@@ -48,12 +52,14 @@ export default async function PatientBookingsPage({ searchParams }: Props) {
 
   const { data: settings } = await serviceSupabase
     .from('platform_settings')
-    .select('require_work_start_confirmation, require_work_completion_confirmation, payment_deadline_hours')
+    .select('require_work_start_confirmation, require_work_completion_confirmation, payment_deadline_hours, require_nurse_approval, free_cancellation_hours')
     .limit(1)
     .single()
 
   const requireWorkDone       = settings?.require_work_completion_confirmation ?? true
   const paymentDeadlineHours  = settings?.payment_deadline_hours ?? 24
+  const requireNurseApproval  = (settings as any)?.require_nurse_approval ?? true
+  const freeCancelHours: number = (settings as any)?.free_cancellation_hours ?? 24
 
   // Filtered + paginated query
   let query = supabase
@@ -83,8 +89,9 @@ export default async function PatientBookingsPage({ searchParams }: Props) {
   const total      = allRows.length
   const active     = allRows.filter(b => b.status === 'accepted' || b.status === 'confirmed').length
   const pending    = allRows.filter(b => b.status === 'pending').length
+  const paymentStatuses = requireNurseApproval ? PAYMENT_STATUSES_POST_APPROVAL : PAYMENT_STATUSES_NO_APPROVAL
   const unpaidCount = allRows.filter(b =>
-    PAYMENT_STATUSES.includes(b.status) && (b as any).payment_status !== 'paid'
+    paymentStatuses.includes(b.status) && (b as any).payment_status !== 'paid'
   ).length
 
   const allItems   = requests ?? []
@@ -217,17 +224,30 @@ export default async function PatientBookingsPage({ searchParams }: Props) {
                 </thead>
                 <tbody>
                   {allItems.map((b: any, i: number) => {
-                    const s = statusStyle[b.status] ?? statusStyle.pending
+                    // When nurse approval is off, pending = auto-accepted, show as "Payment Pending"
+                    const effectiveStatus = (!requireNurseApproval && b.status === 'pending') ? 'accepted' : b.status
+                    const s = statusStyle[effectiveStatus] ?? statusStyle.pending
                     const serial = offset + i + 1
-                    const needsPayment = PAYMENT_STATUSES.includes(b.status) && b.payment_status !== 'paid'
+                    const needsPayment = paymentStatuses.includes(b.status) && b.payment_status !== 'paid'
                     const isPaid = b.payment_status === 'paid'
-                    const showPayment = PAYMENT_STATUSES.includes(b.status)
+                    const showPayment = paymentStatuses.includes(b.status)
                     const deadlineAt: string | null = b.payment_deadline_at ?? null
                     const isOverdue = deadlineAt && new Date(deadlineAt) < new Date()
                     const deadlineFmt = deadlineAt && !isPaid
                       ? new Date(deadlineAt).toLocaleString('en-GB', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' })
                       : null
                     const needsConfirm = b.status === 'work_done' && requireWorkDone
+
+                    // Cancel button: only for pending/accepted/confirmed, within free cancel window
+                    const cancellable = ['pending', 'accepted', 'confirmed'].includes(b.status)
+                    let cancelAllowed = cancellable
+                    if (cancellable && freeCancelHours > 0 && b.start_date) {
+                      const SHIFT_H: Record<string, number> = { morning: 8, evening: 16, night: 0 }
+                      const sh = SHIFT_H[b.shift?.toLowerCase() ?? ''] ?? 0
+                      const shiftStart = new Date(`${b.start_date}T${String(sh).padStart(2,'0')}:00:00`)
+                      const deadline = new Date(shiftStart.getTime() - freeCancelHours * 60 * 60 * 1000)
+                      cancelAllowed = new Date() <= deadline
+                    }
 
                     return (
                       <tr key={b.id} style={{ borderBottom: '1px solid var(--border)', background: i % 2 === 0 ? '#fff' : 'rgba(14,123,140,0.015)', verticalAlign: 'top' }}>
@@ -300,6 +320,9 @@ export default async function PatientBookingsPage({ searchParams }: Props) {
                             </Link>
                             {needsConfirm && (
                               <ConfirmCompletionBtn requestId={b.id} compact />
+                            )}
+                            {cancelAllowed && (
+                              <CancelBookingBtn requestId={b.id} compact />
                             )}
                           </div>
                         </Td>

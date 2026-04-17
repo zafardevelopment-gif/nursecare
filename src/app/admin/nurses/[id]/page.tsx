@@ -119,9 +119,17 @@ export default async function AdminNurseDetailPage({ params }: Props) {
                 <Field label="Nationality" value={nurse.nationality} />
                 <Field label="City"        value={nurse.city} />
                 <Field label="Phone"       value={nurse.phone} />
-                <Field label="Experience"  value={nurse.experience_years != null ? `${nurse.experience_years} yrs` : null} />
-                <Field label="License No"  value={nurse.license_no} />
+                <Field label="Experience"     value={nurse.experience_years != null ? `${nurse.experience_years} yrs` : null} />
+                <Field label="License No"     value={nurse.license_no} />
+                <Field label="License Expiry" value={nurse.license_expiry ?? null} />
                 <Field label="Specialization" value={nurse.specialization} />
+                {nurse.id_type && (
+                  <>
+                    <Field label="ID Type"   value={nurse.id_type === 'iqama' ? 'Iqama (Resident ID)' : nurse.id_type === 'national_id' ? 'National ID' : 'Passport'} />
+                    <Field label="ID Number" value={nurse.id_number ?? null} />
+                    <Field label="ID Expiry" value={nurse.id_expiry ?? null} />
+                  </>
+                )}
               </div>
               {Array.isArray(nurse.languages) && nurse.languages.length > 0 && (
                 <div style={{ marginTop: '0.8rem' }}>
@@ -267,6 +275,7 @@ export default async function AdminNurseDetailPage({ params }: Props) {
                     const LABELS: Record<string, string> = {
                       hourly_rate: 'Hourly Patient Rate (SAR)', daily_rate: 'Daily Shift Rate (SAR)',
                       specialization: 'Specialization', experience_years: 'Years of Experience', license_no: 'License No',
+                      license_expiry: 'License Expiry', id_type: 'ID Type', id_number: 'ID Number', id_expiry: 'ID Expiry',
                     }
                     const old = (pendingUpdate.old_values as any)?.[field]
                     const next = (pendingUpdate.new_values as any)?.[field]

@@ -63,6 +63,8 @@ export type PlatformSettingsInput = {
   share_provider_phone_with_patient: boolean
   show_hospital_contracts: boolean
   show_price_with_commission: boolean
+  require_nurse_approval: boolean
+  on_the_way_enabled: boolean
 }
 
 export async function savePlatformSettings(input: PlatformSettingsInput) {

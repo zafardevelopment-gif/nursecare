@@ -6,6 +6,18 @@ import { onboardingAction } from './actions'
 
 const CITIES = ['Riyadh','Jeddah','Dammam','Mecca','Medina','Khobar','Tabuk','Abha']
 
+const NATIONALITIES = [
+  'Saudi','Pakistani','Indian','Filipino','Egyptian','Jordanian','Sudanese','Yemeni',
+  'Syrian','Lebanese','Bangladeshi','Nepali','Sri Lankan','Indonesian','Nigerian',
+  'Kenyan','Ethiopian','Ghanaian','British','American','Canadian','Australian','Other',
+]
+
+const ID_TYPES = [
+  { value: 'iqama',       label: 'Iqama (Resident ID)' },
+  { value: 'national_id', label: 'National ID' },
+  { value: 'passport',    label: 'Passport' },
+]
+
 const DOC_INPUTS = [
   { name: 'doc_biodata',             label: 'Biodata / Resume',    accept: '.pdf,.doc,.docx' },
   { name: 'doc_national_id',         label: 'National ID / Iqama', accept: '.pdf,.jpg,.jpeg,.png' },
@@ -18,6 +30,7 @@ const DOC_INPUTS = [
 export default function OnboardingForm({ isPending: isAlreadyPending }: { isPending?: boolean }) {
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+  const [idType, setIdType] = useState('')
   const formRef = useRef<HTMLFormElement>(null)
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -58,7 +71,10 @@ export default function OnboardingForm({ isPending: isAlreadyPending }: { isPend
         </div>
         <div className={grp}>
           <label className="form-label">Nationality</label>
-          <input type="text" name="nationality" required className={inp} placeholder="e.g. Saudi, Pakistani" />
+          <select name="nationality" required className={inp}>
+            <option value="">Select nationality</option>
+            {NATIONALITIES.map(n => <option key={n} value={n}>{n}</option>)}
+          </select>
         </div>
       </div>
 
@@ -87,10 +103,41 @@ export default function OnboardingForm({ isPending: isAlreadyPending }: { isPend
         </div>
       </div>
 
-      <div className={grp}>
-        <label className="form-label">SCHS License Number</label>
-        <input type="text" name="license_no" required className={inp} placeholder="SCHS-1234567" />
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+        <div className={grp}>
+          <label className="form-label">SCHS License Number</label>
+          <input type="text" name="license_no" required className={inp} placeholder="SCHS-1234567" />
+        </div>
+        <div className={grp}>
+          <label className="form-label">SCHS License Expiry</label>
+          <input type="date" name="license_expiry" className={inp} />
+        </div>
       </div>
+
+      <div style={{ fontWeight: 700, fontSize: '0.85rem', color: 'var(--teal)', margin: '1.2rem 0 0.4rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+        Identity Document
+      </div>
+
+      <div className={grp}>
+        <label className="form-label">ID Type</label>
+        <select name="id_type" required className={inp} value={idType} onChange={e => setIdType(e.target.value)}>
+          <option value="">Select ID type</option>
+          {ID_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+        </select>
+      </div>
+
+      {idType && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+          <div className={grp}>
+            <label className="form-label">{ID_TYPES.find(t => t.value === idType)?.label} Number</label>
+            <input type="text" name="id_number" required className={inp} placeholder="Enter ID number" />
+          </div>
+          <div className={grp}>
+            <label className="form-label">ID Expiry Date</label>
+            <input type="date" name="id_expiry" required className={inp} />
+          </div>
+        </div>
+      )}
 
       <div className={grp}>
         <label className="form-label">Bio</label>

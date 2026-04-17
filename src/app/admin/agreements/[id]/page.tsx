@@ -3,6 +3,7 @@ import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import AgreementDetailClient from './AgreementDetailClient'
+import { resubmitAgreementToNurse } from '../actions'
 
 export const dynamic = 'force-dynamic'
 
@@ -33,7 +34,7 @@ export default async function AdminAgreementDetailPage({ params }: { params: Pro
         </div>
       </div>
 
-      <AgreementDetailClient agreement={agreement} />
+      <AgreementDetailClient agreement={agreement} resubmitAction={resubmitAgreementToNurse} />
     </div>
   )
 }
