@@ -1,5 +1,7 @@
 import { requireRole } from '@/lib/auth'
+import { createSupabaseServiceRoleClient } from '@/lib/supabase-server'
 import { headers } from 'next/headers'
+import { redirect } from 'next/navigation'
 import SidebarProfile from '@/components/SidebarProfile'
 import SidebarMenu from '@/components/SidebarMenu'
 import MobileSidebar from '@/components/MobileSidebar'
@@ -18,6 +20,20 @@ export default async function PatientLayout({ children }: { children: React.Reac
   const user = await requireRole('patient')
   const headersList = await headers()
   const pathname = headersList.get('x-pathname') ?? '/patient/dashboard'
+
+  // Block dashboard access until onboarding is complete (skip the onboarding route itself)
+  if (!pathname.startsWith('/patient/onboarding')) {
+    const serviceClient = createSupabaseServiceRoleClient()
+    const { data: profile } = await serviceClient
+      .from('patient_profiles')
+      .select('onboarding_completed')
+      .eq('user_id', user.id)
+      .single()
+
+    if (!profile?.onboarding_completed) {
+      redirect('/patient/onboarding')
+    }
+  }
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh' }}>

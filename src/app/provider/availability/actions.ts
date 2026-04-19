@@ -4,8 +4,9 @@ import { createSupabaseServerClient, createSupabaseServiceRoleClient } from '@/l
 import { requireRole } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
 import { SHIFT_HOURS, DAY_OF_WEEK } from './shiftConstants'
-import type { ShiftKey, DayKey, DayShifts, WeekState, ShiftStatus } from './shiftConstants'
-export type { ShiftKey, DayKey, DayShifts, WeekState, ShiftStatus } from './shiftConstants'
+import type { ShiftKey, DayKey, DayShifts, WeekState, ShiftStatus, DaySchedule, WeekSchedule, TimeSlot, DateRangeEntry } from './shiftConstants'
+import { DEFAULT_WEEK_SCHEDULE } from './shiftConstants'
+export type { ShiftKey, DayKey, DayShifts, WeekState, ShiftStatus, DaySchedule, WeekSchedule, TimeSlot, DateRangeEntry } from './shiftConstants'
 
 // ── Calendar types ────────────────────────────────────────
 
@@ -110,8 +111,9 @@ export async function loadCalendarData(year: number, month: number): Promise<Cal
 export type SavedSchedule = {
   mode: 'weekly' | 'flexible' | 'date_range' | null
   weekState: WeekState
+  weekSchedule: WeekSchedule
   flexible: boolean
-  dateRange: { startDate: string; endDate: string; shifts: { morning: boolean; evening: boolean; night: boolean } } | null
+  dateRanges: DateRangeEntry[]
 }
 
 // ── Load saved schedule (all modes) ───────────────────────
@@ -135,27 +137,30 @@ export async function loadShiftSchedule(): Promise<SavedSchedule> {
     sat: { morning: false, evening: false, night: false },
   }
 
-  if (!nurse) return { mode: null, weekState: emptyWeek, flexible: false, dateRange: null }
+  const emptyWeekSchedule: WeekSchedule = { ...DEFAULT_WEEK_SCHEDULE }
+  if (!nurse) return { mode: null, weekState: emptyWeek, weekSchedule: emptyWeekSchedule, flexible: false, dateRanges: [] }
 
-  // Try nurse_shifts first (weekly mode)
   const { data: shiftRows } = await supabase
     .from('nurse_shifts')
     .select('day_of_week, shift, is_active')
     .eq('nurse_id', nurse.id)
 
-  // Check nurse_availability for flexible/date_range (legacy + new)
   const { data: availRows } = await supabase
     .from('nurse_availability')
-    .select('availability_type, day_of_week, start_time, end_time, start_date, end_date')
+    .select('id, availability_type, day_of_week, start_time, end_time, start_date, end_date, slot_group')
     .eq('nurse_id', nurse.id)
+    .order('slot_group', { ascending: true })
+    .order('start_time', { ascending: true })
 
-  const hasWeekly   = shiftRows && shiftRows.some(r => r.is_active)
-  const availMode   = availRows?.[0]?.availability_type ?? null
-  const isFlexible  = availMode === 'flexible'
-  const isDateRange = availMode === 'date_range'
+  const hasWeekly    = shiftRows && shiftRows.some(r => r.is_active)
+  const modes        = [...new Set((availRows ?? []).map(r => r.availability_type).filter(Boolean))]
+  const isFlexible   = modes.includes('flexible')
+  const isDateRange  = modes.includes('date_range')
+  const isWeeklyTime = modes.includes('weekly_time')
 
-  // Build weekState from nurse_shifts
   const DOW_TO_KEY: Record<number, DayKey> = { 0:'sun',1:'mon',2:'tue',3:'wed',4:'thu',5:'fri',6:'sat' }
+
+  // Build weekState (legacy shift-based)
   const weekState = { ...emptyWeek }
   for (const row of shiftRows ?? []) {
     if (!row.is_active) continue
@@ -165,26 +170,134 @@ export async function loadShiftSchedule(): Promise<SavedSchedule> {
     }
   }
 
-  if (isFlexible) return { mode: 'flexible', weekState, flexible: true, dateRange: null }
-
-  if (isDateRange && availRows?.[0]) {
-    const r = availRows[0]
-    return {
-      mode: 'date_range', weekState, flexible: false,
-      dateRange: {
-        startDate: r.start_date ?? '',
-        endDate:   r.end_date   ?? '',
-        shifts:    { morning: true, evening: false, night: false }, // default
-      },
+  // Build weekSchedule (multi-slot time-based weekly)
+  const weekSchedule: WeekSchedule = { ...DEFAULT_WEEK_SCHEDULE }
+  if (isWeeklyTime) {
+    const weekRows = (availRows ?? []).filter(r => r.availability_type === 'weekly_time')
+    for (const dayKey of Object.keys(weekSchedule) as DayKey[]) {
+      const dow = { sun:0,mon:1,tue:2,wed:3,thu:4,fri:5,sat:6 }[dayKey]
+      const dayRows = weekRows.filter(r => r.day_of_week === dow)
+      if (dayRows.length > 0) {
+        weekSchedule[dayKey] = {
+          enabled: true,
+          slots: dayRows.map(r => ({ from: r.start_time ?? '08:00', to: r.end_time ?? '17:00' })),
+        }
+      }
     }
   }
 
-  if (hasWeekly) return { mode: 'weekly', weekState, flexible: false, dateRange: null }
+  // Build dateRanges (multi-range, multi-slot — grouped by slot_group)
+  const dateRanges: DateRangeEntry[] = []
+  if (isDateRange) {
+    const drRows = (availRows ?? []).filter(r => r.availability_type === 'date_range')
+    const groups = [...new Set(drRows.map(r => r.slot_group ?? r.start_date ?? '').filter(Boolean))]
+    for (const grp of groups) {
+      const grpRows = drRows.filter(r => (r.slot_group ?? r.start_date ?? '') === grp)
+      if (grpRows.length === 0) continue
+      dateRanges.push({
+        id: grp,
+        startDate: grpRows[0].start_date ?? '',
+        endDate:   grpRows[0].end_date   ?? '',
+        slots: grpRows.map(r => ({ from: r.start_time ?? '08:00', to: r.end_time ?? '17:00' })),
+      })
+    }
+  }
 
-  return { mode: null, weekState: emptyWeek, flexible: false, dateRange: null }
+  if (isFlexible)   return { mode: 'flexible',   weekState, weekSchedule, flexible: true,  dateRanges }
+  if (isDateRange)  return { mode: 'date_range',  weekState, weekSchedule, flexible: false, dateRanges }
+  if (isWeeklyTime) return { mode: 'weekly',      weekState, weekSchedule, flexible: false, dateRanges }
+  if (hasWeekly)    return { mode: 'weekly',      weekState, weekSchedule, flexible: false, dateRanges }
+
+  return { mode: null, weekState: emptyWeek, weekSchedule: emptyWeekSchedule, flexible: false, dateRanges: [] }
 }
 
-// ── Save shift schedule ────────────────────────────────────
+// ── Shared: time-overlap → shifts ─────────────────────────
+function slotsToShifts(slots: TimeSlot[]): Set<ShiftKey> {
+  const SHIFT_RANGES: Record<ShiftKey, { start: string; end: string }> = {
+    morning: { start: '08:00', end: '16:00' },
+    evening: { start: '16:00', end: '24:00' },
+    night:   { start: '00:00', end: '08:00' },
+  }
+  const result = new Set<ShiftKey>()
+  for (const slot of slots) {
+    const from = slot.from
+    const to   = slot.to <= slot.from ? '24:00' : slot.to
+    for (const shift of ['morning', 'evening', 'night'] as ShiftKey[]) {
+      const sr = SHIFT_RANGES[shift]
+      if (from < sr.end && to > sr.start) result.add(shift)
+    }
+  }
+  return result
+}
+
+// ── Save time-based weekly schedule (multi-slot) ───────────
+export async function saveWeeklyTimeSchedule(
+  schedule: WeekSchedule
+): Promise<{ success: boolean; message: string }> {
+  const user    = await requireRole('provider')
+  const service  = createSupabaseServiceRoleClient()
+
+  const { data: nurse } = await service
+    .from('nurses').select('id').eq('user_id', user.id).single()
+  if (!nurse) return { success: false, message: 'Nurse profile not found' }
+
+  const DOW: Record<DayKey, number> = { sun:0, mon:1, tue:2, wed:3, thu:4, fri:5, sat:6 }
+
+  await service.from('nurse_availability')
+    .delete().eq('nurse_id', nurse.id).eq('availability_type', 'weekly_time')
+
+  // One row per slot per day
+  const rows: object[] = []
+  for (const [dayKey, ds] of Object.entries(schedule) as [DayKey, DaySchedule][]) {
+    if (!ds.enabled) continue
+    for (const slot of ds.slots) {
+      rows.push({
+        nurse_id: nurse.id, availability_type: 'weekly_time',
+        day_of_week: DOW[dayKey],
+        start_time: slot.from, end_time: slot.to,
+        start_date: null, end_date: null,
+      })
+    }
+  }
+
+  if (rows.length > 0) {
+    const { error } = await service.from('nurse_availability').insert(rows)
+    if (error) return { success: false, message: error.message }
+  }
+
+  // Expand shift_availability for next 90 days
+  const DOW_TO_KEY: Record<number, DayKey> = { 0:'sun',1:'mon',2:'tue',3:'wed',4:'thu',5:'fri',6:'sat' }
+  const today = new Date(); today.setHours(0,0,0,0)
+  const todayStr = today.toISOString().slice(0, 10)
+  const avRows: { nurse_id:string; date:string; shift:string; total_hours:number; booked_hours:number; status:string }[] = []
+
+  for (let i = 0; i < 90; i++) {
+    const d = new Date(today); d.setDate(d.getDate() + i)
+    const dateStr = d.toISOString().slice(0, 10)
+    const dayKey  = DOW_TO_KEY[d.getDay()]
+    const ds      = schedule[dayKey]
+    if (!ds.enabled) continue
+    for (const shift of slotsToShifts(ds.slots)) {
+      avRows.push({ nurse_id: nurse.id, date: dateStr, shift, total_hours: 8, booked_hours: 0, status: 'available' })
+    }
+  }
+
+  await service.from('shift_availability')
+    .delete().eq('nurse_id', nurse.id).eq('booked_hours', 0).gte('date', todayStr)
+
+  if (avRows.length > 0) {
+    await service.from('shift_availability')
+      .upsert(avRows, { onConflict: 'nurse_id,date,shift', ignoreDuplicates: true })
+  }
+
+  await service.from('nurse_shifts').update({ is_active: false }).eq('nurse_id', nurse.id)
+
+  revalidatePath('/provider/availability')
+  const activeDays = Object.values(schedule).filter(d => d.enabled).length
+  return { success: true, message: `Schedule saved for ${activeDays} day${activeDays !== 1 ? 's' : ''} per week` }
+}
+
+// ── Save shift schedule (legacy — kept for compatibility) ──
 export async function saveShiftSchedule(
   days: WeekState
 ): Promise<{ success: boolean; message: string }> {
@@ -407,56 +520,244 @@ export async function saveFlexibleSchedule(): Promise<{ success: boolean; messag
   return { success: true, message: 'Flexible availability saved' }
 }
 
-// ── Save Date Range mode ───────────────────────────────────
+// ── Save Date Range mode (multi-range, multi-slot) ────────
 export async function saveDateRangeSchedule(
-  startDate: string,
-  endDate:   string,
-  shifts:    { morning: boolean; evening: boolean; night: boolean },
+  ranges: DateRangeEntry[]
 ): Promise<{ success: boolean; message: string }> {
   const user    = await requireRole('provider')
   const service  = createSupabaseServiceRoleClient()
 
-  if (!startDate || !endDate) return { success: false, message: 'Start and end dates are required' }
-  if (startDate > endDate)    return { success: false, message: 'Start date must be before end date' }
-  if (!shifts.morning && !shifts.evening && !shifts.night)
-    return { success: false, message: 'Select at least one shift' }
+  if (!ranges.length) return { success: false, message: 'Add at least one date range' }
+  for (const r of ranges) {
+    if (!r.startDate || !r.endDate)   return { success: false, message: 'Start and end dates are required for each range' }
+    if (r.startDate > r.endDate)      return { success: false, message: 'Start date must be before end date' }
+    if (!r.slots.length)              return { success: false, message: 'Add at least one time slot per range' }
+    for (const s of r.slots) {
+      if (!s.from || !s.to)           return { success: false, message: 'Fill in all time slots' }
+      if (s.from >= s.to)             return { success: false, message: 'From time must be before to time in each slot' }
+    }
+  }
 
   const { data: nurse } = await service.from('nurses').select('id').eq('user_id', user.id).single()
   if (!nurse) return { success: false, message: 'Nurse profile not found' }
 
-  // Store in nurse_availability
-  await service.from('nurse_availability').delete().eq('nurse_id', nurse.id)
-  await service.from('nurse_availability').insert({
-    nurse_id: nurse.id, availability_type: 'date_range',
-    day_of_week: null, start_time: null, end_time: null,
-    start_date: startDate, end_date: endDate,
-  })
+  // Replace all date_range rows
+  await service.from('nurse_availability').delete().eq('nurse_id', nurse.id).eq('availability_type', 'date_range')
 
-  // Disable nurse_shifts (weekly template)
-  await service.from('nurse_shifts').update({ is_active: false }).eq('nurse_id', nurse.id)
-
-  // Build shift_availability rows for the date range
-  const today = new Date().toISOString().slice(0, 10)
-  const rows: { nurse_id: string; date: string; shift: string; total_hours: number; booked_hours: number; status: string }[] = []
-
-  const cur = new Date(startDate + 'T00:00:00')
-  const end = new Date(endDate   + 'T00:00:00')
-  while (cur <= end) {
-    const dateStr = cur.toISOString().slice(0, 10)
-    if (dateStr >= today) {
-      for (const shift of ['morning', 'evening', 'night'] as ShiftKey[]) {
-        if (shifts[shift]) {
-          rows.push({ nurse_id: nurse.id, date: dateStr, shift, total_hours: 8, booked_hours: 0, status: 'available' })
-        }
-      }
+  // Insert: one row per slot per range; use range id as slot_group
+  const insertRows: object[] = []
+  for (const range of ranges) {
+    for (const slot of range.slots) {
+      insertRows.push({
+        nurse_id: nurse.id, availability_type: 'date_range',
+        day_of_week: null,
+        start_time: slot.from, end_time: slot.to,
+        start_date: range.startDate, end_date: range.endDate,
+        slot_group: range.id,
+      })
     }
-    cur.setDate(cur.getDate() + 1)
   }
 
-  if (rows.length > 0) {
-    await service.from('shift_availability').upsert(rows, { onConflict: 'nurse_id,date,shift', ignoreDuplicates: true })
+  if (insertRows.length > 0) {
+    const { error } = await service.from('nurse_availability').insert(insertRows)
+    if (error) return { success: false, message: error.message }
+  }
+
+  await service.from('nurse_shifts').update({ is_active: false }).eq('nurse_id', nurse.id)
+
+  // Expand shift_availability for all ranges
+  const today = new Date().toISOString().slice(0, 10)
+  const avRows: { nurse_id:string; date:string; shift:string; total_hours:number; booked_hours:number; status:string }[] = []
+
+  for (const range of ranges) {
+    const activeShifts = slotsToShifts(range.slots)
+    const cur = new Date(range.startDate + 'T00:00:00')
+    const end = new Date(range.endDate   + 'T00:00:00')
+    while (cur <= end) {
+      const dateStr = cur.toISOString().slice(0, 10)
+      if (dateStr >= today) {
+        for (const shift of activeShifts) {
+          avRows.push({ nurse_id: nurse.id, date: dateStr, shift, total_hours: 8, booked_hours: 0, status: 'available' })
+        }
+      }
+      cur.setDate(cur.getDate() + 1)
+    }
+  }
+
+  if (avRows.length > 0) {
+    await service.from('shift_availability').upsert(avRows, { onConflict: 'nurse_id,date,shift', ignoreDuplicates: true })
   }
 
   revalidatePath('/provider/availability')
-  return { success: true, message: `Schedule saved for ${rows.length / Object.values(shifts).filter(Boolean).length} days` }
+  return { success: true, message: `${ranges.length} date range${ranges.length !== 1 ? 's' : ''} saved` }
+}
+
+// ── Check if a day-of-week has active bookings (for weekly edit guard) ──
+export async function checkDayHasBookings(
+  dayOfWeek: number  // 0=Sun … 6=Sat
+): Promise<{ hasBookings: boolean; dates: string[] }> {
+  const user    = await requireRole('provider')
+  const service  = createSupabaseServiceRoleClient()
+
+  const { data: nurse } = await service.from('nurses').select('id').eq('user_id', user.id).single()
+  if (!nurse) return { hasBookings: false, dates: [] }
+
+  const today = new Date().toISOString().slice(0, 10)
+  const { data } = await service
+    .from('shift_bookings')
+    .select('date')
+    .eq('nurse_id', nurse.id)
+    .neq('status', 'cancelled')
+    .gte('date', today)
+
+  const matchDates = (data ?? [])
+    .map(r => r.date as string)
+    .filter(d => {
+      const dow = new Date(d + 'T12:00:00').getDay()
+      return dow === dayOfWeek
+    })
+
+  return { hasBookings: matchDates.length > 0, dates: [...new Set(matchDates)] }
+}
+
+// ── Check if a date range overlaps with active bookings ────
+export async function checkRangeHasBookings(
+  startDate: string,
+  endDate:   string,
+): Promise<{ hasBookings: boolean; dates: string[] }> {
+  const user    = await requireRole('provider')
+  const service  = createSupabaseServiceRoleClient()
+
+  const { data: nurse } = await service.from('nurses').select('id').eq('user_id', user.id).single()
+  if (!nurse) return { hasBookings: false, dates: [] }
+
+  const { data } = await service
+    .from('shift_bookings')
+    .select('date')
+    .eq('nurse_id', nurse.id)
+    .neq('status', 'cancelled')
+    .gte('date', startDate)
+    .lte('date', endDate)
+
+  const dates = [...new Set((data ?? []).map(r => r.date as string))]
+  return { hasBookings: dates.length > 0, dates }
+}
+
+// ── Time-based calendar data (replaces shift-based for display) ──
+export type CalendarTimeSlot = {
+  from:        string
+  to:          string
+  bookedHours: number
+  totalHours:  number
+  status:      ShiftStatus
+  bookings: {
+    id:          string
+    patientName: string | null
+    bookedHours: number
+    startTime:   string
+    endTime:     string
+  }[]
+}
+
+export type CalendarDayTimeData = {
+  date:  string
+  slots: CalendarTimeSlot[]
+  totalAvailHours:  number
+  totalBookedHours: number
+}
+
+export async function loadCalendarTimeData(year: number, month: number): Promise<CalendarDayTimeData[]> {
+  const user    = await requireRole('provider')
+  const supabase = await createSupabaseServerClient()
+  const service  = createSupabaseServiceRoleClient()
+
+  const { data: nurse } = await supabase.from('nurses').select('id').eq('user_id', user.id).single()
+  if (!nurse) return []
+
+  const firstDay = new Date(year, month - 1, 1)
+  const lastDay  = new Date(year, month, 0)
+  const startStr = firstDay.toISOString().slice(0, 10)
+  const endStr   = lastDay.toISOString().slice(0, 10)
+
+  // Get nurse_availability time slots that apply to this month
+  const { data: availRows } = await service
+    .from('nurse_availability')
+    .select('availability_type, day_of_week, start_time, end_time, start_date, end_date')
+    .eq('nurse_id', nurse.id)
+
+  // Get bookings
+  const { data: bookingRows } = await service
+    .from('shift_bookings')
+    .select('id, date, patient_name, booked_hours, start_time, end_time, status')
+    .eq('nurse_id', nurse.id)
+    .gte('date', startStr)
+    .lte('date', endStr)
+    .neq('status', 'cancelled')
+
+  const DOW_TO_KEY: Record<number, DayKey> = { 0:'sun',1:'mon',2:'tue',3:'wed',4:'thu',5:'fri',6:'sat' }
+  const result: CalendarDayTimeData[] = []
+
+  const isFlexible  = (availRows ?? []).some(r => r.availability_type === 'flexible')
+  const weeklyRows  = (availRows ?? []).filter(r => r.availability_type === 'weekly_time')
+  const rangeRows   = (availRows ?? []).filter(r => r.availability_type === 'date_range')
+
+  for (let d = new Date(firstDay); d <= lastDay; d.setDate(d.getDate() + 1)) {
+    const dateStr = d.toISOString().slice(0, 10)
+    const dow     = d.getDay()
+
+    // Determine time slots for this day
+    let daySlots: { from: string; to: string }[] = []
+
+    if (isFlexible) {
+      daySlots = [{ from: '00:00', to: '24:00' }]
+    } else {
+      // Check date ranges first (override weekly)
+      const rangeMatch = rangeRows.filter(r =>
+        r.start_date && r.end_date &&
+        dateStr >= r.start_date && dateStr <= r.end_date
+      )
+      if (rangeMatch.length > 0) {
+        daySlots = rangeMatch.map(r => ({ from: r.start_time ?? '08:00', to: r.end_time ?? '17:00' }))
+      } else {
+        // Weekly schedule
+        daySlots = weeklyRows
+          .filter(r => r.day_of_week === dow)
+          .map(r => ({ from: r.start_time ?? '08:00', to: r.end_time ?? '17:00' }))
+      }
+    }
+
+    if (daySlots.length === 0) {
+      result.push({ date: dateStr, slots: [], totalAvailHours: 0, totalBookedHours: 0 })
+      continue
+    }
+
+    const dayBookings = (bookingRows ?? []).filter(b => b.date === dateStr)
+    const totalBookedHours = dayBookings.reduce((s, b) => s + Number(b.booked_hours), 0)
+
+    const slots: CalendarTimeSlot[] = daySlots.map(sl => {
+      const [fh, fm] = sl.from.split(':').map(Number)
+      const [th, tm] = (sl.to === '24:00' ? '24:00' : sl.to).split(':').map(Number)
+      const totalHours = Math.max(0, (th * 60 + tm - fh * 60 - fm) / 60)
+
+      // Bookings overlapping this slot
+      const slotBookings = dayBookings
+        .filter(b => b.start_time < sl.to && b.end_time > sl.from)
+        .map(b => ({
+          id: b.id,
+          patientName: b.patient_name,
+          bookedHours: Number(b.booked_hours),
+          startTime: b.start_time,
+          endTime:   b.end_time,
+        }))
+      const bookedHours = slotBookings.reduce((s, b) => s + b.bookedHours, 0)
+      const status: ShiftStatus = bookedHours === 0 ? 'available' : bookedHours >= totalHours ? 'booked' : 'partial'
+
+      return { from: sl.from, to: sl.to, bookedHours, totalHours, status, bookings: slotBookings }
+    })
+
+    const totalAvailHours = slots.reduce((s, sl) => s + sl.totalHours, 0)
+    result.push({ date: dateStr, slots, totalAvailHours, totalBookedHours })
+  }
+
+  return result
 }
