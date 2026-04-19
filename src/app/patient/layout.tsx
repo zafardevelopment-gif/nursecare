@@ -21,18 +21,26 @@ export default async function PatientLayout({ children }: { children: React.Reac
   const headersList = await headers()
   const pathname = headersList.get('x-pathname') ?? '/patient/dashboard'
 
-  // Block dashboard access until onboarding is complete (skip the onboarding route itself)
-  if (!pathname.startsWith('/patient/onboarding')) {
+  // Onboarding page renders its own full-screen layout — skip sidebar
+  if (pathname.startsWith('/patient/onboarding')) {
+    return <>{children}</>
+  }
+
+  // Block dashboard access until onboarding is complete
+  // Gracefully handle if patient_profiles table doesn't exist yet
+  try {
     const serviceClient = createSupabaseServiceRoleClient()
-    const { data: profile } = await serviceClient
+    const { data: profile, error } = await serviceClient
       .from('patient_profiles')
       .select('onboarding_completed')
       .eq('user_id', user.id)
       .single()
 
-    if (!profile?.onboarding_completed) {
+    if (!error && profile !== null && !profile.onboarding_completed) {
       redirect('/patient/onboarding')
     }
+  } catch {
+    // Table may not exist yet — allow access without redirect
   }
 
   return (

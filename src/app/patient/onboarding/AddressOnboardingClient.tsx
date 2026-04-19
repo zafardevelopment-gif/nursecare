@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useTransition, useCallback } from 'react'
-import { savePatientAddress, type AddressPayload } from './actions'
+import { savePatientAddress, skipOnboarding, type AddressPayload } from './actions'
 
 interface AddressFields {
   full_address: string
@@ -419,8 +419,16 @@ export default function AddressOnboardingClient({ userName, apiKey }: { userName
 
       {/* ── Nav buttons ── */}
       <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-        {step > 1 && (
+        {step > 1 ? (
           <button onClick={back} disabled={isPending} style={S.btnBack}>← Back</button>
+        ) : (
+          <button
+            onClick={() => startTransition(async () => { await skipOnboarding() })}
+            disabled={isPending}
+            style={{ ...S.btnBack, color: 'var(--muted)', fontSize: '0.85rem' }}
+          >
+            ✕ Skip for now
+          </button>
         )}
         <div style={{ flex: 1 }} />
         {step < 4 ? (

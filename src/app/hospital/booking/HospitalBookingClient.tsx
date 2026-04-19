@@ -30,6 +30,83 @@ const SHIFTS = [
   { key: 'night',   icon: '🌙', label: 'Night',   time: '21:00–07:00', bg: '#EDE9FE', color: '#7B2FBE' },
 ] as const
 
+function allDaySlots(): string[] {
+  const slots: string[] = []
+  for (let h = 0; h < 24; h++) {
+    const label = h === 0 ? '12:00 AM' : h < 12 ? `${h}:00 AM` : h === 12 ? '12:00 PM' : `${h - 12}:00 PM`
+    slots.push(`${String(h).padStart(2, '0')}:00|${label}`)
+  }
+  slots.push('00:00|12:00 AM (midnight)')
+  return slots
+}
+
+function calcHoursCustom(startTime: string, endTime: string): number {
+  const [sh, sm] = startTime.split(':').map(Number)
+  const [eh, em] = endTime.split(':').map(Number)
+  let startMins = sh * 60 + sm
+  let endMins   = eh * 60 + em
+  if (endMins === 0) endMins = 24 * 60
+  if (endMins <= startMins) return 0
+  return Math.round((endMins - startMins) / 60 * 10) / 10
+}
+
+function HospTimeModeToggle({ timeMode, onToggle }: { timeMode: 'shift' | 'custom'; onToggle: (m: 'shift' | 'custom') => void }) {
+  return (
+    <div style={{ display:'flex', gap:6, marginBottom:10, background:'var(--shell-bg)', borderRadius:9, padding:4, width:'fit-content' }}>
+      {(['shift', 'custom'] as const).map(m => (
+        <button key={m} type="button" onClick={() => onToggle(m)} style={{
+          padding:'5px 14px', borderRadius:7, border:'none', cursor:'pointer', fontFamily:'inherit',
+          fontSize:'0.75rem', fontWeight:700,
+          background: timeMode === m ? '#0E7B8C' : 'transparent',
+          color: timeMode === m ? '#fff' : 'var(--muted)',
+          transition:'all 0.15s',
+        }}>
+          {m === 'shift' ? '🕐 Shift-Based' : '⏰ Custom Time'}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function HospCustomTimePicker({ startTime, endTime, onStartChange, onEndChange }: {
+  startTime: string; endTime: string
+  onStartChange: (v: string) => void; onEndChange: (v: string) => void
+}) {
+  const startSlots = allDaySlots().slice(0, 24)
+  const endSlots   = allDaySlots().slice(1)
+  const computed   = calcHoursCustom(startTime, endTime)
+
+  return (
+    <div style={{ marginTop:10, padding:'12px 14px', background:'rgba(14,123,140,0.04)', border:'1px solid rgba(14,123,140,0.15)', borderRadius:10 }}>
+      <div style={{ fontSize:'0.72rem', fontWeight:700, color:'var(--muted)', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:8 }}>
+        Select Time (24h)
+      </div>
+      <div style={{ display:'grid', gridTemplateColumns:'1fr auto 1fr', gap:10, alignItems:'center' }}>
+        <div>
+          <div style={{ fontSize:'0.63rem', fontWeight:700, color:'#0E7B8C', letterSpacing:'0.08em', marginBottom:4 }}>START TIME</div>
+          <select value={startTime} onChange={e => onStartChange(e.target.value)}
+            style={{ width:'100%', padding:'7px 8px', borderRadius:7, border:'1px solid var(--border)', fontSize:'0.82rem', fontFamily:'inherit', background:'var(--card)', color:'var(--ink)' }}>
+            {startSlots.map(s => { const [val, label] = s.split('|'); return <option key={val} value={val}>{label}</option> })}
+          </select>
+        </div>
+        <span style={{ color:'var(--muted)', fontSize:'0.85rem', marginTop:18 }}>→</span>
+        <div>
+          <div style={{ fontSize:'0.63rem', fontWeight:700, color:'#0E7B8C', letterSpacing:'0.08em', marginBottom:4 }}>END TIME</div>
+          <select value={endTime} onChange={e => onEndChange(e.target.value)}
+            style={{ width:'100%', padding:'7px 8px', borderRadius:7, border:'1px solid var(--border)', fontSize:'0.82rem', fontFamily:'inherit', background:'var(--card)', color:'var(--ink)' }}>
+            {endSlots.map(s => { const [val, label] = s.split('|'); return <option key={val} value={val}>{label}</option> })}
+          </select>
+        </div>
+      </div>
+      {computed > 0 && (
+        <div style={{ marginTop:8, fontSize:'0.75rem', fontWeight:700, color:'#0E7B8C' }}>
+          {computed} hour{computed !== 1 ? 's' : ''} per shift
+        </div>
+      )}
+    </div>
+  )
+}
+
 const SPECIALIZATIONS = ['ICU / Critical Care','Emergency','Paediatric','Cardiac','Maternity','Rehabilitation','Oncology','General','Surgery','Orthopaedic','Neurology','Radiology']
 const LANGUAGES = ['Arabic','English','Urdu','Hindi','Tagalog','Bengali','French']
 const CITIES    = ['Riyadh','Jeddah','Dammam','Mecca','Medina','Khobar','Taif','Tabuk']
@@ -55,6 +132,11 @@ export default function HospitalBookingClient({
   const [submitted, setSubmitted] = useState(false)
   const [submittedId, setSubmittedId] = useState<string | null>(null)
   const [error, setError]         = useState<string | null>(null)
+
+  // Time mode: shift-based or custom 24h
+  const [timeMode, setTimeMode]           = useState<'shift' | 'custom'>('shift')
+  const [customStartTime, setCustomStartTime] = useState('08:00')
+  const [customEndTime,   setCustomEndTime]   = useState('16:00')
 
   // Date bounds from admin settings
   const { minDate: dateMin, maxDate: dateMax } = getBookingDateBounds(minAdvanceHours, maxAdvanceDays)
@@ -183,7 +265,11 @@ export default function HospitalBookingClient({
     fd.set('start_date', startDate)
     fd.set('end_date', endDate)
     fd.set('duration_days', String(Math.max(1, Math.round((new Date(endDate).getTime() - new Date(startDate).getTime()) / 86400000))))
-    fd.set('shifts', JSON.stringify([...selectedShifts]))
+    fd.set('shifts', timeMode === 'custom' ? JSON.stringify(['custom']) : JSON.stringify([...selectedShifts]))
+    if (timeMode === 'custom') {
+      fd.set('custom_start_time', customStartTime)
+      fd.set('custom_end_time', customEndTime)
+    }
     fd.set('specializations', JSON.stringify([...specs]))
     fd.set('total_nurses', String(totalNurses))
     fd.set('language_preference', JSON.stringify([...langPref]))
@@ -282,16 +368,26 @@ export default function HospitalBookingClient({
               </FG>
             </div>
 
-            <FG label="SHIFTS REQUIRED">
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10 }}>
-                {SHIFTS.map(s => (
-                  <div key={s.key} onClick={() => toggleShift(s.key)} style={{ border: `2px solid ${selectedShifts.has(s.key) ? '#0E7B8C' : 'var(--border)'}`, borderRadius: 10, padding: '12px 8px', cursor: 'pointer', textAlign: 'center', background: selectedShifts.has(s.key) ? 'rgba(14,123,140,0.05)' : 'var(--shell-bg)', transition: 'all 0.12s' }}>
-                    <div style={{ fontSize: '1.4rem', marginBottom: 3 }}>{s.icon}</div>
-                    <div style={{ fontWeight: 700, fontSize: '0.8rem', color: 'var(--ink)' }}>{s.label}</div>
-                    <div style={{ fontSize: '0.67rem', color: 'var(--muted)', marginTop: 1 }}>{s.time}</div>
-                  </div>
-                ))}
-              </div>
+            <FG label="TIME PREFERENCE">
+              <HospTimeModeToggle timeMode={timeMode} onToggle={setTimeMode} />
+              {timeMode === 'shift' ? (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10 }}>
+                  {SHIFTS.map(s => (
+                    <div key={s.key} onClick={() => toggleShift(s.key)} style={{ border: `2px solid ${selectedShifts.has(s.key) ? '#0E7B8C' : 'var(--border)'}`, borderRadius: 10, padding: '12px 8px', cursor: 'pointer', textAlign: 'center', background: selectedShifts.has(s.key) ? 'rgba(14,123,140,0.05)' : 'var(--shell-bg)', transition: 'all 0.12s' }}>
+                      <div style={{ fontSize: '1.4rem', marginBottom: 3 }}>{s.icon}</div>
+                      <div style={{ fontWeight: 700, fontSize: '0.8rem', color: 'var(--ink)' }}>{s.label}</div>
+                      <div style={{ fontSize: '0.67rem', color: 'var(--muted)', marginTop: 1 }}>{s.time}</div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <HospCustomTimePicker
+                  startTime={customStartTime}
+                  endTime={customEndTime}
+                  onStartChange={setCustomStartTime}
+                  onEndChange={setCustomEndTime}
+                />
+              )}
             </FG>
 
             <FG label="NURSE SPECIALISATIONS NEEDED" style={{ marginTop: 14 }}>
@@ -483,7 +579,7 @@ export default function HospitalBookingClient({
             {[
               { label: 'Hospital', value: hospital.name },
               { label: 'Period', value: `${startDate} → ${endDate}` },
-              { label: 'Shifts', value: [...selectedShifts].join(', ') || '—' },
+              { label: 'Time', value: timeMode === 'custom' ? `Custom: ${customStartTime} – ${customEndTime} (${calcHoursCustom(customStartTime, customEndTime)}h)` : [...selectedShifts].join(', ') || '—' },
               { label: 'Total Nurses', value: String(totalNurses) },
               { label: 'Specializations', value: specs.size > 0 ? [...specs].join(', ') : 'Any' },
               { label: 'Language Preference', value: [...langPref].join(', ') || 'Any' },
@@ -538,7 +634,8 @@ export default function HospitalBookingClient({
           {step < 3 ? (
             <button onClick={() => {
               if (step === 1) {
-                if (selectedShifts.size === 0) { setError('Please select at least one shift'); return }
+                if (timeMode === 'shift' && selectedShifts.size === 0) { setError('Please select at least one shift'); return }
+                if (timeMode === 'custom' && calcHoursCustom(customStartTime, customEndTime) <= 0) { setError('Please select a valid custom time range'); return }
                 const dateErr = validateBookingDate(startDate, undefined, minAdvanceHours, maxAdvanceDays)
                 if (dateErr) { setError(dateErr.message); return }
               }

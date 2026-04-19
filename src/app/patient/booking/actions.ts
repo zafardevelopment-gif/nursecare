@@ -68,7 +68,9 @@ export async function submitBookingAction(formData: FormData): Promise<{ booking
   // Read form fields
   const service_type      = (formData.get('service_type')      as string) || ''
   const patient_condition = (formData.get('patient_condition')  as string) || ''
-  const shift             = (formData.get('shift')              as string) || 'Morning (8AM–4PM)'
+  const shift             = (formData.get('shift')              as string) || 'morning'
+  const custom_start_time = (formData.get('start_time')         as string) || ''
+  const custom_end_time   = (formData.get('end_time')           as string) || ''
   const city              = (formData.get('city')               as string) || ''
   const address           = (formData.get('address')            as string) || ''
   const notes             = (formData.get('notes')              as string) || ''
@@ -150,9 +152,13 @@ export async function submitBookingAction(formData: FormData): Promise<{ booking
         'evening (4pm–12am)':{ start: '16:00:00', end: '00:00:00' },
         'night (12am–8am)': { start: '00:00:00', end: '08:00:00' },
       }
-      const shiftKey  = shift.toLowerCase() as string
-      const shiftTimes = SHIFT_TIMES[shiftKey] ?? SHIFT_TIMES['morning']
-      const shiftNorm  = shiftKey.startsWith('morning') ? 'morning'
+      const shiftKey = shift.toLowerCase() as string
+      const isCustom = shiftKey === 'custom'
+      const shiftTimes = isCustom
+        ? { start: custom_start_time ? custom_start_time + ':00' : '09:00:00', end: custom_end_time ? custom_end_time + ':00' : '13:00:00' }
+        : SHIFT_TIMES[shiftKey] ?? SHIFT_TIMES['morning']
+      const shiftNorm = isCustom ? 'morning'
+                       : shiftKey.startsWith('morning') ? 'morning'
                        : shiftKey.startsWith('evening') ? 'evening'
                        : shiftKey.startsWith('night')   ? 'night'
                        : 'morning'

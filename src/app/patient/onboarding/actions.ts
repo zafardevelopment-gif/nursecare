@@ -80,6 +80,15 @@ export async function savePatientAddress(payload: AddressPayload): Promise<{ err
   redirect('/patient/dashboard?message=Welcome+to+NurseCare%2B!')
 }
 
+export async function skipOnboarding(): Promise<void> {
+  const user = await requireRoleAction('patient')
+  const serviceClient = createSupabaseServiceRoleClient()
+  await serviceClient
+    .from('patient_profiles')
+    .upsert({ user_id: user.id, onboarding_completed: true, updated_at: new Date().toISOString() }, { onConflict: 'user_id' })
+  redirect('/patient/dashboard')
+}
+
 export async function checkOnboardingStatus(): Promise<boolean> {
   const supabase = await createSupabaseServerClient()
   const { data: { user } } = await supabase.auth.getUser()

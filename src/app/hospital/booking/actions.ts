@@ -31,7 +31,12 @@ export async function submitHospitalBookingAction(formData: FormData) {
 
   if (!hospital_id) return { error: 'Hospital not found' }
   if (!start_date || !end_date) return { error: 'Start and end dates are required' }
+  const custom_start_time = (formData.get('custom_start_time') as string) || null
+  const custom_end_time   = (formData.get('custom_end_time') as string) || null
+  const isCustomTime = shifts.length === 1 && shifts[0] === 'custom'
+
   if (shifts.length === 0) return { error: 'At least one shift must be selected' }
+  if (isCustomTime && (!custom_start_time || !custom_end_time)) return { error: 'Custom time start and end are required' }
 
   const { data, error } = await supabase
     .from('hospital_booking_requests')
@@ -42,7 +47,9 @@ export async function submitHospitalBookingAction(formData: FormData) {
       start_date,
       end_date,
       duration_days,
-      shifts,
+      shifts: isCustomTime ? ['custom'] : shifts,
+      custom_start_time: isCustomTime ? custom_start_time : null,
+      custom_end_time:   isCustomTime ? custom_end_time : null,
       specializations,
       total_nurses,
       language_preference: lang_pref,

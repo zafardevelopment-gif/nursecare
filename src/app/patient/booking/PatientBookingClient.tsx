@@ -78,6 +78,29 @@ function shiftSlots(shift: string): string[] {
   return slots
 }
 
+// Generate all 24-hour slots (00:00–23:00 start, 01:00–00:00 end)
+function allDaySlots(): string[] {
+  const slots: string[] = []
+  for (let h = 0; h < 24; h++) {
+    const label = h === 0 ? '12:00 AM' : h < 12 ? `${h}:00 AM` : h === 12 ? '12:00 PM' : `${h - 12}:00 PM`
+    const val   = `${String(h).padStart(2, '0')}:00`
+    slots.push(val + '|' + label)
+  }
+  // add midnight as end
+  slots.push('00:00|12:00 AM (midnight)')
+  return slots
+}
+
+function calcHoursCustom(startTime: string, endTime: string): number {
+  const [sh, sm] = startTime.split(':').map(Number)
+  const [eh, em] = endTime.split(':').map(Number)
+  let startMins = sh * 60 + sm
+  let endMins   = eh * 60 + em
+  if (endMins === 0) endMins = 24 * 60  // midnight = end of day
+  if (endMins <= startMins) return 0
+  return Math.round((endMins - startMins) / 60 * 10) / 10
+}
+
 // Price helpers — rate is hourly, hours is selected duration
 function calcPrice(hourlyRate: number, hours: number, vatRate: number) {
   const base  = hourlyRate * hours
@@ -153,6 +176,11 @@ export default function PatientBookingClient({
   const [selectedDays,  setSelectedDays]  = useState<number[]>([])
   const WEEKDAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
   function toggleDay(d: number) { setSelectedDays(p => p.includes(d) ? p.filter(x=>x!==d) : [...p,d]) }
+
+  // ── Time mode (shared): 'shift' or 'custom' ─────────────────────────────
+  const [timeMode, setTimeMode] = useState<'shift' | 'custom'>('shift')
+  const [customStartTime, setCustomStartTime] = useState('09:00')
+  const [customEndTime,   setCustomEndTime]   = useState('13:00')
 
   // ── Smart Match state ────────────────────────────────────────────────────
   const [careType,    setCareType]    = useState(SERVICES[0])
@@ -552,23 +580,36 @@ export default function PatientBookingClient({
                       </div>
                     )}
 
-                    <Field label="Preferred Shift">
-                      <div style={{ display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:10,marginTop:8 }}>
-                        {SHIFTS.map(s=><ShiftCard key={s.key} shift={s} active={smartShift===s.key} onClick={()=>{
-                          setSmartShift(s.key)
-                          const b = SHIFT_BOUNDS[s.key]
-                          setSmartStartTime(`${String(b.startH).padStart(2,'0')}:00`)
-                          setSmartEndTime(`${String(Math.min(b.startH + minBookingHours, b.endH === 24 ? 0 : b.endH)).padStart(2,'0')}:00`)
-                        }} />)}
-                      </div>
-                      <TimeSlotPicker
-                        shift={smartShift}
-                        startTime={smartStartTime}
-                        endTime={smartEndTime}
-                        onStartChange={setSmartStartTime}
-                        onEndChange={setSmartEndTime}
-                        minHours={minBookingHours}
-                      />
+                    <Field label="Time Preference">
+                      <TimeModeToggle timeMode={timeMode} onToggle={setTimeMode} />
+                      {timeMode === 'shift' ? (
+                        <>
+                          <div style={{ display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:10,marginTop:8 }}>
+                            {SHIFTS.map(s=><ShiftCard key={s.key} shift={s} active={smartShift===s.key} onClick={()=>{
+                              setSmartShift(s.key)
+                              const b = SHIFT_BOUNDS[s.key]
+                              setSmartStartTime(`${String(b.startH).padStart(2,'0')}:00`)
+                              setSmartEndTime(`${String(Math.min(b.startH + minBookingHours, b.endH === 24 ? 0 : b.endH)).padStart(2,'0')}:00`)
+                            }} />)}
+                          </div>
+                          <TimeSlotPicker
+                            shift={smartShift}
+                            startTime={smartStartTime}
+                            endTime={smartEndTime}
+                            onStartChange={setSmartStartTime}
+                            onEndChange={setSmartEndTime}
+                            minHours={minBookingHours}
+                          />
+                        </>
+                      ) : (
+                        <CustomTimePicker
+                          startTime={customStartTime}
+                          endTime={customEndTime}
+                          onStartChange={setCustomStartTime}
+                          onEndChange={setCustomEndTime}
+                          minHours={minBookingHours}
+                        />
+                      )}
                     </Field>
                   </BookCard>
                   {error && <div className="auth-error" style={{ marginTop:'0.5rem' }}><span>⚠️</span> {error}</div>}
@@ -614,7 +655,7 @@ export default function PatientBookingClient({
                   <input type="hidden" name="service_type"      value={careType} />
                   <input type="hidden" name="patient_condition" value={`${careFor} · ${careType}`} />
                   <input type="hidden" name="city"              value={smartCity} />
-                  <input type="hidden" name="shift"             value={smartShift} />
+                  <input type="hidden" name="shift"             value={timeMode === 'custom' ? 'custom' : smartShift} />
                   <input type="hidden" name="start_date"        value={smartStart} />
                   <input type="hidden" name="end_date"          value={smartEnd} />
                   <input type="hidden" name="booking_type"      value={bookingType} />
@@ -623,7 +664,9 @@ export default function PatientBookingClient({
                   <input type="hidden" name="nurse_id"          value={matchedNurse.id} />
                   <input type="hidden" name="nurse_name"        value={matchedNurse.name} />
                   <input type="hidden" name="hourly_rate"       value={patientRate(matchedNurse.hourlyRate)} />
-                  <input type="hidden" name="duration"          value={calcHours(smartStartTime, smartEndTime, smartShift)} />
+                  <input type="hidden" name="duration"          value={timeMode === 'custom' ? calcHoursCustom(customStartTime, customEndTime) : calcHours(smartStartTime, smartEndTime, smartShift)} />
+                  {timeMode === 'custom' && <input type="hidden" name="start_time" value={customStartTime} />}
+                  {timeMode === 'custom' && <input type="hidden" name="end_time"   value={customEndTime} />}
                   {selectedDays.map(d=><input key={d} type="hidden" name="days_of_week" value={d} />)}
 
                   <SelectedBanner nurse={matchedNurse} emoji={nurseEmoji(matchedNurse)} color="#006D7A" nationality={matchedNurse.nationality} gender={matchedNurse.gender} onChangeFn={()=>{setMatchedNurse(null);setStep(2)}} />
@@ -636,14 +679,14 @@ export default function PatientBookingClient({
                       ['Care Type',    careType],
                       ['Care For',     careFor],
                       ['City',         smartCity],
-                      ['Shift',        `${SHIFTS.find(s=>s.key===smartShift)?.label} (${SHIFTS.find(s=>s.key===smartShift)?.time})`],
+                      ['Time',         timeMode === 'custom' ? `${customStartTime} – ${customEndTime} (Custom)` : `${SHIFTS.find(s=>s.key===smartShift)?.label} (${SHIFTS.find(s=>s.key===smartShift)?.time})`],
                       ['Booking Type', bookingType==='one_time'?'One-Time':bookingType==='weekly'?'Weekly':'Monthly'],
                       ['Start Date',   smartStart],
                       ...(bookingType!=='one_time'?[['End Date',smartEnd] as [string,string]]:[]),
                       ...(bookingType==='weekly'?[['Days',selectedDays.map(d=>WEEKDAYS[d]).join(', ')] as [string,string]]:[]),
                       ['Duration',     `${smartDays} day${smartDays>1?'s':''}`],
                     ]} />
-                    <PriceBreakdown rate={patientRate(matchedNurse.hourlyRate)} hours={calcHours(smartStartTime, smartEndTime, smartShift)} vatRate={vatRate} />
+                    <PriceBreakdown rate={patientRate(matchedNurse.hourlyRate)} hours={timeMode === 'custom' ? calcHoursCustom(customStartTime, customEndTime) : calcHours(smartStartTime, smartEndTime, smartShift)} vatRate={vatRate} />
                   </BookCard>
 
                   <Field label="Full Address *">
@@ -756,27 +799,40 @@ export default function PatientBookingClient({
                       </select>
                     </Field>
                     <div style={{ marginTop:16 }}>
-                      <Field label="Shift Preference">
-                        <div style={{ display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:10,marginTop:8 }}>
-                          {SHIFTS.map(s=>{
-                            const dayAvail = shiftAvail[browseStart]
-                            const st = dayAvail?.[s.key as ShiftKey]?.status ?? null
-                            return <ShiftCard key={s.key} shift={s} active={browseShift===s.key} onClick={()=>{
-                              setBrowseShift(s.key)
-                              const b = SHIFT_BOUNDS[s.key]
-                              setBrowseStartTime(`${String(b.startH).padStart(2,'0')}:00`)
-                              setBrowseEndTime(`${String(Math.min(b.startH + minBookingHours, b.endH === 24 ? 0 : b.endH)).padStart(2,'0')}:00`)
-                            }} availStatus={st} />
-                          })}
-                        </div>
-                        <TimeSlotPicker
-                          shift={browseShift}
-                          startTime={browseStartTime}
-                          endTime={browseEndTime}
-                          onStartChange={setBrowseStartTime}
-                          onEndChange={setBrowseEndTime}
-                          minHours={minBookingHours}
-                        />
+                      <Field label="Time Preference">
+                        <TimeModeToggle timeMode={timeMode} onToggle={setTimeMode} />
+                        {timeMode === 'shift' ? (
+                          <>
+                            <div style={{ display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:10,marginTop:8 }}>
+                              {SHIFTS.map(s=>{
+                                const dayAvail = shiftAvail[browseStart]
+                                const st = dayAvail?.[s.key as ShiftKey]?.status ?? null
+                                return <ShiftCard key={s.key} shift={s} active={browseShift===s.key} onClick={()=>{
+                                  setBrowseShift(s.key)
+                                  const b = SHIFT_BOUNDS[s.key]
+                                  setBrowseStartTime(`${String(b.startH).padStart(2,'0')}:00`)
+                                  setBrowseEndTime(`${String(Math.min(b.startH + minBookingHours, b.endH === 24 ? 0 : b.endH)).padStart(2,'0')}:00`)
+                                }} availStatus={st} />
+                              })}
+                            </div>
+                            <TimeSlotPicker
+                              shift={browseShift}
+                              startTime={browseStartTime}
+                              endTime={browseEndTime}
+                              onStartChange={setBrowseStartTime}
+                              onEndChange={setBrowseEndTime}
+                              minHours={minBookingHours}
+                            />
+                          </>
+                        ) : (
+                          <CustomTimePicker
+                            startTime={customStartTime}
+                            endTime={customEndTime}
+                            onStartChange={setCustomStartTime}
+                            onEndChange={setCustomEndTime}
+                            minHours={minBookingHours}
+                          />
+                        )}
                       </Field>
                     </div>
                     <div style={{ marginTop:16 }}>
@@ -796,7 +852,7 @@ export default function PatientBookingClient({
                   <input type="hidden" name="service_type"      value={browseService} />
                   <input type="hidden" name="patient_condition" value="General care" />
                   <input type="hidden" name="city"              value={selectedNurse.city} />
-                  <input type="hidden" name="shift"             value={browseShift} />
+                  <input type="hidden" name="shift"             value={timeMode === 'custom' ? 'custom' : browseShift} />
                   <input type="hidden" name="start_date"        value={browseStart} />
                   <input type="hidden" name="end_date"          value={browseEnd} />
                   <input type="hidden" name="booking_type"      value={bookingType} />
@@ -805,7 +861,9 @@ export default function PatientBookingClient({
                   <input type="hidden" name="nurse_id"          value={selectedNurse.id} />
                   <input type="hidden" name="nurse_name"        value={selectedNurse.name} />
                   <input type="hidden" name="hourly_rate"       value={patientRate(selectedNurse.hourlyRate)} />
-                  <input type="hidden" name="duration"          value={calcHours(browseStartTime, browseEndTime, browseShift)} />
+                  <input type="hidden" name="duration"          value={timeMode === 'custom' ? calcHoursCustom(customStartTime, customEndTime) : calcHours(browseStartTime, browseEndTime, browseShift)} />
+                  {timeMode === 'custom' && <input type="hidden" name="start_time" value={customStartTime} />}
+                  {timeMode === 'custom' && <input type="hidden" name="end_time"   value={customEndTime} />}
                   {selectedDays.map(d=><input key={d} type="hidden" name="days_of_week" value={d} />)}
 
                   <SelectedBanner nurse={selectedNurse} emoji={nurseEmoji(selectedNurse)} color="#C5880F" nationality={selectedNurse.nationality} gender={selectedNurse.gender} onChangeFn={()=>setStep(2)} />
@@ -822,9 +880,9 @@ export default function PatientBookingClient({
                       ...(bookingType!=='one_time'?[['End Date',browseEnd] as [string,string]]:[]),
                       ...(bookingType==='weekly'?[['Days',selectedDays.map(d=>WEEKDAYS[d]).join(', ')] as [string,string]]:[]),
                       ['Duration',     `${browseDays} day${browseDays>1?'s':''}`],
-                      ['Shift',        `${SHIFTS.find(s=>s.key===browseShift)?.label} (${SHIFTS.find(s=>s.key===browseShift)?.time})`],
+                      ['Time',         timeMode === 'custom' ? `${customStartTime} – ${customEndTime} (Custom)` : `${SHIFTS.find(s=>s.key===browseShift)?.label} (${SHIFTS.find(s=>s.key===browseShift)?.time})`],
                     ]} />
-                    <PriceBreakdown rate={patientRate(selectedNurse.hourlyRate)} hours={calcHours(browseStartTime, browseEndTime, browseShift)} vatRate={vatRate} />
+                    <PriceBreakdown rate={patientRate(selectedNurse.hourlyRate)} hours={timeMode === 'custom' ? calcHoursCustom(customStartTime, customEndTime) : calcHours(browseStartTime, browseEndTime, browseShift)} vatRate={vatRate} />
                   </BookCard>
                   <Field label="Full Address *">
                     <div style={{ display:'flex', gap:8 }}>
@@ -1382,6 +1440,74 @@ function Field({ label, children, hint }: { label:string;children:React.ReactNod
         {hint && <div style={{ fontSize:'0.62rem',color:'var(--teal)',fontWeight:600,opacity:0.85 }}>{hint}</div>}
       </div>
       {children}
+    </div>
+  )
+}
+
+function TimeModeToggle({ timeMode, onToggle }: { timeMode: 'shift' | 'custom'; onToggle: (m: 'shift' | 'custom') => void }) {
+  return (
+    <div style={{ display:'flex', gap:6, marginBottom:10, marginTop:6, background:'var(--shell-bg)', borderRadius:9, padding:4, width:'fit-content' }}>
+      {(['shift', 'custom'] as const).map(m => (
+        <button key={m} onClick={() => onToggle(m)} style={{
+          padding:'5px 14px', borderRadius:7, border:'none', cursor:'pointer', fontFamily:'inherit',
+          fontSize:'0.75rem', fontWeight:700,
+          background: timeMode === m ? '#0E7B8C' : 'transparent',
+          color: timeMode === m ? '#fff' : 'var(--muted)',
+          transition:'all 0.15s',
+        }}>
+          {m === 'shift' ? '🕐 Shift-Based' : '⏰ Custom Time'}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function CustomTimePicker({ startTime, endTime, onStartChange, onEndChange, minHours }: {
+  startTime: string; endTime: string
+  onStartChange: (v: string) => void; onEndChange: (v: string) => void
+  minHours: number
+}) {
+  const startSlots = allDaySlots().slice(0, 24)
+  const endSlots   = allDaySlots().slice(1)
+  const computed   = calcHoursCustom(startTime, endTime)
+  const isValid    = computed >= minHours
+
+  return (
+    <div style={{ marginTop:8, padding:'12px 14px', background:'rgba(14,123,140,0.04)', border:'1px solid rgba(14,123,140,0.15)', borderRadius:10 }}>
+      <div style={{ fontSize:'0.72rem', fontWeight:700, color:'var(--muted)', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:8 }}>
+        Select Any Time (24h)
+      </div>
+      <div style={{ display:'grid', gridTemplateColumns:'1fr auto 1fr', gap:8, alignItems:'center' }}>
+        <div>
+          <div style={{ fontSize:'0.65rem', color:'var(--muted)', marginBottom:3 }}>Start Time</div>
+          <select value={startTime} onChange={e => onStartChange(e.target.value)}
+            style={{ width:'100%', padding:'7px 8px', borderRadius:7, border:'1px solid var(--border)', fontSize:'0.82rem', fontFamily:'inherit', background:'#fff', color:'var(--ink)' }}>
+            {startSlots.map(s => {
+              const [val, label] = s.split('|')
+              return <option key={val} value={val}>{label}</option>
+            })}
+          </select>
+        </div>
+        <span style={{ color:'var(--muted)', fontSize:'0.85rem', marginTop:16 }}>→</span>
+        <div>
+          <div style={{ fontSize:'0.65rem', color:'var(--muted)', marginBottom:3 }}>End Time</div>
+          <select value={endTime} onChange={e => onEndChange(e.target.value)}
+            style={{ width:'100%', padding:'7px 8px', borderRadius:7, border:'1px solid var(--border)', fontSize:'0.82rem', fontFamily:'inherit', background:'#fff', color:'var(--ink)' }}>
+            {endSlots.map(s => {
+              const [val, label] = s.split('|')
+              return <option key={val} value={val}>{label}</option>
+            })}
+          </select>
+        </div>
+      </div>
+      <div style={{ marginTop:8, display:'flex', alignItems:'center', gap:8 }}>
+        <span style={{ fontSize:'0.75rem', fontWeight:700, color: isValid ? '#27A869' : '#E04A4A' }}>
+          {computed > 0 ? `${computed} hour${computed !== 1 ? 's' : ''} selected` : 'Select valid time range'}
+        </span>
+        {!isValid && computed > 0 && (
+          <span style={{ fontSize:'0.68rem', color:'#E04A4A' }}>(Minimum {minHours}h required)</span>
+        )}
+      </div>
     </div>
   )
 }
