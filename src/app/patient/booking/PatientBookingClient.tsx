@@ -190,7 +190,7 @@ export default function PatientBookingClient({
   const [smartStartTime,  setSmartStartTime]  = useState('16:00')
   const [smartEndTime,    setSmartEndTime]    = useState('18:00')
   const [smartStart,  setSmartStart]  = useState(nxt(1))
-  const [smartEnd,    setSmartEnd]    = useState(nxt(4))
+  const [smartEnd,    setSmartEnd]    = useState(nxt(8))
   const [smartNotes,  setSmartNotes]  = useState('')
   const [smartAddr,   setSmartAddr]   = useState('')
   const [genderPref,  setGenderPref]  = useState('Any')
@@ -211,7 +211,7 @@ export default function PatientBookingClient({
   const [browseStartTime, setBrowseStartTime] = useState('08:00')
   const [browseEndTime,   setBrowseEndTime]   = useState('10:00')
   const [browseStart,     setBrowseStart]     = useState(nxt(1))
-  const [browseEnd,       setBrowseEnd]       = useState(nxt(2))
+  const [browseEnd,       setBrowseEnd]       = useState(nxt(8))
   const [browseService, setBrowseService] = useState(SERVICES[0])
   const [browseAddr,    setBrowseAddr]    = useState('')
   const [browseNotes,   setBrowseNotes]   = useState('')
@@ -256,9 +256,9 @@ export default function PatientBookingClient({
       .catch(() => setShiftAvail({}))
   }, [selectedNurse?.id, browseStart, browseEnd])
 
-  // Smart duration = days between start and end
-  const smartDays = Math.max(1, Math.round((new Date(smartEnd).getTime() - new Date(smartStart).getTime()) / 86400000))
-  const browseDays = Math.max(1, Math.round((new Date(browseEnd).getTime() - new Date(browseStart).getTime()) / 86400000))
+  // Smart duration = days between start and end (0 = same day = 1 session)
+  const smartDays = Math.round((new Date(smartEnd).getTime() - new Date(smartStart).getTime()) / 86400000)
+  const browseDays = Math.round((new Date(browseEnd).getTime() - new Date(browseStart).getTime()) / 86400000)
 
   function showToast(msg: string) { setToast(msg); setTimeout(() => setToast(''), 3000) }
 
@@ -535,7 +535,7 @@ export default function PatientBookingClient({
                     <Field label="Booking Type">
                       <div style={{ display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:8,marginTop:6,marginBottom:16 }}>
                         {([['one_time','📅','One-Time','Single session'],['weekly','🔁','Weekly','Pick days/week'],['monthly','📆','Monthly','Same day each month']] as const).map(([val,icon,label,sub])=>(
-                          <div key={val} onClick={()=>setBookingType(val as any)} style={{ border:`1.5px solid ${bookingType===val?'#006D7A':'var(--border)'}`,background:bookingType===val?'rgba(0,109,122,0.07)':'var(--cream)',borderRadius:10,padding:'10px 8px',textAlign:'center',cursor:'pointer',transition:'all 0.15s' }}>
+                          <div key={val} onClick={()=>{ setBookingType(val as any); if(val==='one_time') setSmartEnd(smartStart); else if(val==='weekly'||val==='monthly') setSmartEnd(nxt(8)) }} style={{ border:`1.5px solid ${bookingType===val?'#006D7A':'var(--border)'}`,background:bookingType===val?'rgba(0,109,122,0.07)':'var(--cream)',borderRadius:10,padding:'10px 8px',textAlign:'center',cursor:'pointer',transition:'all 0.15s' }}>
                             <div style={{ fontSize:'1.2rem',marginBottom:3 }}>{icon}</div>
                             <div style={{ fontSize:'0.78rem',fontWeight:700,color:bookingType===val?'#006D7A':'var(--ink)' }}>{label}</div>
                             <div style={{ fontSize:'0.65rem',color:'var(--muted)',marginTop:1 }}>{sub}</div>
@@ -571,7 +571,7 @@ export default function PatientBookingClient({
 
                     {bookingType==='one_time' && (
                       <div style={{ fontSize:'0.78rem',color:'#006D7A',fontWeight:600,marginBottom:16 }}>
-                        📅 Duration: {smartDays} day{smartDays>1?'s':''}
+                        📅 1 session · {smartStart}
                       </div>
                     )}
                     {bookingType!=='one_time' && (
@@ -684,7 +684,7 @@ export default function PatientBookingClient({
                       ['Start Date',   smartStart],
                       ...(bookingType!=='one_time'?[['End Date',smartEnd] as [string,string]]:[]),
                       ...(bookingType==='weekly'?[['Days',selectedDays.map(d=>WEEKDAYS[d]).join(', ')] as [string,string]]:[]),
-                      ['Duration',     `${smartDays} day${smartDays>1?'s':''}`],
+                      ['Duration',     bookingType==='one_time' ? '1 session' : `${smartDays} day${smartDays!==1?'s':''}`],
                     ]} />
                     <PriceBreakdown rate={patientRate(matchedNurse.hourlyRate)} hours={timeMode === 'custom' ? calcHoursCustom(customStartTime, customEndTime) : calcHours(smartStartTime, smartEndTime, smartShift)} vatRate={vatRate} />
                   </BookCard>
@@ -756,7 +756,7 @@ export default function PatientBookingClient({
                     <Field label="Booking Type">
                       <div style={{ display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:8,marginTop:6,marginBottom:16 }}>
                         {([['one_time','📅','One-Time','Single session'],['weekly','🔁','Weekly','Pick days/week'],['monthly','📆','Monthly','Same day each month']] as const).map(([val,icon,label,sub])=>(
-                          <div key={val} onClick={()=>setBookingType(val as any)} style={{ border:`1.5px solid ${bookingType===val?'#C5880F':'var(--border)'}`,background:bookingType===val?'rgba(197,136,15,0.07)':'var(--cream)',borderRadius:10,padding:'10px 8px',textAlign:'center',cursor:'pointer',transition:'all 0.15s' }}>
+                          <div key={val} onClick={()=>{ setBookingType(val as any); if(val==='one_time') setBrowseEnd(browseStart); else if(val==='weekly'||val==='monthly') setBrowseEnd(nxt(8)) }} style={{ border:`1.5px solid ${bookingType===val?'#C5880F':'var(--border)'}`,background:bookingType===val?'rgba(197,136,15,0.07)':'var(--cream)',borderRadius:10,padding:'10px 8px',textAlign:'center',cursor:'pointer',transition:'all 0.15s' }}>
                             <div style={{ fontSize:'1.2rem',marginBottom:3 }}>{icon}</div>
                             <div style={{ fontSize:'0.78rem',fontWeight:700,color:bookingType===val?'#C5880F':'var(--ink)' }}>{label}</div>
                             <div style={{ fontSize:'0.65rem',color:'var(--muted)',marginTop:1 }}>{sub}</div>
@@ -791,7 +791,7 @@ export default function PatientBookingClient({
                     )}
 
                     <div style={{ fontSize:'0.78rem',color:'#C5880F',fontWeight:600,marginBottom:16 }}>
-                      📅 {bookingType==='one_time'?`Duration: ${browseDays} day${browseDays>1?'s':''}`:bookingType==='weekly'?`Weekly · ${browseStart} → ${browseEnd}`:`Monthly · ${browseStart} → ${browseEnd}`}
+                      📅 {bookingType==='one_time'?`1 session · ${browseStart}`:bookingType==='weekly'?`Weekly · ${browseStart} → ${browseEnd}`:`Monthly · ${browseStart} → ${browseEnd}`}
                     </div>
                     <Field label="Service Type">
                       <select className="form-input" value={browseService} onChange={e=>setBrowseService(e.target.value)} style={{ fontSize:'0.85rem',marginTop:4 }}>
@@ -879,7 +879,7 @@ export default function PatientBookingClient({
                       ['Start Date',   browseStart],
                       ...(bookingType!=='one_time'?[['End Date',browseEnd] as [string,string]]:[]),
                       ...(bookingType==='weekly'?[['Days',selectedDays.map(d=>WEEKDAYS[d]).join(', ')] as [string,string]]:[]),
-                      ['Duration',     `${browseDays} day${browseDays>1?'s':''}`],
+                      ['Duration',     bookingType==='one_time' ? '1 session' : `${browseDays} day${browseDays!==1?'s':''}`],
                       ['Time',         timeMode === 'custom' ? `${customStartTime} – ${customEndTime} (Custom)` : `${SHIFTS.find(s=>s.key===browseShift)?.label} (${SHIFTS.find(s=>s.key===browseShift)?.time})`],
                     ]} />
                     <PriceBreakdown rate={patientRate(selectedNurse.hourlyRate)} hours={timeMode === 'custom' ? calcHoursCustom(customStartTime, customEndTime) : calcHours(browseStartTime, browseEndTime, browseShift)} vatRate={vatRate} />
