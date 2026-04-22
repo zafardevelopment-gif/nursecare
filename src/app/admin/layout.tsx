@@ -13,10 +13,13 @@ const adminMenu = [
   { icon: '📋', label: 'Bookings',          href: '/admin/bookings?type=patient' },
   { icon: '🏥', label: 'Hospitals',          href: '/admin/hospitals' },
   { icon: '👩‍⚕️', label: 'Hospital Bookings', href: '/admin/hospital-bookings' },
+  { icon: '🌴', label: 'Leave Requests',      href: '/admin/leave' },
   { icon: '⚠️', label: 'Disputes',           href: '/admin/disputes' },
+  { icon: '📣', label: 'Complaints',          href: '/admin/complaints' },
   { icon: '📄', label: 'Agreements',        href: '/admin/agreements' },
   { icon: '🪪', label: 'ID Cards',          href: '/admin/nurses/id-cards' },
   { icon: '👥', label: 'Users',             href: '/admin/users' },
+  { icon: '🩺', label: 'Service Master',     href: '/admin/services' },
   { icon: '⚙️', label: 'Settings',          href: '/admin/settings' },
 ]
 

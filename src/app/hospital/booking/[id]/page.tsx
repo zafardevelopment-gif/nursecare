@@ -145,6 +145,14 @@ export default async function HospitalBookingDetailPage({
   const isCancelled = booking.status === 'cancelled'
   const canEdit = booking.status === 'pending' || booking.status === 'reviewing'
 
+  // Fetch ledger items (Service Master path)
+  const { data: ledgerItems } = await supabase
+    .from('booking_service_items')
+    .select('id, service_name, unit_price, quantity')
+    .eq('booking_id', id)
+    .eq('booking_type', 'hospital')
+    .order('created_at')
+
   // Stats
   const approvedCount = nurseSelections.filter(n => n.status === 'approved').length
   const rejectedCount = nurseSelections.filter(n => n.status === 'rejected').length
@@ -182,7 +190,7 @@ export default async function HospitalBookingDetailPage({
               <code style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--teal)', letterSpacing: '0.02em' }}>{id.slice(0, 8).toUpperCase()}</code>
             </div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
             <span style={{
               background: bStatus.bg, color: bStatus.color,
               padding: '7px 18px', borderRadius: 50, fontWeight: 700, fontSize: '0.82rem',
@@ -190,6 +198,21 @@ export default async function HospitalBookingDetailPage({
             }}>
               {bStatus.label}
             </span>
+            {booking.priority && booking.priority !== 'normal' && (
+              <span style={{
+                background: booking.priority === 'critical' ? 'rgba(224,74,74,0.09)' : 'rgba(245,132,42,0.1)',
+                color: booking.priority === 'critical' ? '#E04A4A' : '#b85e00',
+                padding: '5px 14px', borderRadius: 50, fontWeight: 700, fontSize: '0.78rem',
+                border: `1px solid ${booking.priority === 'critical' ? 'rgba(224,74,74,0.3)' : 'rgba(245,132,42,0.35)'}`,
+              }}>
+                {booking.priority === 'critical' ? '🚨 Critical' : '⚡ Urgent'}
+              </span>
+            )}
+            {booking.is_recurring && (
+              <span style={{ background: 'rgba(107,63,160,0.1)', color: '#6B3FA0', padding: '5px 12px', borderRadius: 50, fontWeight: 700, fontSize: '0.78rem', border: '1px solid rgba(107,63,160,0.25)' }}>
+                🔁 Recurring
+              </span>
+            )}
             {canEdit && (
               <Link href={`/hospital/booking/${id}/edit`} style={{
                 background: 'var(--card)', color: 'var(--ink)',
@@ -297,6 +320,12 @@ export default async function HospitalBookingDetailPage({
             <InfoRow label="End Date"           value={new Date(booking.end_date).toLocaleDateString('en-GB', { weekday:'short', day:'numeric', month:'long', year:'numeric' })} />
             <InfoRow label="Duration"           value={`${booking.duration_days} days`} />
             <InfoRow label="Total Nurses"       value={booking.total_nurses} />
+            {booking.priority && booking.priority !== 'normal' && (
+              <InfoRow label="Priority" value={booking.priority === 'critical' ? '🚨 Critical' : '⚡ Urgent'} highlight />
+            )}
+            {booking.is_recurring && (
+              <InfoRow label="Recurring" value={`🔁 ${booking.recurrence_type ?? 'weekly'}${booking.recurrence_end_date ? ` until ${new Date(booking.recurrence_end_date).toLocaleDateString('en-GB')}` : ''}`} />
+            )}
             {booking.gender_preference && booking.gender_preference !== 'any' && (
               <InfoRow label="Gender Preference" value={booking.gender_preference} />
             )}
@@ -305,6 +334,9 @@ export default async function HospitalBookingDetailPage({
             )}
             {booking.special_instructions && (
               <InfoRow label="Instructions" value={booking.special_instructions} />
+            )}
+            {booking.internal_notes && (
+              <InfoRow label="Internal Notes" value={booking.internal_notes} />
             )}
             {booking.admin_notes && (
               <InfoRow label="Admin Notes" value={booking.admin_notes} highlight />
@@ -504,6 +536,48 @@ export default async function HospitalBookingDetailPage({
                   <td colSpan={showWithCommission ? 6 : 4} style={{ padding: '10px 14px', fontWeight: 800, fontSize: '0.82rem', color: 'var(--ink)' }}>TOTAL</td>
                   <td style={{ padding: '10px 14px', fontWeight: 800, fontSize: '0.9rem', color: '#1A7A4A' }}>
                     SAR {showWithCommission ? totalNurseCost.toFixed(2) : totalNurseEarnings.toFixed(2)}
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* ── Service Ledger (Service Master path) ── */}
+      {ledgerItems && ledgerItems.length > 0 && (
+        <div className="dash-card" style={{ marginBottom: '1.5rem', borderLeft: '4px solid #0E7B8C' }}>
+          <div className="dash-card-header">
+            <span className="dash-card-title">🩺 Service Ledger</span>
+            <span style={{ fontSize: '0.72rem', color: 'var(--muted)' }}>Pricing snapshot at booking time</span>
+          </div>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.83rem' }}>
+              <thead>
+                <tr style={{ background: 'var(--shell-bg)', borderBottom: '1px solid var(--border)' }}>
+                  {['Service', 'Unit Price', 'Qty', 'Line Total'].map(h => (
+                    <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontWeight: 700, color: 'var(--muted)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {ledgerItems.map((item: any) => {
+                  const lineTotal = Number(item.unit_price) * (item.quantity ?? 1)
+                  return (
+                    <tr key={item.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                      <td style={{ padding: '11px 16px', fontWeight: 700, color: 'var(--ink)' }}>{item.service_name}</td>
+                      <td style={{ padding: '11px 16px', color: '#0E7B8C', fontWeight: 600 }}>SAR {Number(item.unit_price).toFixed(2)}</td>
+                      <td style={{ padding: '11px 16px', color: 'var(--muted)' }}>{item.quantity ?? 1}</td>
+                      <td style={{ padding: '11px 16px', fontWeight: 800, color: '#1A7A4A' }}>SAR {lineTotal.toFixed(2)}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+              <tfoot>
+                <tr style={{ borderTop: '2px solid var(--border)', background: 'var(--shell-bg)' }}>
+                  <td colSpan={3} style={{ padding: '10px 16px', fontWeight: 800, fontSize: '0.82rem', color: 'var(--ink)' }}>TOTAL (informational)</td>
+                  <td style={{ padding: '10px 16px', fontWeight: 800, fontSize: '0.9rem', color: '#1A7A4A' }}>
+                    SAR {ledgerItems.reduce((s: number, i: any) => s + Number(i.unit_price) * (i.quantity ?? 1), 0).toFixed(2)}
                   </td>
                 </tr>
               </tfoot>

@@ -14,6 +14,10 @@ export type NotificationType =
   | 'booking_completed'
   | 'booking_in_progress'
   | 'payment_received'
+  | 'booking_new'
+  | 'booking_cancelled'
+  | 'booking_change_requested'
+  | 'booking_change_resolved'
 
 interface NotifPayload {
   userId: string

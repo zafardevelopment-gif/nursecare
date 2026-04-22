@@ -5,6 +5,11 @@ import { recalcShiftAvailability } from '@/app/provider/availability/actions'
 import type { ShiftKey } from '@/app/provider/availability/shiftConstants'
 import { sendNotifications } from '@/lib/notifications'
 
+async function getAdminUserIds(supabase: ReturnType<typeof createSupabaseServiceRoleClient>): Promise<string[]> {
+  const { data } = await supabase.from('users').select('id').eq('role', 'admin')
+  return (data ?? []).map((r: any) => r.id)
+}
+
 // Generate all dates for a recurring booking
 function generateDates(
   bookingType: string,
@@ -66,6 +71,7 @@ export async function submitBookingAction(formData: FormData): Promise<{ booking
   const requireNurseApproval: boolean = (settings as any)?.require_nurse_approval ?? true
 
   // Read form fields
+  const service_id        = (formData.get('service_id')        as string) || null
   const service_type      = (formData.get('service_type')      as string) || ''
   const patient_condition = (formData.get('patient_condition')  as string) || ''
   const shift             = (formData.get('shift')              as string) || 'morning'
@@ -74,6 +80,10 @@ export async function submitBookingAction(formData: FormData): Promise<{ booking
   const city              = (formData.get('city')               as string) || ''
   const address           = (formData.get('address')            as string) || ''
   const notes             = (formData.get('notes')              as string) || ''
+  // Service Master ledger fields (present only when flag is ON)
+  const ledger_service_id   = (formData.get('ledger_service_id')   as string) || null
+  const ledger_service_name = (formData.get('ledger_service_name') as string) || ''
+  const ledger_unit_price   = parseFloat(formData.get('ledger_unit_price') as string) || 0
   const start_date        = (formData.get('start_date')         as string) || ''
   const end_date          = (formData.get('end_date')           as string) || ''
   const booking_type      = (formData.get('booking_type')       as string) || 'one_time'
@@ -119,6 +129,7 @@ export async function submitBookingAction(formData: FormData): Promise<{ booking
       total_sessions:    dates.length,
       nurse_id:          nurse_user_id || null,
       nurse_name:        nurse_name    || null,
+      service_id:        service_id    || null,
       status:            requireNurseApproval ? 'pending' : 'accepted',
       payment_status:    'unpaid',
       payment_deadline_at: paymentDeadlineHours > 0
@@ -186,6 +197,63 @@ export async function submitBookingAction(formData: FormData): Promise<{ booking
     }
   }
 
+  // Write immutable pricing ledger snapshot (Service Master path only)
+  // Fix B1 + B2 + B3: validate nurse offers service, use authoritative DB price, check nurse approval
+  if (ledger_service_id && nurse_user_id) {
+    // B1: verify nurse actually offers this service and it's active
+    const { data: nurseServiceRow } = await supabase
+      .from('nurse_services')
+      .select('my_price, is_active, nurse_id')
+      .eq('service_id', ledger_service_id)
+      .eq('is_active', true)
+      .single()
+
+    // B3: verify nurse is approved
+    const { data: nurseApprovalRow } = await supabase
+      .from('nurses')
+      .select('status')
+      .eq('user_id', nurse_user_id)
+      .single()
+
+    if (!nurseServiceRow) {
+      // Rollback: delete booking_requests + any shift_bookings already inserted (cascade via FK or explicit)
+      await Promise.all([
+        supabase.from('shift_bookings').delete().eq('booking_request_id', request.id),
+        supabase.from('booking_requests').delete().eq('id', request.id),
+      ])
+      return { error: 'The selected nurse does not offer this service. Please select a different nurse.' }
+    }
+    if (nurseApprovalRow?.status !== 'approved') {
+      await Promise.all([
+        supabase.from('shift_bookings').delete().eq('booking_request_id', request.id),
+        supabase.from('booking_requests').delete().eq('id', request.id),
+      ])
+      return { error: 'The selected nurse is not currently approved. Please select a different nurse.' }
+    }
+
+    // B2: use authoritative price from DB, not client-submitted value
+    const authoritative_price = Number(nurseServiceRow.my_price)
+
+    await supabase.from('booking_service_items').insert({
+      booking_id:   request.id,
+      booking_type: 'patient',
+      service_id:   ledger_service_id,
+      service_name: ledger_service_name,
+      unit_price:   authoritative_price,
+      quantity:     1,
+    })
+  } else if (ledger_service_name && ledger_unit_price > 0 && !ledger_service_id) {
+    // Legacy SM path without service_id — write as-is (no nurse_services to validate against)
+    await supabase.from('booking_service_items').insert({
+      booking_id:   request.id,
+      booking_type: 'patient',
+      service_id:   null,
+      service_name: ledger_service_name,
+      unit_price:   ledger_unit_price,
+      quantity:     1,
+    })
+  }
+
   // Send notifications
   const deadlineFmt = paymentDeadlineHours > 0
     ? ` Please complete payment within ${paymentDeadlineHours} hour${paymentDeadlineHours !== 1 ? 's' : ''} to confirm your booking.`
@@ -204,10 +272,21 @@ export async function submitBookingAction(formData: FormData): Promise<{ booking
   if (nurse_user_id) {
     notifPayloads.push({
       userId: nurse_user_id,
-      type: 'booking_accepted' as const,
+      type: 'booking_new' as const,
       title: '🔔 New Booking Request',
       body: `You have a new booking request from ${userName} for ${start_date}. Awaiting payment confirmation.`,
       data: { bookingId: request.id, deadlineHours: 0 },
+    })
+  }
+
+  const adminIds = await getAdminUserIds(supabase)
+  for (const adminId of adminIds) {
+    notifPayloads.push({
+      userId: adminId,
+      type: 'booking_new' as const,
+      title: '📋 New Booking',
+      body: `${userName} placed a new booking for ${service_type || 'nursing care'} on ${start_date}${nurse_name ? ` with ${nurse_name}` : ''}.`,
+      data: { bookingId: request.id },
     })
   }
 

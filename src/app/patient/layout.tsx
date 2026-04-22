@@ -13,6 +13,7 @@ const patientMenu = [
   { icon: '🏥', label: 'Book a Nurse', href: '/patient/booking' },
   { icon: '📅', label: 'My Bookings',  href: '/patient/bookings' },
   { icon: '💬', label: 'Messages',     href: '/patient/messages' },
+  { icon: '📣', label: 'Complaints',   href: '/patient/complaints' },
   { icon: '👤', label: 'My Profile',   href: '/patient/profile' },
 ]
 

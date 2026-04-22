@@ -1,6 +1,9 @@
 import { requireRole } from '@/lib/auth'
 import { createSupabaseServiceRoleClient } from '@/lib/supabase-server'
 import HospitalBookingClient from './HospitalBookingClient'
+import HospitalSMBookingClient from './HospitalSMBookingClient'
+import type { SMCategory, SMService } from './HospitalSMBookingClient'
+import { getServiceMasterEnabled } from '@/lib/platform-settings'
 import Link from 'next/link'
 
 export const dynamic = 'force-dynamic'
@@ -13,9 +16,16 @@ const STATUS_META: Record<string, { bg: string; color: string; label: string }> 
   cancelled: { bg: 'rgba(224,74,74,0.06)', color: '#E04A4A', label: '✕ Cancelled' },
 }
 
+const PRIORITY_BADGE: Record<string, { color: string; bg: string; icon: string }> = {
+  normal:   { color: '#0E7B8C', bg: 'rgba(14,123,140,0.07)',  icon: '' },
+  urgent:   { color: '#b85e00', bg: 'rgba(245,132,42,0.1)',   icon: '⚡' },
+  critical: { color: '#E04A4A', bg: 'rgba(224,74,74,0.09)',   icon: '🚨' },
+}
+
 export default async function HospitalBookingPage() {
-  const user     = await requireRole('hospital')
-  const supabase = createSupabaseServiceRoleClient()
+  const user      = await requireRole('hospital')
+  const supabase  = createSupabaseServiceRoleClient()
+  const flagEnabled = await getServiceMasterEnabled()
 
   const { data: hospital } = await supabase
     .from('hospitals')
@@ -23,7 +33,6 @@ export default async function HospitalBookingPage() {
     .eq('user_id', user.id)
     .single()
 
-  // Block if not active
   if (!hospital || hospital.status !== 'active') {
     return (
       <div className="dash-shell">
@@ -74,7 +83,7 @@ export default async function HospitalBookingPage() {
 
     supabase
       .from('hospital_booking_requests')
-      .select('id, status, start_date, end_date, total_nurses, shifts, created_at, nurse_selections')
+      .select('id, status, start_date, end_date, total_nurses, shifts, created_at, nurse_selections, priority, service_id, is_recurring')
       .eq('hospital_id', hospital.id)
       .order('created_at', { ascending: false })
       .limit(20),
@@ -98,9 +107,44 @@ export default async function HospitalBookingPage() {
 
   const bookings = pastBookings ?? []
 
+  // ── Service Master catalog (only loaded when flag ON) ──────────────
+  let categories: SMCategory[] = []
+  let services:   SMService[]  = []
+
+  if (flagEnabled) {
+    const [{ data: rawCats }, { data: rawSvcs }] = await Promise.all([
+      supabase
+        .from('service_categories')
+        .select('id, name, icon, description')
+        .eq('is_active', true)
+        .order('sort_order').order('name'),
+
+      supabase
+        .from('services')
+        .select('id, name, description, base_price, min_price, max_price, duration_minutes, category_id')
+        .eq('is_active', true)
+        .order('sort_order').order('name'),
+    ])
+
+    categories = (rawCats ?? []).map((c: any) => ({
+      id: c.id, name: c.name, icon: c.icon, description: c.description,
+    }))
+
+    services = (rawSvcs ?? []).map((s: any) => ({
+      id:               s.id,
+      name:             s.name,
+      description:      s.description,
+      base_price:       Number(s.base_price),
+      min_price:        Number(s.min_price),
+      max_price:        s.max_price !== null ? Number(s.max_price) : null,
+      duration_minutes: s.duration_minutes,
+      category_id:      s.category_id,
+    }))
+  }
+
   return (
     <div className="dash-shell" style={{ padding: 0 }}>
-      {/* Past Bookings List — shown above the form if there are any */}
+      {/* Past Bookings List */}
       {bookings.length > 0 && (
         <div style={{ padding: '1.5rem 1.5rem 0' }}>
           <div className="dash-card">
@@ -111,7 +155,10 @@ export default async function HospitalBookingPage() {
             <div className="dash-card-body" style={{ padding: 0 }}>
               {bookings.map((b, i) => {
                 const sm = STATUS_META[b.status] ?? STATUS_META.pending
+                const priority = (b as any).priority ?? 'normal'
+                const pb = PRIORITY_BADGE[priority] ?? PRIORITY_BADGE.normal
                 const nurseCount = (b.nurse_selections as any[])?.length ?? 0
+                const hasService = !!(b as any).service_id
                 return (
                   <Link key={b.id} href={`/hospital/booking/${b.id}`} style={{ textDecoration: 'none' }}>
                     <div style={{
@@ -121,8 +168,19 @@ export default async function HospitalBookingPage() {
                       cursor: 'pointer',
                     }}>
                       <div>
-                        <div style={{ fontWeight: 700, fontSize: '0.88rem', color: 'var(--ink)' }}>
-                          {new Date(b.start_date).toLocaleDateString('en-GB')} – {new Date(b.end_date).toLocaleDateString('en-GB')}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <div style={{ fontWeight: 700, fontSize: '0.88rem', color: 'var(--ink)' }}>
+                            {new Date(b.start_date).toLocaleDateString('en-GB')} – {new Date(b.end_date).toLocaleDateString('en-GB')}
+                          </div>
+                          {pb.icon && (
+                            <span style={{ fontSize: '0.68rem', fontWeight: 700, color: pb.color, background: pb.bg, padding: '1px 7px', borderRadius: 50 }}>{pb.icon} {priority}</span>
+                          )}
+                          {(b as any).is_recurring && (
+                            <span style={{ fontSize: '0.65rem', color: '#6B3FA0', background: 'rgba(107,63,160,0.08)', padding: '1px 6px', borderRadius: 50, fontWeight: 700 }}>🔁</span>
+                          )}
+                          {hasService && (
+                            <span style={{ fontSize: '0.65rem', color: '#0E7B8C', background: 'rgba(14,123,140,0.08)', padding: '1px 6px', borderRadius: 50, fontWeight: 700 }}>🩺 SM</span>
+                          )}
                         </div>
                         <div style={{ fontSize: '0.75rem', color: 'var(--muted)', marginTop: 2 }}>
                           {b.total_nurses} nurses · {nurseCount} selected · {(b.shifts as string[])?.join(', ')}
@@ -146,14 +204,28 @@ export default async function HospitalBookingPage() {
         </div>
       )}
 
-      <HospitalBookingClient
-        hospital={{ id: hospital.id, name: hospital.hospital_name, city: hospital.city ?? 'Riyadh' }}
-        departments={departments ?? []}
-        requestedBy={user.full_name}
-        nurses={nurses}
-        minAdvanceHours={minAdvanceHours}
-        maxAdvanceDays={maxAdvanceDays}
-      />
+      {/* ── Booking form: SM path or legacy path ── */}
+      {flagEnabled ? (
+        <HospitalSMBookingClient
+          hospital={{ id: hospital.id, name: hospital.hospital_name, city: hospital.city ?? 'Riyadh' }}
+          departments={departments ?? []}
+          requestedBy={user.full_name}
+          nurses={nurses}
+          categories={categories}
+          services={services}
+          minAdvanceHours={minAdvanceHours}
+          maxAdvanceDays={maxAdvanceDays}
+        />
+      ) : (
+        <HospitalBookingClient
+          hospital={{ id: hospital.id, name: hospital.hospital_name, city: hospital.city ?? 'Riyadh' }}
+          departments={departments ?? []}
+          requestedBy={user.full_name}
+          nurses={nurses}
+          minAdvanceHours={minAdvanceHours}
+          maxAdvanceDays={maxAdvanceDays}
+        />
+      )}
     </div>
   )
 }
