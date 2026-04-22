@@ -7,35 +7,36 @@ export default async function AdminDashboardPage() {
   const supabase = await createSupabaseServerClient()
   const serviceSupabase = createSupabaseServiceRoleClient()
 
+  // Fetch all booking statuses in one query, then count in JS — 1 round-trip instead of 6
   const [
-    { count: pendingNurses },
-    { count: updatePendingNurses },
-    { count: totalNurses },
-    { count: approvedNurses },
-    { count: totalBookings },
-    { count: pendingBookings },
-    { count: activeBookings },
-    { count: inProgressBookings },
-    { count: workDoneBookings },
-    { count: completedBookings },
+    { data: nurseStatuses },
+    { data: bookingStatuses },
     { count: totalUsers },
     { count: pendingUpdateRequests },
     { count: rejectedAgreements },
   ] = await Promise.all([
-    supabase.from('nurses').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
-    supabase.from('nurses').select('*', { count: 'exact', head: true }).eq('status', 'update_pending'),
-    supabase.from('nurses').select('*', { count: 'exact', head: true }),
-    supabase.from('nurses').select('*', { count: 'exact', head: true }).eq('status', 'approved'),
-    serviceSupabase.from('booking_requests').select('*', { count: 'exact', head: true }),
-    serviceSupabase.from('booking_requests').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
-    serviceSupabase.from('booking_requests').select('*', { count: 'exact', head: true }).in('status', ['accepted', 'confirmed']),
-    serviceSupabase.from('booking_requests').select('*', { count: 'exact', head: true }).eq('status', 'in_progress'),
-    serviceSupabase.from('booking_requests').select('*', { count: 'exact', head: true }).eq('status', 'work_done'),
-    serviceSupabase.from('booking_requests').select('*', { count: 'exact', head: true }).eq('status', 'completed'),
+    supabase.from('nurses').select('status'),
+    serviceSupabase.from('booking_requests').select('status'),
     supabase.from('users').select('*', { count: 'exact', head: true }),
     supabase.from('nurse_update_requests').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
     supabase.from('agreements').select('*', { count: 'exact', head: true }).eq('status', 'rejected'),
   ])
+
+  // Count nurse statuses in JS — zero extra DB round-trips
+  const nurses = nurseStatuses ?? []
+  const pendingNurses      = nurses.filter(n => n.status === 'pending').length
+  const updatePendingNurses = nurses.filter(n => n.status === 'update_pending').length
+  const totalNurses        = nurses.length
+  const approvedNurses     = nurses.filter(n => n.status === 'approved').length
+
+  // Count booking statuses in JS
+  const bookings = bookingStatuses ?? []
+  const totalBookings      = bookings.length
+  const pendingBookings    = bookings.filter(b => b.status === 'pending').length
+  const activeBookings     = bookings.filter(b => b.status === 'accepted' || b.status === 'confirmed').length
+  const inProgressBookings = bookings.filter(b => b.status === 'in_progress').length
+  const workDoneBookings   = bookings.filter(b => b.status === 'work_done').length
+  const completedBookings  = bookings.filter(b => b.status === 'completed').length
 
   const totalPendingActions = (pendingNurses ?? 0) + (updatePendingNurses ?? 0) + (pendingUpdateRequests ?? 0) + (rejectedAgreements ?? 0)
 

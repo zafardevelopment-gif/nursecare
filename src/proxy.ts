@@ -12,78 +12,79 @@ const PROTECTED_ROUTES: Record<string, string[]> = {
 // Routes that logged-in users should NOT visit (auth pages)
 const AUTH_ROUTES = ['/auth/login', '/auth/signup']
 
+const DASHBOARD_MAP: Record<string, string> = {
+  patient:  '/patient/dashboard',
+  provider: '/provider/dashboard',
+  admin:    '/admin/dashboard',
+  hospital: '/hospital/dashboard',
+}
+
 export async function proxy(request: NextRequest) {
   const { supabase, supabaseResponse } = await createSupabaseMiddlewareClient(request)
   const pathname = request.nextUrl.pathname
 
-  // Skip auth redirect for server actions — they are POST requests from the client
-  // and the user was already authenticated when the page loaded.
+  // Pass pathname header for active sidebar highlighting on every request
+  supabaseResponse.headers.set('x-pathname', pathname)
+
+  // Skip heavy auth checks for POST server actions — already authenticated when page loaded
   if (request.method === 'POST') {
     await supabase.auth.getUser()
     return supabaseResponse
   }
 
-  // Refresh session — critical, must always run
+  // Refresh session — must always run to keep cookies fresh
   const { data: { user } } = await supabase.auth.getUser()
 
-  // If visiting an auth page while already logged in → redirect to dashboard
-  if (user && AUTH_ROUTES.some(r => pathname.startsWith(r))) {
+  const isProtected = Object.keys(PROTECTED_ROUTES).some(p => pathname.startsWith(p))
+  const isAuthPage  = AUTH_ROUTES.some(r => pathname.startsWith(r))
+
+  // Neither protected nor auth page — pass through immediately, no DB query
+  if (!isProtected && !isAuthPage) {
+    return supabaseResponse
+  }
+
+  // Fetch user role once — used for both redirect and protection checks
+  let userRole: string | null = null
+  if (user) {
     const { data: profile } = await supabase
       .from('users')
       .select('role')
       .eq('id', user.id)
       .single()
+    userRole = profile?.role ?? null
 
-    if (profile?.role) {
-      const dashboardMap: Record<string, string> = {
-        patient:  '/patient/dashboard',
-        provider: '/provider/dashboard',
-        admin:    '/admin/dashboard',
-        hospital: '/hospital/dashboard',
-      }
-      const dest = dashboardMap[profile.role] ?? '/'
-      return NextResponse.redirect(new URL(dest, request.url))
+    // Pass user-id and role in headers so server components can skip re-querying
+    supabaseResponse.headers.set('x-user-id', user.id)
+    if (userRole) supabaseResponse.headers.set('x-user-role', userRole)
+  }
+
+  // Logged-in user visiting an auth page → redirect to their dashboard
+  if (user && isAuthPage) {
+    const dest = userRole ? (DASHBOARD_MAP[userRole] ?? '/') : '/'
+    return NextResponse.redirect(new URL(dest, request.url))
+  }
+
+  // Protected route checks
+  if (isProtected) {
+    // Not authenticated → login
+    if (!user) {
+      const loginUrl = new URL('/auth/login', request.url)
+      loginUrl.searchParams.set('redirect', pathname)
+      return NextResponse.redirect(loginUrl)
+    }
+
+    // Wrong role → unauthorized
+    const allowedRoles = Object.entries(PROTECTED_ROUTES).find(([p]) => pathname.startsWith(p))?.[1] ?? []
+    if (!userRole || !allowedRoles.includes(userRole)) {
+      return NextResponse.redirect(new URL('/unauthorized', request.url))
     }
   }
 
-  // Check protected routes
-  for (const [prefix, allowedRoles] of Object.entries(PROTECTED_ROUTES)) {
-    if (pathname.startsWith(prefix)) {
-      // Not authenticated → login
-      if (!user) {
-        const loginUrl = new URL('/auth/login', request.url)
-        loginUrl.searchParams.set('redirect', pathname)
-        return NextResponse.redirect(loginUrl)
-      }
-
-      // Authenticated but wrong role → unauthorized
-      const { data: profile } = await supabase
-        .from('users')
-        .select('role')
-        .eq('id', user.id)
-        .single()
-
-      if (!profile || !allowedRoles.includes(profile.role)) {
-        return NextResponse.redirect(new URL('/unauthorized', request.url))
-      }
-
-      break
-    }
-  }
-
-  // Pass pathname to layouts via request headers for active menu highlighting
-  supabaseResponse.headers.set('x-pathname', pathname)
   return supabaseResponse
 }
 
 export const config = {
   matcher: [
-    /*
-     * Match all request paths EXCEPT:
-     * - _next/static, _next/image (Next.js internals)
-     * - favicon.ico, public files
-     * - API routes
-     */
     '/((?!_next/static|_next/image|favicon.ico|api/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 }

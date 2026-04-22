@@ -10,7 +10,12 @@ export default async function PatientDashboardPage() {
   const serviceSupabase = createSupabaseServiceRoleClient()
 
   const [{ data: requests }, { data: platformSettings }] = await Promise.all([
-    supabase.from('booking_requests').select('*').eq('patient_id', user.id).order('created_at', { ascending: false }),
+    supabase
+      .from('booking_requests')
+      .select('id, status, service_type, nurse_name, start_date, end_date, shift, city, duration_hours, payment_status, created_at')
+      .eq('patient_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(100),
     serviceSupabase.from('platform_settings').select('require_nurse_approval').limit(1).single(),
   ])
 

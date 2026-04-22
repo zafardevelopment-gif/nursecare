@@ -120,16 +120,15 @@ export default async function ProviderDashboardPage({ searchParams }: Props) {
       : Promise.resolve({ data: [] }),
     myBookingsQuery.order('created_at', { ascending: false })
       .range(offset, offset + PAGE_SIZE - 1),
-    // Hospital bookings where this nurse is in nurse_selections
+    // Hospital bookings — filter server-side using Postgres JSON operator
     serviceSupabase.from('hospital_booking_requests')
       .select('id, status, start_date, end_date, hospital_id, nurse_selections, created_at')
-      .order('created_at', { ascending: false }),
+      .filter('nurse_selections', 'cs', JSON.stringify([{ nurseId: user.id }]))
+      .order('created_at', { ascending: false })
+      .limit(50),
   ])
 
-  // Filter hospital bookings to only those containing this nurse
-  const myHospBookings = (allHospBookingsRaw ?? []).filter((b: any) =>
-    (b.nurse_selections ?? []).some((ns: any) => ns.nurseId === user.id)
-  )
+  const myHospBookings = allHospBookingsRaw ?? []
   const hospBookingCount = myHospBookings.length
 
   // Fetch hospital names for my hospital bookings
@@ -430,11 +429,11 @@ export default async function ProviderDashboardPage({ searchParams }: Props) {
                         {!canMarkStarted && !canMarkDone && !isWorkDone && <span style={{ color: 'var(--muted)', fontSize: '0.7rem' }}>—</span>}
                       </DashTd>
                       <DashTd>
-                        <a href={`/provider/bookings/${req.id}`} style={{
+                        <Link href={`/provider/bookings/${req.id}`} style={{
                           padding: '4px 10px', borderRadius: 6, border: '1px solid var(--border)',
                           background: 'var(--cream)', color: 'var(--teal)', fontSize: '0.72rem',
                           fontWeight: 700, textDecoration: 'none', whiteSpace: 'nowrap',
-                        }}>View →</a>
+                        }}>View →</Link>
                       </DashTd>
                     </tr>
                   )

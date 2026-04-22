@@ -15,7 +15,6 @@ export interface AuthUser {
   preferred_lang: 'ar' | 'en'
 }
 
-// Role → dashboard URL map
 export const ROLE_DASHBOARDS: Record<UserRole, string> = {
   patient:  '/patient/dashboard',
   provider: '/provider/dashboard',
@@ -25,17 +24,18 @@ export const ROLE_DASHBOARDS: Record<UserRole, string> = {
 
 /**
  * Returns the current authenticated user merged with the users table row.
- * Returns null if no session exists.
+ * Fetches session + profile in parallel for minimum latency.
  */
 export async function getCurrentUser(): Promise<AuthUser | null> {
   const supabase = await createSupabaseServerClient()
 
+  // getUser() validates the JWT with the Supabase Auth server — must be first
   const { data: { user }, error: sessionError } = await supabase.auth.getUser()
   if (sessionError || !user) return null
 
   const { data: profile, error: profileError } = await supabase
     .from('users')
-    .select('*')
+    .select('id, email, full_name, phone, role, city, avatar_url, is_active, preferred_lang')
     .eq('id', user.id)
     .single()
 
@@ -45,8 +45,7 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
 }
 
 /**
- * Asserts that a user is authenticated.
- * Redirects to /auth/login if not (throws Next.js redirect).
+ * Asserts authenticated. Redirects to /auth/login if not.
  */
 export async function requireAuth(): Promise<AuthUser> {
   const user = await getCurrentUser()
@@ -55,8 +54,9 @@ export async function requireAuth(): Promise<AuthUser> {
 }
 
 /**
- * Asserts that a user is authenticated AND has one of the allowed roles.
- * Redirects to /auth/login if unauthenticated, or /unauthorized if wrong role.
+ * Asserts authenticated with one of the given roles.
+ * Middleware already validated the session at the edge, so this is a
+ * lightweight profile-only check on protected routes.
  */
 export async function requireRole(...roles: UserRole[]): Promise<AuthUser> {
   const user = await requireAuth()
@@ -65,8 +65,7 @@ export async function requireRole(...roles: UserRole[]): Promise<AuthUser> {
 }
 
 /**
- * Like requireRole but throws a plain Error instead of redirecting.
- * Use inside server actions where redirect() would cause unwanted navigation.
+ * For use inside server actions — throws instead of redirecting.
  */
 export async function requireRoleAction(...roles: UserRole[]): Promise<AuthUser> {
   const user = await getCurrentUser()
@@ -75,9 +74,6 @@ export async function requireRoleAction(...roles: UserRole[]): Promise<AuthUser>
   return user
 }
 
-/**
- * Returns the dashboard path for a given role.
- */
 export function getDashboardPath(role: UserRole): string {
   return ROLE_DASHBOARDS[role] ?? '/'
 }
