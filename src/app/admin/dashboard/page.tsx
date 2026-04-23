@@ -14,12 +14,19 @@ export default async function AdminDashboardPage() {
     { count: totalUsers },
     { count: pendingUpdateRequests },
     { count: rejectedAgreements },
+    { count: openDisputes },
+    { data: recentActivity },
   ] = await Promise.all([
     supabase.from('nurses').select('status'),
     serviceSupabase.from('booking_requests').select('status'),
     supabase.from('users').select('*', { count: 'exact', head: true }),
     supabase.from('nurse_update_requests').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
     supabase.from('agreements').select('*', { count: 'exact', head: true }).eq('status', 'rejected'),
+    supabase.from('complaints').select('*', { count: 'exact', head: true }).eq('status', 'open'),
+    serviceSupabase.from('booking_requests')
+      .select('id, patient_name, nurse_name, service_type, status, created_at')
+      .order('created_at', { ascending: false })
+      .limit(8),
   ])
 
   // Count nurse statuses in JS — zero extra DB round-trips
@@ -136,11 +143,13 @@ export default async function AdminDashboardPage() {
             <div className="dash-kpi-label">Rejected Agreements</div>
           </div>
         </Link>
-        <div className="dash-kpi">
-          <div className="dash-kpi-icon" style={{ background: '#FEE8E8' }}>⚖️</div>
-          <div className="dash-kpi-num">0</div>
-          <div className="dash-kpi-label">Open Disputes</div>
-        </div>
+        <Link href="/admin/complaints?status=open" style={{ textDecoration: 'none' }}>
+          <div className="dash-kpi" style={{ border: (openDisputes ?? 0) > 0 ? '1px solid rgba(192,57,43,0.3)' : '1px solid var(--border)', cursor: 'pointer' }}>
+            <div className="dash-kpi-icon" style={{ background: (openDisputes ?? 0) > 0 ? 'rgba(192,57,43,0.08)' : '#FEE8E8' }}>⚖️</div>
+            <div className="dash-kpi-num" style={{ color: (openDisputes ?? 0) > 0 ? '#C0392B' : 'var(--ink)' }}>{openDisputes ?? 0}</div>
+            <div className="dash-kpi-label">Open Disputes</div>
+          </div>
+        </Link>
       </div>
 
       {/* Quick Links */}
@@ -164,11 +173,60 @@ export default async function AdminDashboardPage() {
           <QuickLink href="/admin/users">
             👥 Users
           </QuickLink>
+          <QuickLink href="/admin/complaints?status=open" color={(openDisputes ?? 0) > 0 ? '#C0392B' : undefined} badge={openDisputes ?? 0} badgeColor="#C0392B">
+            ⚖️ Disputes
+          </QuickLink>
           <QuickLink href="/admin/settings">
             ⚙️ Settings
           </QuickLink>
         </div>
       </div>
+
+      {/* Recent Activity */}
+      {(recentActivity ?? []).length > 0 && (
+        <div className="dash-card" style={{ marginTop: '1.5rem' }}>
+          <div className="dash-card-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span className="dash-card-title">Recent Booking Activity</span>
+            <Link href="/admin/bookings" style={{ fontSize: '0.78rem', color: 'var(--teal)', textDecoration: 'none', fontWeight: 600 }}>View all →</Link>
+          </div>
+          <div style={{ padding: 0 }}>
+            {(recentActivity ?? []).map((b: any, i: number) => {
+              const statusColors: Record<string, { bg: string; color: string; label: string }> = {
+                pending:     { bg: 'rgba(245,132,42,0.1)',  color: '#F5842A', label: '⏳ Pending' },
+                accepted:    { bg: 'rgba(39,168,105,0.1)',  color: '#27A869', label: '✓ Accepted' },
+                confirmed:   { bg: 'rgba(39,168,105,0.1)',  color: '#27A869', label: '✓ Confirmed' },
+                declined:    { bg: 'rgba(224,74,74,0.1)',   color: '#E04A4A', label: '✕ Declined' },
+                in_progress: { bg: 'rgba(14,123,140,0.12)', color: '#0E7B8C', label: '🔄 In Progress' },
+                work_done:   { bg: 'rgba(107,63,160,0.1)',  color: '#6B3FA0', label: '✅ Work Done' },
+                completed:   { bg: 'rgba(14,123,140,0.1)',  color: '#0E7B8C', label: '✓ Completed' },
+                cancelled:   { bg: 'rgba(138,155,170,0.1)', color: '#8A9BAA', label: 'Cancelled' },
+              }
+              const s = statusColors[b.status] ?? statusColors.pending
+              return (
+                <div key={b.id} style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+                  padding: '11px 20px',
+                  borderBottom: i < (recentActivity ?? []).length - 1 ? '1px solid var(--border)' : 'none',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
+                    <div style={{ width: 32, height: 32, borderRadius: 8, background: s.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.85rem', flexShrink: 0 }}>📋</div>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--ink)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {b.patient_name ?? 'Patient'} → {b.nurse_name ?? 'Unassigned'}
+                      </div>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--muted)', marginTop: 1 }}>{b.service_type ?? 'Booking'}</div>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+                    <span style={{ background: s.bg, color: s.color, fontSize: '0.65rem', fontWeight: 700, padding: '3px 9px', borderRadius: 50, whiteSpace: 'nowrap' }}>{s.label}</span>
+                    <span style={{ fontSize: '0.68rem', color: 'var(--muted)', whiteSpace: 'nowrap' }}>{new Date(b.created_at).toLocaleDateString('en-SA', { day: '2-digit', month: 'short' })}</span>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

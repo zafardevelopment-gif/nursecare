@@ -9,7 +9,7 @@ export default async function PatientDashboardPage() {
   const supabase = await createSupabaseServerClient()
   const serviceSupabase = createSupabaseServiceRoleClient()
 
-  const [{ data: requests }, { data: platformSettings }] = await Promise.all([
+  const [{ data: requests }, { data: platformSettings }, { data: myComplaints }] = await Promise.all([
     supabase
       .from('booking_requests')
       .select('id, status, service_type, nurse_name, start_date, end_date, shift, city, duration_hours, payment_status, created_at')
@@ -17,6 +17,7 @@ export default async function PatientDashboardPage() {
       .order('created_at', { ascending: false })
       .limit(100),
     serviceSupabase.from('platform_settings').select('require_nurse_approval').limit(1).single(),
+    supabase.from('complaints').select('id, complaint_type, status, created_at').eq('reporter_id', user.id).order('created_at', { ascending: false }).limit(5),
   ])
 
   const requireNurseApproval = (platformSettings as any)?.require_nurse_approval ?? true
@@ -103,6 +104,13 @@ export default async function PatientDashboardPage() {
           <div className="dash-kpi-num" style={{ color: unpaid > 0 ? '#F5842A' : 'var(--ink)' }}>{unpaid}</div>
           <div className="dash-kpi-label">Payment Pending</div>
         </div>
+        <Link href="/patient/complaints" style={{ textDecoration: 'none' }}>
+          <div className="dash-kpi" style={{ cursor: 'pointer' }}>
+            <div className="dash-kpi-icon" style={{ background: '#FEE8E8' }}>⚖️</div>
+            <div className="dash-kpi-num">{(myComplaints ?? []).length}</div>
+            <div className="dash-kpi-label">My Disputes</div>
+          </div>
+        </Link>
       </div>
 
       {recentBookings.length > 0 && (
@@ -193,8 +201,74 @@ export default async function PatientDashboardPage() {
               </span>
             )}
           </Link>
+          <Link href="/patient/complaints" style={{
+            display: 'flex', alignItems: 'center', gap: '0.5rem',
+            background: 'var(--cream)', border: '1px solid var(--border)', color: 'var(--ink)',
+            padding: '12px 20px', borderRadius: 10, fontWeight: 600, fontSize: '0.88rem', textDecoration: 'none',
+          }}>
+            ⚖️ My Disputes
+          </Link>
         </div>
       </div>
+
+      {/* Recent Activity */}
+      {allItems.length > 0 && (
+        <div className="dash-card" style={{ marginTop: '1.5rem' }}>
+          <div className="dash-card-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span className="dash-card-title">Recent Activity</span>
+            <Link href="/patient/bookings" style={{ fontSize: '0.78rem', color: 'var(--teal)', textDecoration: 'none', fontWeight: 600 }}>View all →</Link>
+          </div>
+          <div style={{ padding: 0 }}>
+            {[...allItems.slice(0, 5).map((b: any) => ({ type: 'booking', data: b, ts: b.created_at })),
+              ...(myComplaints ?? []).map((c: any) => ({ type: 'complaint', data: c, ts: c.created_at }))
+            ].sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime()).slice(0, 8).map((item, i, arr) => {
+              if (item.type === 'booking') {
+                const b = item.data
+                const s = statusStyle[b.status] ?? statusStyle.pending
+                return (
+                  <Link key={`b-${b.id}`} href={`/patient/bookings/${b.id}`} style={{ textDecoration: 'none' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '11px 20px', borderBottom: i < arr.length - 1 ? '1px solid var(--border)' : 'none' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
+                        <div style={{ width: 32, height: 32, borderRadius: 8, background: s.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.85rem', flexShrink: 0 }}>📋</div>
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--ink)' }}>{b.service_type ?? 'Booking'}</div>
+                          <div style={{ fontSize: '0.7rem', color: 'var(--muted)', marginTop: 1 }}>{b.nurse_name ? `Nurse: ${b.nurse_name}` : 'Awaiting nurse'}</div>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+                        <span style={{ background: s.bg, color: s.color, fontSize: '0.65rem', fontWeight: 700, padding: '3px 9px', borderRadius: 50, whiteSpace: 'nowrap' }}>{s.label}</span>
+                        <span style={{ fontSize: '0.68rem', color: 'var(--muted)', whiteSpace: 'nowrap' }}>{new Date(b.created_at).toLocaleDateString('en-SA', { day: '2-digit', month: 'short' })}</span>
+                      </div>
+                    </div>
+                  </Link>
+                )
+              } else {
+                const c = item.data
+                const cStatus = c.status === 'open' ? { bg: 'rgba(192,57,43,0.08)', color: '#C0392B', label: '🔴 Open' }
+                  : c.status === 'resolved' ? { bg: 'rgba(39,168,105,0.08)', color: '#27A869', label: '✅ Resolved' }
+                  : { bg: 'rgba(138,155,170,0.1)', color: '#8A9BAA', label: 'Closed' }
+                return (
+                  <Link key={`c-${c.id}`} href="/patient/complaints" style={{ textDecoration: 'none' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '11px 20px', borderBottom: i < arr.length - 1 ? '1px solid var(--border)' : 'none' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
+                        <div style={{ width: 32, height: 32, borderRadius: 8, background: 'rgba(192,57,43,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.85rem', flexShrink: 0 }}>⚖️</div>
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--ink)' }}>Dispute: {c.complaint_type?.replace(/_/g, ' ')}</div>
+                          <div style={{ fontSize: '0.7rem', color: 'var(--muted)', marginTop: 1 }}>Complaint submitted</div>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+                        <span style={{ background: cStatus.bg, color: cStatus.color, fontSize: '0.65rem', fontWeight: 700, padding: '3px 9px', borderRadius: 50, whiteSpace: 'nowrap' }}>{cStatus.label}</span>
+                        <span style={{ fontSize: '0.68rem', color: 'var(--muted)', whiteSpace: 'nowrap' }}>{new Date(c.created_at).toLocaleDateString('en-SA', { day: '2-digit', month: 'short' })}</span>
+                      </div>
+                    </div>
+                  </Link>
+                )
+              }
+            })}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

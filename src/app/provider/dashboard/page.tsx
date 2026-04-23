@@ -97,6 +97,8 @@ export default async function ProviderDashboardPage({ searchParams }: Props) {
     { data: pendingRequests },
     { data: myBookings, count: myBookingsTotal },
     { data: allHospBookingsRaw },
+    { data: myComplaints },
+    { data: recentBookingsActivity },
   ] = await Promise.all([
     serviceSupabase.from('booking_requests').select('*', { count: 'exact', head: true })
       .eq('nurse_id', user.id).in('status', ['accepted', 'confirmed']),
@@ -126,6 +128,12 @@ export default async function ProviderDashboardPage({ searchParams }: Props) {
       .filter('nurse_selections', 'cs', JSON.stringify([{ nurseId: user.id }]))
       .order('created_at', { ascending: false })
       .limit(50),
+    supabase.from('complaints').select('id, complaint_type, status, created_at').eq('reporter_id', user.id).order('created_at', { ascending: false }).limit(5),
+    serviceSupabase.from('booking_requests')
+      .select('id, patient_name, service_type, status, created_at')
+      .eq('nurse_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(5),
   ])
 
   const myHospBookings = allHospBookingsRaw ?? []
