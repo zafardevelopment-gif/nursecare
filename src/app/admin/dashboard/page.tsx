@@ -203,10 +203,11 @@ export default async function AdminDashboardPage() {
               }
               const s = statusColors[b.status] ?? statusColors.pending
               return (
-                <div key={b.id} style={{
+                <Link key={b.id} href={`/admin/bookings/${b.id}`} className="activity-row-link" style={{
                   display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
                   padding: '11px 20px',
                   borderBottom: i < (recentActivity ?? []).length - 1 ? '1px solid var(--border)' : 'none',
+                  textDecoration: 'none',
                 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
                     <div style={{ width: 32, height: 32, borderRadius: 8, background: s.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.85rem', flexShrink: 0 }}>📋</div>
@@ -220,8 +221,9 @@ export default async function AdminDashboardPage() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
                     <span style={{ background: s.bg, color: s.color, fontSize: '0.65rem', fontWeight: 700, padding: '3px 9px', borderRadius: 50, whiteSpace: 'nowrap' }}>{s.label}</span>
                     <span style={{ fontSize: '0.68rem', color: 'var(--muted)', whiteSpace: 'nowrap' }}>{new Date(b.created_at).toLocaleDateString('en-SA', { day: '2-digit', month: 'short' })}</span>
+                    <span style={{ fontSize: '0.7rem', color: 'var(--teal)', fontWeight: 700 }}>→</span>
                   </div>
-                </div>
+                </Link>
               )
             })}
           </div>

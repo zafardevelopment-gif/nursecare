@@ -28,6 +28,7 @@ export default async function HospitalLayout({ children }: { children: React.Rea
     { icon: '🗓️', label: 'Shift Schedule',  href: '/hospital/schedule' },
     { icon: '💬', label: 'Messages',        href: '/hospital/messages' },
     { icon: '📣', label: 'Complaints',      href: '/hospital/complaints' },
+    { icon: '📈', label: 'Reports',         href: '/hospital/reports' },
     { icon: '🔔', label: 'Notifications',   href: '/hospital/notifications', badge: unreadCount ?? 0 },
     { icon: '👤', label: 'My Profile',      href: '/hospital/profile' },
   ]
