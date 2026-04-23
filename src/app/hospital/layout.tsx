@@ -1,30 +1,40 @@
 import { requireRole } from '@/lib/auth'
+import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { headers } from 'next/headers'
 import SidebarProfile from '@/components/SidebarProfile'
 import SidebarMenu from '@/components/SidebarMenu'
 import MobileSidebar from '@/components/MobileSidebar'
+import NotificationBell from '@/components/NotificationBell'
 import ThemeToggle from '@/components/ThemeToggle'
 import Link from 'next/link'
 
-const hospitalMenu = [
-  { icon: '🏠', label: 'Dashboard',       href: '/hospital/dashboard' },
-  { icon: '📄', label: 'Agreements',      href: '/hospital/agreements' },
-  { icon: '🏢', label: 'Departments',     href: '/hospital/departments' },
-  { icon: '👩‍⚕️', label: 'Book Nurses',     href: '/hospital/booking' },
-  { icon: '🗓️', label: 'Shift Schedule',  href: '/hospital/schedule' },
-  { icon: '💬', label: 'Messages',        href: '/hospital/messages' },
-  { icon: '📣', label: 'Complaints',      href: '/hospital/complaints' },
-  { icon: '👤', label: 'My Profile',      href: '/hospital/profile' },
-]
-
 export default async function HospitalLayout({ children }: { children: React.ReactNode }) {
   const user = await requireRole('hospital')
+  const supabase = await createSupabaseServerClient()
   const headersList = await headers()
   const pathname = headersList.get('x-pathname') ?? '/hospital/dashboard'
 
+  const { count: unreadCount } = await supabase
+    .from('notifications')
+    .select('*', { count: 'exact', head: true })
+    .eq('user_id', user.id)
+    .eq('is_read', false)
+
+  const hospitalMenu = [
+    { icon: '🏠', label: 'Dashboard',       href: '/hospital/dashboard' },
+    { icon: '📄', label: 'Agreements',      href: '/hospital/agreements' },
+    { icon: '🏢', label: 'Departments',     href: '/hospital/departments' },
+    { icon: '👩‍⚕️', label: 'Book Nurses',     href: '/hospital/booking' },
+    { icon: '🗓️', label: 'Shift Schedule',  href: '/hospital/schedule' },
+    { icon: '💬', label: 'Messages',        href: '/hospital/messages' },
+    { icon: '📣', label: 'Complaints',      href: '/hospital/complaints' },
+    { icon: '🔔', label: 'Notifications',   href: '/hospital/notifications', badge: unreadCount ?? 0 },
+    { icon: '👤', label: 'My Profile',      href: '/hospital/profile' },
+  ]
+
   return (
     <div style={{ display: 'flex', minHeight: '100vh' }}>
-      <MobileSidebar logoHref="/hospital/dashboard">
+      <MobileSidebar logoHref="/hospital/dashboard" topbarRight={<NotificationBell role="hospital" />}>
         {/* Logo */}
         <div style={{
           padding: '1.2rem 1rem',
@@ -45,6 +55,9 @@ export default async function HospitalLayout({ children }: { children: React.Rea
               Nurse<span style={{ color: '#0ABFCC' }}>Care+</span>
             </span>
           </Link>
+          <div style={{ marginLeft: 'auto' }}>
+            <NotificationBell role="hospital" />
+          </div>
         </div>
 
         <SidebarProfile

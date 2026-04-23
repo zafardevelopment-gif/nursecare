@@ -286,52 +286,52 @@ body {
 
 .dash-kpi-row {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 1.2rem;
-  margin-bottom: 2rem;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
 }
 .dash-kpi {
   background: var(--card);
-  border-radius: 16px;
-  padding: 1.4rem;
+  border-radius: 12px;
+  padding: 1rem 1.1rem;
   border: 1px solid var(--border);
 }
 .dash-kpi-icon {
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.3rem;
-  margin-bottom: 0.8rem;
+  font-size: 1rem;
+  margin-bottom: 0.55rem;
 }
 .dash-kpi-num {
   font-family: Georgia, serif;
-  font-size: 1.8rem;
+  font-size: 1.45rem;
   font-weight: 700;
   color: var(--ink);
   line-height: 1;
 }
 .dash-kpi-label {
-  font-size: 0.75rem;
+  font-size: 0.68rem;
   color: var(--muted);
-  margin-top: 4px;
+  margin-top: 3px;
   font-weight: 500;
 }
 
 .dash-card {
   background: var(--card);
-  border-radius: 16px;
+  border-radius: 14px;
   border: 1px solid var(--border);
   overflow: hidden;
 }
 .dash-card-header {
-  padding: 1.2rem 1.5rem;
+  padding: 0.9rem 1.2rem;
   border-bottom: 1px solid var(--border);
 }
-.dash-card-title { font-size: 0.95rem; font-weight: 700; color: var(--ink); }
-.dash-card-body { padding: 1.5rem; }
+.dash-card-title { font-size: 0.9rem; font-weight: 700; color: var(--ink); }
+.dash-card-body { padding: 1.2rem; }
 
 .signout-btn {
   background: rgba(224,74,74,0.08);
@@ -389,6 +389,12 @@ body {
   transform: translateY(-7px) rotate(-45deg);
 }
 
+/* Sidebar scrollbar — thin and dark-themed */
+.app-sidebar::-webkit-scrollbar { width: 4px; }
+.app-sidebar::-webkit-scrollbar-track { background: transparent; }
+.app-sidebar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 4px; }
+.app-sidebar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.22); }
+
 /* Sidebar overlay backdrop */
 .sidebar-backdrop {
   display: none;
@@ -411,10 +417,15 @@ body {
   background: #05111A;
   border-bottom: 1px solid rgba(255,255,255,0.07);
   align-items: center;
-  justify-content: center;
+  justify-content: space-between;
   z-index: 90;
-  padding: 0 1rem;
+  padding: 0 1rem 0 3.8rem; /* leave room for hamburger on the left */
+  gap: 0.75rem;
 }
+
+/* Activity log — desktop table visible, mobile cards hidden by default */
+.activity-desktop { display: block; }
+.activity-mobile  { display: none; }
 
 @media (max-width: 768px) {
   /* Show hamburger + topbar */
@@ -445,7 +456,23 @@ body {
   /* KPI row: 2 columns on mobile */
   .dash-kpi-row {
     grid-template-columns: 1fr 1fr;
-    gap: 0.8rem;
+    gap: 0.6rem;
+  }
+  .dash-kpi {
+    padding: 0.8rem 0.85rem;
+    border-radius: 10px;
+  }
+  .dash-kpi-icon {
+    width: 28px;
+    height: 28px;
+    font-size: 0.88rem;
+    margin-bottom: 0.4rem;
+  }
+  .dash-kpi-num {
+    font-size: 1.25rem;
+  }
+  .dash-kpi-label {
+    font-size: 0.62rem;
   }
 
   /* Header: stack vertically */
@@ -474,11 +501,25 @@ body {
   .role-grid {
     grid-template-columns: 1fr 1fr;
   }
+
+  /* Activity log — switch to card view on mobile */
+  .activity-desktop { display: none !important; }
+  .activity-mobile  { display: block !important; }
 }
 
 @media (max-width: 480px) {
   .dash-kpi-row {
     grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+  }
+  .dash-kpi {
+    padding: 0.7rem 0.75rem;
+  }
+  .dash-kpi-num {
+    font-size: 1.1rem;
+  }
+  .dash-kpi-label {
+    font-size: 0.6rem;
   }
   .role-grid {
     grid-template-columns: 1fr;

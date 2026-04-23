@@ -6,9 +6,10 @@ import { usePathname } from 'next/navigation'
 interface MobileSidebarProps {
   children: React.ReactNode
   logoHref: string
+  topbarRight?: React.ReactNode
 }
 
-export default function MobileSidebar({ children, logoHref }: MobileSidebarProps) {
+export default function MobileSidebar({ children, logoHref, topbarRight }: MobileSidebarProps) {
   const [open, setOpen] = useState(false)
   const pathname = usePathname()
 
@@ -38,13 +39,18 @@ export default function MobileSidebar({ children, logoHref }: MobileSidebarProps
         <span />
       </button>
 
-      {/* Mobile top bar with logo */}
+      {/* Mobile top bar with logo + optional right slot (notification bell) */}
       <div className="mobile-topbar">
         <a href={logoHref} style={{ textDecoration: 'none' }}>
           <span style={{ fontFamily: 'Georgia,serif', fontSize: '1.15rem', color: '#fff', fontWeight: 700 }}>
             Nurse<span style={{ color: '#0ABFCC' }}>Care+</span>
           </span>
         </a>
+        {topbarRight && (
+          <div style={{ marginLeft: 'auto' }}>
+            {topbarRight}
+          </div>
+        )}
       </div>
 
       {/* Backdrop */}
@@ -57,13 +63,15 @@ export default function MobileSidebar({ children, logoHref }: MobileSidebarProps
       <aside className={`app-sidebar${open ? ' open' : ''}`} style={{
         width: 260,
         background: '#05111A',
-        minHeight: '100vh',
+        height: '100vh',
         position: 'fixed',
         top: 0,
         left: 0,
         display: 'flex',
         flexDirection: 'column',
         zIndex: 150,
+        overflowY: 'auto',
+        overflowX: 'hidden',
       }}>
         {children}
       </aside>

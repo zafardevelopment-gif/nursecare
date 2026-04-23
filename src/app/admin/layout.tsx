@@ -1,8 +1,10 @@
 import { requireRole } from '@/lib/auth'
+import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { headers } from 'next/headers'
 import SidebarProfile from '@/components/SidebarProfile'
 import SidebarMenu from '@/components/SidebarMenu'
 import MobileSidebar from '@/components/MobileSidebar'
+import NotificationBell from '@/components/NotificationBell'
 import ThemeToggle from '@/components/ThemeToggle'
 import Link from 'next/link'
 
@@ -20,17 +22,30 @@ const adminMenu = [
   { icon: '🪪', label: 'ID Cards',          href: '/admin/nurses/id-cards' },
   { icon: '👥', label: 'Users',             href: '/admin/users' },
   { icon: '🩺', label: 'Service Master',     href: '/admin/services' },
+  { icon: '📊', label: 'Activity Log',      href: '/admin/activity' },
+  { icon: '🔔', label: 'Notifications',     href: '/admin/notifications' },
   { icon: '⚙️', label: 'Settings',          href: '/admin/settings' },
 ]
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const user = await requireRole('admin')
+  const supabase = await createSupabaseServerClient()
   const headersList = await headers()
   const pathname = headersList.get('x-pathname') ?? '/admin/dashboard'
 
+  const { count: unreadCount } = await supabase
+    .from('notifications')
+    .select('*', { count: 'exact', head: true })
+    .eq('user_id', user.id)
+    .eq('is_read', false)
+
+  const adminMenuWithBadge = adminMenu.map(item =>
+    item.href === '/admin/notifications' ? { ...item, badge: unreadCount ?? 0 } : item
+  )
+
   return (
     <div style={{ display: 'flex', minHeight: '100vh' }}>
-      <MobileSidebar logoHref="/admin/dashboard">
+      <MobileSidebar logoHref="/admin/dashboard" topbarRight={<NotificationBell role="admin" />}>
         {/* Logo */}
         <div style={{
           padding: '1.2rem 1rem',
@@ -51,6 +66,10 @@ export default async function AdminLayout({ children }: { children: React.ReactN
               Nurse<span style={{ color: '#0ABFCC' }}>Care+</span>
             </span>
           </Link>
+          {/* Desktop bell — shown beside logo in sidebar header on desktop */}
+          <div style={{ marginLeft: 'auto' }}>
+            <NotificationBell role="admin" />
+          </div>
         </div>
 
         <SidebarProfile
@@ -60,7 +79,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           avatarUrl={user.avatar_url}
         />
 
-        <SidebarMenu items={adminMenu} activePath={pathname} />
+        <SidebarMenu items={adminMenuWithBadge} activePath={pathname} />
 
         <div style={{ padding: '0.75rem', marginTop: 'auto', borderTop: '1px solid rgba(255,255,255,0.07)' }}>
           <ThemeToggle />

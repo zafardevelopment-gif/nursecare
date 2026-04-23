@@ -3,6 +3,7 @@
 import { createSupabaseServiceRoleClient, createSupabaseServerClient } from '@/lib/supabase-server'
 import { revalidatePath } from 'next/cache'
 import { sendNotifications } from '@/lib/notifications'
+import { logActivity } from '@/lib/activity'
 
 async function getAuthUser() {
   const supabase = await createSupabaseServerClient()
@@ -128,6 +129,16 @@ export async function submitComplaint(formData: FormData): Promise<{ error?: str
   ]
 
   await sendNotifications(notifs)
+  await logActivity({
+    actorId:     user.id,
+    actorName:   profile?.full_name ?? 'Unknown',
+    actorRole:   reporter_role,
+    action:      'complaint_raised',
+    entityType:  'complaint',
+    entityId:    data.id,
+    description: `${profile?.full_name ?? 'A user'} (${reporter_role}) raised a complaint: ${complaint_type.replace(/_/g, ' ')}`,
+    meta:        { complaint_type, booking_id },
+  })
   revalidateComplaints()
   return { id: data.id }
 }
@@ -183,6 +194,19 @@ export async function updateComplaintStatus(formData: FormData): Promise<{ error
     data:   { complaintId: id },
   }])
 
+  // Get admin name for log
+  const { data: adminProfile } = await supabase.from('users').select('full_name').eq('id', user.id).single()
+  const action = status === 'resolved' ? 'complaint_resolved' : 'complaint_rejected'
+  await logActivity({
+    actorId:     user.id,
+    actorName:   adminProfile?.full_name ?? 'Admin',
+    actorRole:   'admin',
+    action,
+    entityType:  'complaint',
+    entityId:    id,
+    description: `Admin ${status} complaint (${complaint.complaint_type?.replace(/_/g, ' ') ?? ''})${admin_note ? ': ' + admin_note : ''}`,
+    meta:        { complaint_id: id, status, admin_note },
+  })
   revalidateComplaints()
   return {}
 }

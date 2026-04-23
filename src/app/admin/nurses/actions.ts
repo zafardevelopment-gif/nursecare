@@ -3,6 +3,7 @@
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { requireRole } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
+import { logActivity } from '@/lib/activity'
 
 export async function approveNurse(formData: FormData) {
   const admin = await requireRole('admin')
@@ -42,11 +43,20 @@ export async function approveNurse(formData: FormData) {
 
   if (error) throw new Error(error.message)
 
+  // Fetch nurse name for log
+  const { data: nurse } = await supabase.from('nurses').select('full_name, user_id').eq('id', nurseId).single()
+  await logActivity({
+    actorId: admin.id, actorName: admin.full_name, actorRole: 'admin',
+    action: 'nurse_approved', entityType: 'nurse', entityId: nurseId,
+    description: `Admin approved nurse: ${nurse?.full_name ?? nurseId}`,
+    meta: { nurseId, hourly_rate, daily_rate },
+  })
+
   revalidatePath('/admin/nurses')
 }
 
 export async function rejectNurse(formData: FormData) {
-  await requireRole('admin')
+  const admin = await requireRole('admin')
   const supabase = await createSupabaseServerClient()
 
   const nurseId = formData.get('nurseId') as string
@@ -60,6 +70,14 @@ export async function rejectNurse(formData: FormData) {
       reviewed_at:      new Date().toISOString(),
     })
     .eq('id', nurseId)
+
+  const { data: nurse } = await supabase.from('nurses').select('full_name').eq('id', nurseId).single()
+  await logActivity({
+    actorId: admin.id, actorName: admin.full_name, actorRole: 'admin',
+    action: 'nurse_rejected', entityType: 'nurse', entityId: nurseId,
+    description: `Admin rejected nurse: ${nurse?.full_name ?? nurseId}${reason ? ' — Reason: ' + reason : ''}`,
+    meta: { nurseId, reason },
+  })
 
   revalidatePath('/admin/nurses')
 }

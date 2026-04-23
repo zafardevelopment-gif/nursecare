@@ -14,7 +14,7 @@ interface SidebarMenuProps {
 
 export default function SidebarMenu({ items, activePath }: SidebarMenuProps) {
   return (
-    <nav style={{ padding: '0.8rem', flex: 1 }}>
+    <nav style={{ padding: '0.8rem' }}>
       {items.map((item) => {
         const isActive = activePath === item.href || activePath.startsWith(item.href + '/')
         return (

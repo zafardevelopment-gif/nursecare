@@ -45,8 +45,8 @@ export default async function HospitalDashboardPage() {
   const isApproved = hospital.status === 'approved' || hospital.status === 'agreement_pending'
   const isActive   = hospital.status === 'active'
 
-  // Fetch agreements + booking requests
-  const [{ data: agreements }, { data: bookingReqs }] = await Promise.all([
+  // Fetch agreements + booking requests + complaints
+  const [{ data: agreements }, { data: bookingReqs }, { data: myComplaints }] = await Promise.all([
     supabase
       .from('hospital_agreements')
       .select('id, ref_number, status, payment_type, start_date, end_date, created_at')
@@ -58,6 +58,7 @@ export default async function HospitalDashboardPage() {
       .eq('hospital_id', hospital.id)
       .order('created_at', { ascending: false })
       .limit(10),
+    supabase.from('complaints').select('id, complaint_type, status, created_at').eq('reporter_id', user.id).order('created_at', { ascending: false }).limit(5),
   ])
 
   const allAgreements    = agreements ?? []
@@ -152,18 +153,19 @@ export default async function HospitalDashboardPage() {
       )}
 
       {/* KPIs */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
         {[
-          { label: 'Total Agreements', value: totalCount,       color: '#0E7B8C', icon: '📄', bg: 'rgba(14,123,140,0.08)',  href: '/hospital/agreements' },
-          { label: 'Awaiting Review',  value: pendingSentCount, color: '#b85e00', icon: '⏳', bg: 'rgba(181,94,0,0.08)',    href: '/hospital/agreements' },
-          { label: 'Active',           value: activeCount,      color: '#1A7A4A', icon: '✅', bg: 'rgba(26,122,74,0.08)',   href: '/hospital/agreements' },
-          { label: 'Pending Bookings',  value: pendingBookings,  color: '#7B2FBE', icon: '👩‍⚕️', bg: 'rgba(123,47,190,0.08)', href: '/hospital/booking' },
+          { label: 'Total Agreements', value: totalCount,                  color: '#0E7B8C', icon: '📄', bg: 'rgba(14,123,140,0.08)',  href: '/hospital/agreements' },
+          { label: 'Awaiting Review',  value: pendingSentCount,            color: '#b85e00', icon: '⏳', bg: 'rgba(181,94,0,0.08)',    href: '/hospital/agreements' },
+          { label: 'Active',           value: activeCount,                 color: '#1A7A4A', icon: '✅', bg: 'rgba(26,122,74,0.08)',   href: '/hospital/agreements' },
+          { label: 'Pending Bookings', value: pendingBookings,             color: '#7B2FBE', icon: '👩‍⚕️', bg: 'rgba(123,47,190,0.08)', href: '/hospital/booking' },
+          { label: 'Disputes',         value: (myComplaints ?? []).length, color: '#C0392B', icon: '⚖️', bg: 'rgba(192,57,43,0.06)',  href: '/hospital/complaints' },
         ].map(kpi => (
           <Link key={kpi.label} href={kpi.href} style={{ textDecoration: 'none' }}>
-            <div className="dash-card" style={{ padding: '1.2rem', cursor: 'pointer', borderTop: `3px solid ${kpi.color}` }}>
-              <div style={{ width: 40, height: 40, borderRadius: 10, background: kpi.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem', marginBottom: 10 }}>{kpi.icon}</div>
-              <div style={{ fontSize: '1.9rem', fontWeight: 800, color: kpi.color, lineHeight: 1 }}>{kpi.value}</div>
-              <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginTop: 4 }}>{kpi.label}</div>
+            <div className="dash-card" style={{ padding: '1rem', cursor: 'pointer', borderTop: `3px solid ${kpi.color}` }}>
+              <div style={{ width: 36, height: 36, borderRadius: 9, background: kpi.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem', marginBottom: 8 }}>{kpi.icon}</div>
+              <div style={{ fontSize: '1.7rem', fontWeight: 800, color: kpi.color, lineHeight: 1 }}>{kpi.value}</div>
+              <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginTop: 4 }}>{kpi.label}</div>
             </div>
           </Link>
         ))}
@@ -288,6 +290,69 @@ export default async function HospitalDashboardPage() {
           </div>
         </div>
       </div>
+
+      {/* Recent Activity */}
+      {(allBookings.length > 0 || (myComplaints ?? []).length > 0) && (
+        <div className="dash-card" style={{ marginTop: '1rem' }}>
+          <div className="dash-card-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span className="dash-card-title">Recent Activity</span>
+            <Link href="/hospital/booking" style={{ fontSize: '0.78rem', color: 'var(--teal)', textDecoration: 'none', fontWeight: 600 }}>View bookings →</Link>
+          </div>
+          <div style={{ padding: 0 }}>
+            {[...allBookings.slice(0, 5).map((b: any) => ({ type: 'booking', data: b, ts: b.created_at })),
+              ...(myComplaints ?? []).map((c: any) => ({ type: 'complaint', data: c, ts: c.created_at }))
+            ].sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime()).slice(0, 8).map((item, i, arr) => {
+              if (item.type === 'booking') {
+                const b = item.data
+                const bsm = bookingStatusColors[b.status] ?? bookingStatusColors.pending
+                return (
+                  <Link key={`b-${b.id}`} href={`/hospital/booking/${b.id}`} style={{ textDecoration: 'none' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '11px 20px', borderBottom: i < arr.length - 1 ? '1px solid var(--border)' : 'none' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
+                        <div style={{ width: 32, height: 32, borderRadius: 8, background: bsm.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.85rem', flexShrink: 0 }}>👩‍⚕️</div>
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--ink)' }}>
+                            Booking: {new Date(b.start_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} – {new Date(b.end_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                          </div>
+                          <div style={{ fontSize: '0.7rem', color: 'var(--muted)', marginTop: 1 }}>{b.total_nurses} nurses requested</div>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+                        <span style={{ background: bsm.bg, color: bsm.color, fontSize: '0.65rem', fontWeight: 700, padding: '3px 9px', borderRadius: 50, whiteSpace: 'nowrap' }}>{bsm.label}</span>
+                        <span style={{ fontSize: '0.68rem', color: 'var(--muted)', whiteSpace: 'nowrap' }}>{new Date(b.created_at).toLocaleDateString('en-SA', { day: '2-digit', month: 'short' })}</span>
+                      </div>
+                    </div>
+                  </Link>
+                )
+              } else {
+                const c = item.data
+                const cStatus = c.status === 'open'
+                  ? { bg: 'rgba(192,57,43,0.08)', color: '#C0392B', label: '🔴 Open' }
+                  : c.status === 'resolved'
+                  ? { bg: 'rgba(39,168,105,0.08)', color: '#27A869', label: '✅ Resolved' }
+                  : { bg: 'rgba(138,155,170,0.1)', color: '#8A9BAA', label: 'Closed' }
+                return (
+                  <Link key={`c-${c.id}`} href="/hospital/complaints" style={{ textDecoration: 'none' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '11px 20px', borderBottom: i < arr.length - 1 ? '1px solid var(--border)' : 'none' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
+                        <div style={{ width: 32, height: 32, borderRadius: 8, background: 'rgba(192,57,43,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.85rem', flexShrink: 0 }}>⚖️</div>
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--ink)' }}>Dispute: {c.complaint_type?.replace(/_/g, ' ')}</div>
+                          <div style={{ fontSize: '0.7rem', color: 'var(--muted)', marginTop: 1 }}>Complaint submitted</div>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+                        <span style={{ background: cStatus.bg, color: cStatus.color, fontSize: '0.65rem', fontWeight: 700, padding: '3px 9px', borderRadius: 50, whiteSpace: 'nowrap' }}>{cStatus.label}</span>
+                        <span style={{ fontSize: '0.68rem', color: 'var(--muted)', whiteSpace: 'nowrap' }}>{new Date(c.created_at).toLocaleDateString('en-SA', { day: '2-digit', month: 'short' })}</span>
+                      </div>
+                    </div>
+                  </Link>
+                )
+              }
+            })}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -253,6 +253,13 @@ export default async function ProviderDashboardPage({ searchParams }: Props) {
             )}
           </div>
         </Link>
+        <Link href="/provider/complaints" style={{ textDecoration: 'none' }}>
+          <div className="dash-kpi" style={{ cursor: 'pointer' }}>
+            <div className="dash-kpi-icon" style={{ background: '#FEE8E8' }}>⚖️</div>
+            <div className="dash-kpi-num">{(myComplaints ?? []).length}</div>
+            <div className="dash-kpi-label">Disputes</div>
+          </div>
+        </Link>
       </div>
 
       {/* Agreements */}
@@ -554,6 +561,67 @@ export default async function ProviderDashboardPage({ searchParams }: Props) {
                 })}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* Recent Activity */}
+      {((recentBookingsActivity ?? []).length > 0 || (myComplaints ?? []).length > 0) && (
+        <div className="dash-card" style={{ marginTop: '1.5rem' }}>
+          <div className="dash-card-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span className="dash-card-title">Recent Activity</span>
+            <Link href="/provider/bookings" style={{ fontSize: '0.78rem', color: 'var(--teal)', textDecoration: 'none', fontWeight: 600 }}>View all →</Link>
+          </div>
+          <div style={{ padding: 0 }}>
+            {[...(recentBookingsActivity ?? []).map((b: any) => ({ type: 'booking', data: b, ts: b.created_at })),
+              ...(myComplaints ?? []).map((c: any) => ({ type: 'complaint', data: c, ts: c.created_at }))
+            ].sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime()).slice(0, 8).map((item, i, arr) => {
+              if (item.type === 'booking') {
+                const b = item.data
+                const s = STATUS_MAP[b.status] ?? STATUS_MAP.pending
+                return (
+                  <Link key={`b-${b.id}`} href={`/provider/bookings/${b.id}`} style={{ textDecoration: 'none' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '11px 20px', borderBottom: i < arr.length - 1 ? '1px solid var(--border)' : 'none' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
+                        <div style={{ width: 32, height: 32, borderRadius: 8, background: s.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.85rem', flexShrink: 0 }}>📋</div>
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--ink)' }}>{b.patient_name ?? 'Patient'}</div>
+                          <div style={{ fontSize: '0.7rem', color: 'var(--muted)', marginTop: 1 }}>{b.service_type ?? 'Booking'}</div>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+                        <span style={{ background: s.bg, color: s.color, fontSize: '0.65rem', fontWeight: 700, padding: '3px 9px', borderRadius: 50, whiteSpace: 'nowrap' }}>{s.label}</span>
+                        <span style={{ fontSize: '0.68rem', color: 'var(--muted)', whiteSpace: 'nowrap' }}>{new Date(b.created_at).toLocaleDateString('en-SA', { day: '2-digit', month: 'short' })}</span>
+                      </div>
+                    </div>
+                  </Link>
+                )
+              } else {
+                const c = item.data
+                const cStatus = c.status === 'open'
+                  ? { bg: 'rgba(192,57,43,0.08)', color: '#C0392B', label: '🔴 Open' }
+                  : c.status === 'resolved'
+                  ? { bg: 'rgba(39,168,105,0.08)', color: '#27A869', label: '✅ Resolved' }
+                  : { bg: 'rgba(138,155,170,0.1)', color: '#8A9BAA', label: 'Closed' }
+                return (
+                  <Link key={`c-${c.id}`} href="/provider/complaints" style={{ textDecoration: 'none' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '11px 20px', borderBottom: i < arr.length - 1 ? '1px solid var(--border)' : 'none' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
+                        <div style={{ width: 32, height: 32, borderRadius: 8, background: 'rgba(192,57,43,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.85rem', flexShrink: 0 }}>⚖️</div>
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--ink)' }}>Dispute: {c.complaint_type?.replace(/_/g, ' ')}</div>
+                          <div style={{ fontSize: '0.7rem', color: 'var(--muted)', marginTop: 1 }}>Complaint submitted</div>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+                        <span style={{ background: cStatus.bg, color: cStatus.color, fontSize: '0.65rem', fontWeight: 700, padding: '3px 9px', borderRadius: 50, whiteSpace: 'nowrap' }}>{cStatus.label}</span>
+                        <span style={{ fontSize: '0.68rem', color: 'var(--muted)', whiteSpace: 'nowrap' }}>{new Date(c.created_at).toLocaleDateString('en-SA', { day: '2-digit', month: 'short' })}</span>
+                      </div>
+                    </div>
+                  </Link>
+                )
+              }
+            })}
           </div>
         </div>
       )}

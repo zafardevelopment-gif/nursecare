@@ -4,6 +4,7 @@ import { createSupabaseServiceRoleClient } from '@/lib/supabase-server'
 import { requireRole } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
+import { logActivity } from '@/lib/activity'
 
 export async function approveHospitalAction(formData: FormData) {
   const admin = await requireRole('admin')
@@ -23,13 +24,11 @@ export async function approveHospitalAction(formData: FormData) {
 
   if (error) throw new Error(error.message)
 
-  // Audit log
-  await supabase.from('hospital_audit_log').insert({
-    hospital_id: hospitalId,
-    actor_id:    admin.id,
-    actor_role:  'admin',
-    action:      'admin_approved_hospital',
-    details:     { approved_by: admin.full_name },
+  const { data: hosp } = await supabase.from('hospitals').select('hospital_name').eq('id', hospitalId).single()
+  await logActivity({
+    actorId: admin.id, actorName: admin.full_name, actorRole: 'admin',
+    action: 'hospital_approved', entityType: 'hospital', entityId: hospitalId,
+    description: `Admin approved hospital: ${hosp?.hospital_name ?? hospitalId}`,
   })
 
   revalidatePath('/admin/hospitals')
@@ -51,12 +50,12 @@ export async function rejectHospitalAction(formData: FormData) {
     })
     .eq('id', hospitalId)
 
-  await supabase.from('hospital_audit_log').insert({
-    hospital_id: hospitalId,
-    actor_id:    admin.id,
-    actor_role:  'admin',
-    action:      'admin_rejected_hospital',
-    details:     { reason },
+  const { data: hosp } = await supabase.from('hospitals').select('hospital_name').eq('id', hospitalId).single()
+  await logActivity({
+    actorId: admin.id, actorName: admin.full_name, actorRole: 'admin',
+    action: 'hospital_rejected', entityType: 'hospital', entityId: hospitalId,
+    description: `Admin rejected hospital: ${hosp?.hospital_name ?? hospitalId}${reason ? ' — Reason: ' + reason : ''}`,
+    meta: { reason },
   })
 
   revalidatePath('/admin/hospitals')
