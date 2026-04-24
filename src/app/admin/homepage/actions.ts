@@ -3,17 +3,25 @@
 import { requireRole } from '@/lib/auth'
 import { createSupabaseServiceRoleClient } from '@/lib/supabase-server'
 import { revalidatePath } from 'next/cache'
+import { logActivity } from '@/lib/activity'
 
 const supabase = () => createSupabaseServiceRoleClient()
 
 // ── Settings (key/value store) ─────────────────────────────────
 export async function saveSettings(formData: FormData) {
-  await requireRole('admin')
+  const admin = await requireRole('admin')
   const db = supabase()
   const entries = Array.from(formData.entries()) as [string, string][]
   for (const [key, value] of entries) {
     await db.from('homepage_settings').upsert({ key, value, updated_at: new Date().toISOString() }, { onConflict: 'key' })
   }
+  void logActivity({
+    actorId: admin.id, actorName: admin.full_name ?? 'Admin', actorRole: 'admin',
+    action: 'homepage_settings_changed', module: 'homepage',
+    entityType: 'homepage',
+    description: `Admin updated homepage settings (${entries.length} field${entries.length !== 1 ? 's' : ''})`,
+    meta: { keys: entries.map(([k]) => k) },
+  })
   revalidatePath('/')
   revalidatePath('/admin/homepage')
   return { ok: true }

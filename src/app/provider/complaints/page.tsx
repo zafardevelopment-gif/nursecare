@@ -1,5 +1,6 @@
 import { requireRole } from '@/lib/auth'
 import { createSupabaseServiceRoleClient } from '@/lib/supabase-server'
+import { getDisputeComplaintSettings } from '@/lib/platform-settings'
 import ComplaintsClient from '@/app/components/ComplaintsClient'
 
 export const dynamic = 'force-dynamic'
@@ -8,7 +9,7 @@ export default async function ProviderComplaintsPage() {
   const user    = await requireRole('provider')
   const supabase = createSupabaseServiceRoleClient()
 
-  const [{ data: complaints }, { data: bookings }] = await Promise.all([
+  const [{ data: complaints }, { data: bookings }, settings] = await Promise.all([
     supabase
       .from('complaints')
       .select('id, complaint_type, description, status, admin_note, booking_id, created_at')
@@ -21,6 +22,7 @@ export default async function ProviderComplaintsPage() {
       .in('status', ['accepted', 'confirmed', 'completed', 'in_progress'])
       .order('start_date', { ascending: false })
       .limit(30),
+    getDisputeComplaintSettings(),
   ])
 
   const bookingOptions = (bookings ?? []).map(b => ({
@@ -33,6 +35,8 @@ export default async function ProviderComplaintsPage() {
       complaints={complaints ?? []}
       reporterRole="provider"
       bookingOptions={bookingOptions}
+      complaintsEnabled={settings.complaints_enabled}
+      complaintWindowHours={settings.complaint_window_hours}
     />
   )
 }

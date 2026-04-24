@@ -27,15 +27,20 @@ interface Settings {
   show_price_with_commission?: boolean
   require_nurse_approval?: boolean
   on_the_way_enabled?: boolean
+  disputes_enabled?: boolean
+  complaints_enabled?: boolean
+  dispute_window_hours?: number
+  complaint_window_hours?: number
 }
 
-type Tab = 'general' | 'provider' | 'patient' | 'hospital'
+type Tab = 'general' | 'provider' | 'patient' | 'hospital' | 'disputes'
 
 const TABS: { key: Tab; label: string; icon: string }[] = [
   { key: 'general',  label: 'General',  icon: '⚙️' },
   { key: 'provider', label: 'Provider', icon: '👩‍⚕️' },
   { key: 'patient',  label: 'Patient',  icon: '🏥' },
   { key: 'hospital', label: 'Hospital', icon: '🏨' },
+  { key: 'disputes', label: 'Disputes', icon: '⚖️' },
 ]
 
 export default function SettingsForm({ settings }: { settings: Settings | null }) {
@@ -56,6 +61,8 @@ export default function SettingsForm({ settings }: { settings: Settings | null }
   const [showCommission, setShowCommission]       = useState(settings?.show_price_with_commission ?? true)
   const [requireNurseApproval, setRequireNurseApproval] = useState(settings?.require_nurse_approval ?? true)
   const [onTheWayEnabled, setOnTheWayEnabled]     = useState(settings?.on_the_way_enabled ?? true)
+  const [disputesEnabled, setDisputesEnabled]     = useState(settings?.disputes_enabled ?? true)
+  const [complaintsEnabled, setComplaintsEnabled] = useState(settings?.complaints_enabled ?? true)
 
   // Sync all boolean toggles when settings prop changes (server revalidation after save)
   useEffect(() => {
@@ -71,6 +78,8 @@ export default function SettingsForm({ settings }: { settings: Settings | null }
     if (settings?.show_price_with_commission !== undefined)          setShowCommission(settings.show_price_with_commission)
     if (settings?.require_nurse_approval !== undefined)              setRequireNurseApproval(settings.require_nurse_approval)
     if (settings?.on_the_way_enabled !== undefined)                  setOnTheWayEnabled(settings.on_the_way_enabled)
+    if (settings?.disputes_enabled !== undefined)                    setDisputesEnabled(settings.disputes_enabled)
+    if (settings?.complaints_enabled !== undefined)                  setComplaintsEnabled(settings.complaints_enabled)
   }, [
     settings?.allow_emergency_bookings,
     settings?.require_work_start_confirmation,
@@ -84,6 +93,8 @@ export default function SettingsForm({ settings }: { settings: Settings | null }
     settings?.show_price_with_commission,
     settings?.require_nurse_approval,
     settings?.on_the_way_enabled,
+    settings?.disputes_enabled,
+    settings?.complaints_enabled,
   ])
 
   const [logoUrl, setLogoUrl]             = useState<string | null>(settings?.logo_url ?? null)
@@ -102,6 +113,8 @@ export default function SettingsForm({ settings }: { settings: Settings | null }
   const refMaxAdvanceDays          = useRef<HTMLInputElement>(null)
   const refPaymentDeadline         = useRef<HTMLInputElement>(null)
   const refWorkStartEnableHours    = useRef<HTMLInputElement>(null)
+  const refDisputeWindowHours      = useRef<HTMLInputElement>(null)
+  const refComplaintWindowHours    = useRef<HTMLInputElement>(null)
 
   function num(ref: React.RefObject<HTMLInputElement | null>, fallback: number) {
     const v = parseFloat(ref.current?.value ?? '')
@@ -137,6 +150,10 @@ export default function SettingsForm({ settings }: { settings: Settings | null }
       show_price_with_commission:           showCommission,
       require_nurse_approval:               requireNurseApproval,
       on_the_way_enabled:                   onTheWayEnabled,
+      disputes_enabled:                     disputesEnabled,
+      complaints_enabled:                   complaintsEnabled,
+      dispute_window_hours:                 num(refDisputeWindowHours, settings?.dispute_window_hours ?? 48),
+      complaint_window_hours:               num(refComplaintWindowHours, settings?.complaint_window_hours ?? 168),
     }
 
     startTransition(async () => {
@@ -472,6 +489,85 @@ export default function SettingsForm({ settings }: { settings: Settings | null }
               last
             >
               <NumberInput name="auto_complete_hours" defaultValue={settings?.auto_complete_hours ?? 24} unit="hours" inputRef={refAutoComplete} />
+            </SettingRow>
+          </div>
+        </div>
+      )}
+
+      {/* ── DISPUTES TAB ── */}
+      {activeTab === 'disputes' && (
+        <div className="dash-card">
+          <SectionHeader icon="⚖️" title="Dispute Settings" sub="Control when patients and nurses can raise booking disputes" />
+          <div style={{ padding: '0 1.2rem' }}>
+            <SettingRow
+              label="Enable Disputes"
+              description={
+                <>
+                  When <strong>ON</strong>: patients and nurses can raise a dispute against a booking (e.g. no-show, quality issue).
+                  <br />
+                  When <strong>OFF</strong>: the dispute option is hidden for all users. Admin can still review existing disputes.
+                  <br />
+                  <span style={{ color: disputesEnabled ? 'var(--teal)' : '#E04A4A', fontWeight: 600 }}>
+                    {disputesEnabled ? '✓ Disputes are currently ENABLED' : '✕ Disputes are currently DISABLED for all users'}
+                  </span>
+                </>
+              }
+            >
+              <Toggle checked={disputesEnabled} onChange={setDisputesEnabled} />
+            </SettingRow>
+
+            <SettingRow
+              label="Dispute Window (hours after completion)"
+              description={
+                <>
+                  How many hours <strong>after</strong> a booking is marked completed can a user raise a dispute.
+                  <br />
+                  After this window expires, disputes are blocked with the message <em>"Dispute window has expired."</em>
+                  <br />
+                  <span style={{ color: 'var(--teal)' }}>e.g. 48 hrs → users have 2 days after completion to raise a dispute</span>
+                </>
+              }
+              last
+            >
+              <NumberInput name="dispute_window_hours" defaultValue={settings?.dispute_window_hours ?? 48} unit="hours" inputRef={refDisputeWindowHours} />
+            </SettingRow>
+          </div>
+
+          <SectionHeader icon="📣" title="Complaint Settings" sub="Control when users can submit general complaints" />
+          <div style={{ padding: '0 1.2rem' }}>
+            <SettingRow
+              label="Enable Complaints"
+              description={
+                <>
+                  When <strong>ON</strong>: patients, nurses, and hospitals can submit complaints about any issue.
+                  <br />
+                  When <strong>OFF</strong>: the complaint submission form is hidden for all users. Admin can still resolve existing complaints.
+                  <br />
+                  <span style={{ color: complaintsEnabled ? 'var(--teal)' : '#E04A4A', fontWeight: 600 }}>
+                    {complaintsEnabled ? '✓ Complaints are currently ENABLED' : '✕ Complaints are currently DISABLED for all users'}
+                  </span>
+                </>
+              }
+            >
+              <Toggle checked={complaintsEnabled} onChange={setComplaintsEnabled} />
+            </SettingRow>
+
+            <SettingRow
+              label="Complaint Window (hours after booking completion)"
+              description={
+                <>
+                  How many hours <strong>after</strong> a linked booking is completed can a user submit a complaint about it.
+                  <br />
+                  Complaints not linked to a booking are always allowed when complaints are enabled.
+                  <br />
+                  After this window, booking-linked complaints are blocked with the message <em>"Complaint submission period has expired."</em>
+                  <br />
+                  <span style={{ color: 'var(--teal)' }}>e.g. 168 hrs (7 days) → users have 1 week after completion to complain</span>
+                </>
+              }
+              last
+            >
+              <NumberInput name="complaint_window_hours" defaultValue={settings?.complaint_window_hours ?? 168} unit="hours" inputRef={refComplaintWindowHours} />
             </SettingRow>
           </div>
         </div>

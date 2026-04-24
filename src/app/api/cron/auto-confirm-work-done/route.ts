@@ -45,11 +45,12 @@ export async function POST(req: NextRequest) {
 
   const ids = overdue.map(b => b.id)
 
-  // Auto-confirm as completed
+  // Auto-confirm as completed — also stamp completed_at for dispute/complaint window
   const { error: updateErr } = await supabase
     .from('booking_requests')
     .update({
       status:            'completed',
+      completed_at:      now,
       auto_confirmed_at: now,
     })
     .in('id', ids)

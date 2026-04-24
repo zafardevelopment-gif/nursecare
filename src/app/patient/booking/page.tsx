@@ -59,9 +59,10 @@ export default async function PatientBookingPage() {
     const { data: rawNurses } = nurseIds.length > 0
       ? await supabase
           .from('nurses')
-          .select('id, user_id, full_name, specialization, city, experience_years, gender, nationality, languages, is_available, status, nurse_documents(doc_type, file_url)')
+          .select('id, user_id, full_name, specialization, city, experience_years, gender, nationality, languages, is_available, is_paused, status, nurse_documents(doc_type, file_url)')
           .in('id', nurseIds)
           .eq('status', 'approved')
+          .eq('is_paused', false)
       : { data: [] }
 
     // Index nurses by their internal id for fast lookup
@@ -132,7 +133,7 @@ export default async function PatientBookingPage() {
     )
   }
 
-  // ── LEGACY PATH (flag OFF) — unchanged ────────────────────────────────────
+  // ── LEGACY PATH (flag OFF) ────────────────────────────────────────────────
   const { data: nursesRaw } = await supabase
     .from('nurses')
     .select(`
@@ -148,9 +149,12 @@ export default async function PatientBookingPage() {
       bio,
       languages,
       is_available,
+      is_paused,
       status,
       nurse_documents ( doc_type, file_url )
     `)
+    .eq('status', 'approved')
+    .eq('is_paused', false)
     .limit(50)
 
   const nurseList = (nursesRaw ?? []).map((n: any) => ({

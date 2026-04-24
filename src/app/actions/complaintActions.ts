@@ -4,6 +4,7 @@ import { createSupabaseServiceRoleClient, createSupabaseServerClient } from '@/l
 import { revalidatePath } from 'next/cache'
 import { sendNotifications } from '@/lib/notifications'
 import { logActivity } from '@/lib/activity'
+import { getDisputeComplaintSettings } from '@/lib/platform-settings'
 
 async function getAuthUser() {
   const supabase = await createSupabaseServerClient()
@@ -46,6 +47,13 @@ export async function submitComplaint(formData: FormData): Promise<{ error?: str
   if (!VALID_TYPES.includes(complaint_type)) return { error: 'Invalid complaint type' }
   if (!VALID_ROLES.includes(reporter_role))  return { error: 'Invalid reporter role' }
 
+  // Get platform settings (complaints enabled + window)
+  const settings = await getDisputeComplaintSettings()
+
+  if (!settings.complaints_enabled) {
+    return { error: 'Complaints are currently disabled by the platform administrator.' }
+  }
+
   // Get reporter name
   const { data: profile } = await supabase
     .from('users')
@@ -59,19 +67,61 @@ export async function submitComplaint(formData: FormData): Promise<{ error?: str
     if (reporter_role === 'patient') {
       const { data } = await supabase
         .from('booking_requests')
-        .select('id')
+        .select('id, status, completed_at')
         .eq('id', booking_id)
         .eq('patient_id', user.id)
         .single()
       ownershipCheck = data
+
+      // Time-limit check: if booking is completed, enforce window
+      if (ownershipCheck && ownershipCheck.status === 'completed' && ownershipCheck.completed_at) {
+        const completedMs  = new Date(ownershipCheck.completed_at).getTime()
+        const windowMs     = settings.complaint_window_hours * 60 * 60 * 1000
+        const expiredAt    = new Date(completedMs + windowMs)
+        if (Date.now() > expiredAt.getTime()) {
+          // Log the blocked attempt
+          void logActivity({
+            actorId:     user.id,
+            actorName:   profile?.full_name ?? 'Unknown',
+            actorRole:   reporter_role,
+            action:      'complaint_expired_blocked',
+            module:      'complaint',
+            entityType:  'complaint',
+            entityId:    booking_id,
+            description: `Complaint submission blocked — window expired for booking (${complaint_type.replace(/_/g, ' ')})`,
+            meta:        { complaint_type, booking_id, expired_at: expiredAt.toISOString() },
+          })
+          return { error: 'Complaint submission period has expired. The allowed window after booking completion has passed.' }
+        }
+      }
     } else if (reporter_role === 'provider') {
       const { data } = await supabase
         .from('booking_requests')
-        .select('id')
+        .select('id, status, completed_at')
         .eq('id', booking_id)
         .eq('nurse_id', user.id)
         .single()
       ownershipCheck = data
+
+      if (ownershipCheck && ownershipCheck.status === 'completed' && ownershipCheck.completed_at) {
+        const completedMs = new Date(ownershipCheck.completed_at).getTime()
+        const windowMs    = settings.complaint_window_hours * 60 * 60 * 1000
+        const expiredAt   = new Date(completedMs + windowMs)
+        if (Date.now() > expiredAt.getTime()) {
+          void logActivity({
+            actorId:     user.id,
+            actorName:   profile?.full_name ?? 'Unknown',
+            actorRole:   reporter_role,
+            action:      'complaint_expired_blocked',
+            module:      'complaint',
+            entityType:  'complaint',
+            entityId:    booking_id,
+            description: `Complaint submission blocked — window expired for booking (${complaint_type.replace(/_/g, ' ')})`,
+            meta:        { complaint_type, booking_id, expired_at: expiredAt.toISOString() },
+          })
+          return { error: 'Complaint submission period has expired. The allowed window after booking completion has passed.' }
+        }
+      }
     } else {
       // hospital — check hospital_booking_requests
       const { data: hospital } = await supabase
@@ -92,6 +142,10 @@ export async function submitComplaint(formData: FormData): Promise<{ error?: str
     if (!ownershipCheck) return { error: 'Booking not found or does not belong to you' }
   }
 
+  // Calculate expires_at for this complaint
+  const now       = new Date()
+  const expiresAt = new Date(now.getTime() + settings.complaint_window_hours * 60 * 60 * 1000)
+
   const { data, error } = await supabase
     .from('complaints')
     .insert({
@@ -102,7 +156,8 @@ export async function submitComplaint(formData: FormData): Promise<{ error?: str
       complaint_type,
       description,
       image_url,
-      status: 'open',
+      status:        'open',
+      expires_at:    expiresAt.toISOString(),
     })
     .select('id')
     .single()
@@ -129,11 +184,12 @@ export async function submitComplaint(formData: FormData): Promise<{ error?: str
   ]
 
   await sendNotifications(notifs)
-  await logActivity({
+  void logActivity({
     actorId:     user.id,
     actorName:   profile?.full_name ?? 'Unknown',
     actorRole:   reporter_role,
     action:      'complaint_raised',
+    module:      'complaint',
     entityType:  'complaint',
     entityId:    data.id,
     description: `${profile?.full_name ?? 'A user'} (${reporter_role}) raised a complaint: ${complaint_type.replace(/_/g, ' ')}`,
@@ -154,7 +210,7 @@ export async function updateComplaintStatus(formData: FormData): Promise<{ error
   const status     = (formData.get('status')        as string)?.trim()
   const admin_note = (formData.get('admin_note')    as string)?.trim() || null
 
-  if (!id)     return { error: 'Missing complaint ID' }
+  if (!id) return { error: 'Missing complaint ID' }
 
   const validStatuses = ['open', 'resolved', 'rejected']
   if (!validStatuses.includes(status)) return { error: 'Invalid status' }
@@ -196,12 +252,13 @@ export async function updateComplaintStatus(formData: FormData): Promise<{ error
 
   // Get admin name for log
   const { data: adminProfile } = await supabase.from('users').select('full_name').eq('id', user.id).single()
-  const action = status === 'resolved' ? 'complaint_resolved' : 'complaint_rejected'
-  await logActivity({
+  const action = status === 'resolved' ? 'complaint_resolved' : status === 'rejected' ? 'complaint_rejected' : 'complaint_closed'
+  void logActivity({
     actorId:     user.id,
     actorName:   adminProfile?.full_name ?? 'Admin',
     actorRole:   'admin',
     action,
+    module:      'complaint',
     entityType:  'complaint',
     entityId:    id,
     description: `Admin ${status} complaint (${complaint.complaint_type?.replace(/_/g, ' ') ?? ''})${admin_note ? ': ' + admin_note : ''}`,

@@ -40,9 +40,17 @@ interface Props {
   complaints: ComplaintRow[]
   reporterRole: 'patient' | 'provider' | 'hospital'
   bookingOptions: BookingOption[]
+  complaintsEnabled: boolean
+  complaintWindowHours: number
 }
 
-export default function ComplaintsClient({ complaints, reporterRole, bookingOptions }: Props) {
+export default function ComplaintsClient({
+  complaints,
+  reporterRole,
+  bookingOptions,
+  complaintsEnabled,
+  complaintWindowHours,
+}: Props) {
   const [showForm, setShowForm]     = useState(false)
   const [imageUrl, setImageUrl]     = useState('')
   const [error, setError]           = useState<string | null>(null)
@@ -74,6 +82,9 @@ export default function ComplaintsClient({ complaints, reporterRole, bookingOpti
 
   const roleLabel = reporterRole === 'patient' ? 'Patient' : reporterRole === 'provider' ? 'Nurse' : 'Hospital'
 
+  const windowDays  = complaintWindowHours >= 24 ? Math.round(complaintWindowHours / 24) : null
+  const windowLabel = windowDays ? `${windowDays} day${windowDays !== 1 ? 's' : ''}` : `${complaintWindowHours} hours`
+
   return (
     <div className="dash-shell">
       {/* Header */}
@@ -82,16 +93,30 @@ export default function ComplaintsClient({ complaints, reporterRole, bookingOpti
           <h1 className="dash-title">My Complaints</h1>
           <p className="dash-sub">Submit and track complaints or issues</p>
         </div>
-        <button
-          onClick={() => { setShowForm(true); setError(null); setSuccess(false) }}
-          style={{ padding: '9px 20px', borderRadius: 9, border: 'none', background: '#E04A4A', color: '#fff', fontWeight: 700, fontSize: '0.88rem', cursor: 'pointer', fontFamily: 'inherit' }}
-        >
-          📣 Submit Complaint
-        </button>
+        {complaintsEnabled ? (
+          <button
+            onClick={() => { setShowForm(true); setError(null); setSuccess(false) }}
+            style={{ padding: '9px 20px', borderRadius: 9, border: 'none', background: '#E04A4A', color: '#fff', fontWeight: 700, fontSize: '0.88rem', cursor: 'pointer', fontFamily: 'inherit' }}
+          >
+            📣 Submit Complaint
+          </button>
+        ) : (
+          <div style={{ background: 'rgba(138,155,170,0.12)', border: '1px solid rgba(138,155,170,0.3)', borderRadius: 9, padding: '9px 16px', fontSize: '0.82rem', color: 'var(--muted)', fontWeight: 600 }}>
+            🔒 Complaints are currently disabled
+          </div>
+        )}
       </div>
 
+      {/* Complaint window info banner */}
+      {complaintsEnabled && (
+        <div style={{ background: 'rgba(14,123,140,0.05)', border: '1px solid rgba(14,123,140,0.15)', borderRadius: 10, padding: '10px 16px', marginBottom: '1.25rem', fontSize: '0.8rem', color: 'var(--teal)', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span>ℹ️</span>
+          <span>Complaints linked to a completed booking must be submitted within <strong>{windowLabel}</strong> of booking completion. General complaints (not linked to a booking) can be submitted at any time.</span>
+        </div>
+      )}
+
       {/* Submit modal */}
-      {showForm && (
+      {showForm && complaintsEnabled && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
           <div style={{ background: 'var(--card)', borderRadius: 16, padding: '28px 28px 24px', maxWidth: 520, width: '100%', boxShadow: '0 20px 60px rgba(0,0,0,0.25)', border: '1px solid var(--border)', maxHeight: '90vh', overflowY: 'auto' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 22 }}>
@@ -122,6 +147,9 @@ export default function ComplaintsClient({ complaints, reporterRole, bookingOpti
                         <option key={b.id} value={b.id}>{b.label}</option>
                       ))}
                     </select>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--muted)', marginTop: 4 }}>
+                      Note: complaints linked to a completed booking must be submitted within {windowLabel} of completion.
+                    </div>
                   </div>
                 )}
                 {bookingOptions.length === 0 && (

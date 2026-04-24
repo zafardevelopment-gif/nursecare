@@ -3,6 +3,7 @@
 import { createSupabaseServerClient, createSupabaseServiceRoleClient } from '@/lib/supabase-server'
 import { requireRole } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
+import { logActivity } from '@/lib/activity'
 
 /* ── Logo Upload ────────────────────────────────────────────────── */
 
@@ -65,6 +66,10 @@ export type PlatformSettingsInput = {
   show_price_with_commission: boolean
   require_nurse_approval: boolean
   on_the_way_enabled: boolean
+  disputes_enabled: boolean
+  complaints_enabled: boolean
+  dispute_window_hours: number
+  complaint_window_hours: number
 }
 
 export async function savePlatformSettings(input: PlatformSettingsInput) {
@@ -90,6 +95,14 @@ export async function savePlatformSettings(input: PlatformSettingsInput) {
     const { error } = await supabase.from('platform_settings').insert(values)
     if (error) console.error('[savePlatformSettings] insert error:', error.message)
   }
+
+  void logActivity({
+    actorId: admin.id, actorName: admin.full_name ?? 'Admin', actorRole: 'admin',
+    action: 'admin_settings_changed', module: 'settings',
+    entityType: 'settings',
+    description: `Admin updated platform settings`,
+    meta: { platform_name: input.platform_name, commission: input.default_commission },
+  })
 
   revalidatePath('/admin/settings')
 }

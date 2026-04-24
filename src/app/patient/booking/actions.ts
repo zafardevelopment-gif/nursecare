@@ -4,6 +4,7 @@ import { createSupabaseServiceRoleClient } from '@/lib/supabase-server'
 import { recalcShiftAvailability } from '@/app/provider/availability/actions'
 import type { ShiftKey } from '@/app/provider/availability/shiftConstants'
 import { sendNotifications } from '@/lib/notifications'
+import { logActivity } from '@/lib/activity'
 
 async function getAdminUserIds(supabase: ReturnType<typeof createSupabaseServiceRoleClient>): Promise<string[]> {
   const { data } = await supabase.from('users').select('id').eq('role', 'admin')
@@ -291,6 +292,14 @@ export async function submitBookingAction(formData: FormData): Promise<{ booking
   }
 
   await sendNotifications(notifPayloads)
+
+  void logActivity({
+    actorId: userId, actorName: userName, actorRole: 'patient',
+    action: 'booking_created', module: 'booking',
+    entityType: 'booking', entityId: request.id,
+    description: `Patient ${userName} created a booking for ${service_type || 'nursing care'} on ${start_date}${nurse_name ? ` with ${nurse_name}` : ''}`,
+    meta: { service_type, start_date, nurse_name, sessions: dates.length, booking_type },
+  })
 
   return { bookingRef: request.id, sessions: dates.length }
   } catch (e: any) {

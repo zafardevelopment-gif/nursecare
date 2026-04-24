@@ -3,6 +3,7 @@
 import { createSupabaseServerClient, createSupabaseServiceRoleClient } from '@/lib/supabase-server'
 import { revalidatePath } from 'next/cache'
 import { sendNotifications } from '@/lib/notifications'
+import { logActivity } from '@/lib/activity'
 
 const REVALIDATE = () => {
   revalidatePath('/patient/bookings')
@@ -102,6 +103,15 @@ export async function cancelBooking(requestId: string): Promise<{ error?: string
   }
 
   await sendNotifications(notifs)
+
+  void logActivity({
+    actorId: user.id, actorName: booking.patient_name ?? 'Patient', actorRole: 'patient',
+    action: 'booking_cancelled', module: 'booking',
+    entityType: 'booking', entityId: requestId,
+    description: `Patient ${booking.patient_name ?? '—'} cancelled booking for ${booking.service_type ?? 'care'} on ${booking.start_date}`,
+    meta: { service_type: booking.service_type, start_date: booking.start_date },
+  })
+
   REVALIDATE()
   return {}
 }
@@ -109,7 +119,14 @@ export async function cancelBooking(requestId: string): Promise<{ error?: string
 /* ── Mark payment done (simulated) ─────────────────────────── */
 
 export async function markPaymentDone(requestId: string) {
+  const user = await getAuthUser()
   const supabase = createSupabaseServiceRoleClient()
+
+  const { data: booking } = await supabase
+    .from('booking_requests')
+    .select('patient_name, service_type, start_date')
+    .eq('id', requestId)
+    .single()
 
   const { error } = await supabase
     .from('booking_requests')
@@ -117,6 +134,17 @@ export async function markPaymentDone(requestId: string) {
     .eq('id', requestId)
 
   if (error) console.error('[markPaymentDone]', error.message)
+
+  if (user && booking) {
+    void logActivity({
+      actorId: user.id, actorName: booking.patient_name ?? 'Patient', actorRole: 'patient',
+      action: 'booking_payment_done', module: 'payment',
+      entityType: 'booking', entityId: requestId,
+      description: `Payment marked done for ${booking.service_type ?? 'booking'} on ${booking.start_date}`,
+      meta: { service_type: booking.service_type, start_date: booking.start_date },
+    })
+  }
+
   REVALIDATE()
 }
 
@@ -228,6 +256,14 @@ export async function submitRescheduleRequest(formData: FormData): Promise<{ err
 
   if (notifs.length) await sendNotifications(notifs)
 
+  void logActivity({
+    actorId: user.id, actorName: booking.patient_name ?? 'Patient', actorRole: 'patient',
+    action: 'booking_reschedule_requested', module: 'booking',
+    entityType: 'booking', entityId: booking_id,
+    description: `Patient ${booking.patient_name ?? '—'} requested reschedule from ${booking.start_date} → ${new_date}`,
+    meta: { old_date: booking.start_date, new_date, service_type: booking.service_type },
+  })
+
   revalidatePath(`/patient/bookings/${booking_id}`)
   revalidatePath('/patient/bookings')
   revalidatePath('/admin/bookings')
@@ -306,6 +342,14 @@ export async function submitCancelRequest(formData: FormData): Promise<{ error?:
   }
 
   if (notifs.length) await sendNotifications(notifs)
+
+  void logActivity({
+    actorId: user.id, actorName: booking.patient_name ?? 'Patient', actorRole: 'patient',
+    action: 'booking_cancel_requested', module: 'booking',
+    entityType: 'booking', entityId: booking_id,
+    description: `Patient ${booking.patient_name ?? '—'} requested cancellation of ${booking.service_type ?? 'booking'} on ${booking.start_date}`,
+    meta: { service_type: booking.service_type, start_date: booking.start_date, reason },
+  })
 
   revalidatePath(`/patient/bookings/${booking_id}`)
   revalidatePath('/patient/bookings')

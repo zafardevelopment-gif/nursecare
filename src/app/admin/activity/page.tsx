@@ -7,33 +7,57 @@ export const dynamic = 'force-dynamic'
 const PAGE_SIZE = 25
 
 const ACTION_ICON: Record<string, string> = {
-  booking_created:        '📋',
-  booking_accepted:       '✅',
-  booking_declined:       '✕',
-  booking_cancelled:      '❌',
-  booking_in_progress:    '🔄',
-  booking_work_done:      '🎉',
-  booking_completed:      '🏁',
-  nurse_approved:         '👩‍⚕️',
-  nurse_rejected:         '❌',
-  nurse_profile_updated:  '📝',
-  complaint_raised:       '⚖️',
-  complaint_resolved:     '✅',
-  complaint_rejected:     '✕',
-  leave_requested:        '🌴',
-  leave_approved:         '✅',
-  leave_rejected:         '✕',
-  agreement_created:      '📄',
-  agreement_signed:       '✍️',
-  agreement_rejected:     '❌',
-  hospital_approved:      '🏥',
-  hospital_rejected:      '❌',
-  payment_received:       '💳',
-  payment_reminder_sent:  '⚠️',
-  admin_settings_changed: '⚙️',
-  user_created:           '👤',
-  user_updated:           '👤',
-  notification_sent:      '🔔',
+  booking_created:              '📋',
+  booking_accepted:             '✅',
+  booking_declined:             '✕',
+  booking_cancelled:            '❌',
+  booking_cancel_requested:     '⚠️',
+  booking_reschedule_requested: '📅',
+  booking_on_the_way:           '🚗',
+  booking_in_progress:          '🔄',
+  booking_work_done:            '🎉',
+  booking_completed:            '🏁',
+  booking_payment_done:         '💳',
+  nurse_registered:             '👤',
+  nurse_approved:               '👩‍⚕️',
+  nurse_rejected:               '❌',
+  nurse_profile_updated:        '📝',
+  nurse_availability_updated:   '🕐',
+  leave_requested:              '🌴',
+  leave_approved:               '✅',
+  leave_rejected:               '✕',
+  complaint_raised:             '⚖️',
+  complaint_resolved:           '✅',
+  complaint_rejected:           '✕',
+  agreement_created:            '📄',
+  agreement_signed:             '✍️',
+  agreement_rejected:           '❌',
+  hospital_approved:            '🏥',
+  hospital_rejected:            '❌',
+  hospital_booking_created:     '🏥',
+  hospital_booking_updated:     '🏥',
+  payment_received:             '💳',
+  payment_reminder_sent:        '⚠️',
+  admin_settings_changed:       '⚙️',
+  homepage_settings_changed:    '🌐',
+  user_created:                 '👤',
+  user_updated:                 '👤',
+  notification_sent:            '🔔',
+}
+
+const MODULE_ICON: Record<string, string> = {
+  booking:   '📋',
+  nurse:     '👩‍⚕️',
+  patient:   '🧑',
+  leave:     '🌴',
+  complaint: '⚖️',
+  agreement: '📄',
+  hospital:  '🏥',
+  payment:   '💳',
+  settings:  '⚙️',
+  homepage:  '🌐',
+  auth:      '🔐',
+  system:    '🖥️',
 }
 
 const ROLE_COLOR: Record<string, { bg: string; color: string }> = {
@@ -55,13 +79,19 @@ function timeAgo(iso: string): string {
   return new Date(iso).toLocaleDateString('en-SA', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
+function getModule(log: any): string {
+  return log.module ?? (log.meta as any)?.module ?? log.entity_type ?? ''
+}
+
 interface Props {
   searchParams: Promise<{
     page?: string
     q?: string
     role?: string
     action?: string
-    date?: string
+    module?: string
+    date_from?: string
+    date_to?: string
   }>
 }
 
@@ -70,34 +100,35 @@ export default async function AdminActivityPage({ searchParams }: Props) {
   const supabase = createSupabaseServiceRoleClient()
   const params = await searchParams
 
-  const page   = Math.max(1, parseInt(params.page ?? '1'))
-  const offset = (page - 1) * PAGE_SIZE
-  const q      = params.q?.trim() ?? ''
-  const roleF  = params.role ?? ''
-  const actionF = params.action ?? ''
-  const dateF  = params.date ?? ''
+  const page     = Math.max(1, parseInt(params.page ?? '1'))
+  const offset   = (page - 1) * PAGE_SIZE
+  const q        = params.q?.trim() ?? ''
+  const roleF    = params.role ?? ''
+  const actionF  = params.action ?? ''
+  const moduleF  = params.module ?? ''
+  const dateFrom = params.date_from ?? ''
+  const dateTo   = params.date_to ?? ''
 
-  // Build query with filters
   let query = supabase
     .from('activity_logs')
-    .select('id, actor_name, actor_role, action, entity_type, description, created_at, meta', { count: 'exact' })
+    .select('id, actor_name, actor_role, action, entity_type, entity_id, description, created_at, meta', { count: 'exact' })
     .order('created_at', { ascending: false })
 
-  if (q)       query = query.ilike('description', `%${q}%`)
-  if (roleF)   query = query.eq('actor_role', roleF)
-  if (actionF) query = query.eq('action', actionF)
-  if (dateF) {
-    const start = new Date(dateF)
-    const end   = new Date(dateF)
+  if (q)        query = query.ilike('description', `%${q}%`)
+  if (roleF)    query = query.eq('actor_role', roleF)
+  if (actionF)  query = query.eq('action', actionF)
+  if (moduleF)  query = query.eq('entity_type', moduleF)
+  if (dateFrom) query = query.gte('created_at', new Date(dateFrom).toISOString())
+  if (dateTo) {
+    const end = new Date(dateTo)
     end.setDate(end.getDate() + 1)
-    query = query.gte('created_at', start.toISOString()).lt('created_at', end.toISOString())
+    query = query.lt('created_at', end.toISOString())
   }
 
   const { data: rows, count } = await query.range(offset, offset + PAGE_SIZE - 1)
   const logs = rows ?? []
   const totalPages = Math.ceil((count ?? 0) / PAGE_SIZE)
 
-  // Stats (unfiltered) for KPIs — quick counts
   const [
     { count: totalLogs },
     { count: todayLogs },
@@ -112,12 +143,12 @@ export default async function AdminActivityPage({ searchParams }: Props) {
 
   function buildUrl(overrides: Record<string, string>) {
     const sp = new URLSearchParams()
-    const base = { page: '1', q, role: roleF, action: actionF, date: dateF, ...overrides }
+    const base = { page: '1', q, role: roleF, action: actionF, module: moduleF, date_from: dateFrom, date_to: dateTo, ...overrides }
     Object.entries(base).forEach(([k, v]) => { if (v) sp.set(k, v) })
     return `/admin/activity${sp.toString() ? '?' + sp.toString() : ''}`
   }
 
-  const isFiltered = q || roleF || actionF || dateF
+  const isFiltered = q || roleF || actionF || moduleF || dateFrom || dateTo
 
   return (
     <div className="dash-shell">
@@ -157,37 +188,48 @@ export default async function AdminActivityPage({ searchParams }: Props) {
       <div className="dash-card" style={{ marginBottom: '1.25rem' }}>
         <div style={{ padding: '1rem 1.2rem' }}>
           <form method="GET" action="/admin/activity">
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem', alignItems: 'end' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '0.75rem', alignItems: 'end' }}>
+
               {/* Search */}
               <div>
-                <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: 'var(--muted)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                  Search
-                </label>
+                <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: 'var(--muted)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Search</label>
                 <input
                   name="q"
                   defaultValue={q}
                   placeholder="Search description…"
-                  style={{
-                    width: '100%', padding: '8px 12px', borderRadius: 9,
-                    border: '1px solid var(--border)', background: 'var(--card)',
-                    color: 'var(--ink)', fontSize: '0.83rem', boxSizing: 'border-box',
-                  }}
+                  style={{ width: '100%', padding: '8px 12px', borderRadius: 9, border: '1px solid var(--border)', background: 'var(--card)', color: 'var(--ink)', fontSize: '0.83rem', boxSizing: 'border-box' }}
                 />
+              </div>
+
+              {/* Module filter */}
+              <div>
+                <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: 'var(--muted)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Module</label>
+                <select
+                  name="module"
+                  defaultValue={moduleF}
+                  style={{ width: '100%', padding: '8px 12px', borderRadius: 9, border: '1px solid var(--border)', background: 'var(--card)', color: 'var(--ink)', fontSize: '0.83rem', boxSizing: 'border-box' }}
+                >
+                  <option value="">All Modules</option>
+                  <option value="booking">📋 Bookings</option>
+                  <option value="nurse">👩‍⚕️ Nurses</option>
+                  <option value="patient">🧑 Patients</option>
+                  <option value="leave">🌴 Leave</option>
+                  <option value="complaint">⚖️ Complaints</option>
+                  <option value="agreement">📄 Agreements</option>
+                  <option value="hospital">🏥 Hospital</option>
+                  <option value="payment">💳 Payments</option>
+                  <option value="settings">⚙️ Settings</option>
+                  <option value="homepage">🌐 Homepage</option>
+                </select>
               </div>
 
               {/* Role filter */}
               <div>
-                <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: 'var(--muted)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                  User Role
-                </label>
+                <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: 'var(--muted)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Role</label>
                 <select
                   name="role"
                   defaultValue={roleF}
-                  style={{
-                    width: '100%', padding: '8px 12px', borderRadius: 9,
-                    border: '1px solid var(--border)', background: 'var(--card)',
-                    color: 'var(--ink)', fontSize: '0.83rem', boxSizing: 'border-box',
-                  }}
+                  style={{ width: '100%', padding: '8px 12px', borderRadius: 9, border: '1px solid var(--border)', background: 'var(--card)', color: 'var(--ink)', fontSize: '0.83rem', boxSizing: 'border-box' }}
                 >
                   <option value="">All Roles</option>
                   <option value="admin">Admin</option>
@@ -199,63 +241,76 @@ export default async function AdminActivityPage({ searchParams }: Props) {
 
               {/* Action type filter */}
               <div>
-                <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: 'var(--muted)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                  Activity Type
-                </label>
+                <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: 'var(--muted)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Action Type</label>
                 <select
                   name="action"
                   defaultValue={actionF}
-                  style={{
-                    width: '100%', padding: '8px 12px', borderRadius: 9,
-                    border: '1px solid var(--border)', background: 'var(--card)',
-                    color: 'var(--ink)', fontSize: '0.83rem', boxSizing: 'border-box',
-                  }}
+                  style={{ width: '100%', padding: '8px 12px', borderRadius: 9, border: '1px solid var(--border)', background: 'var(--card)', color: 'var(--ink)', fontSize: '0.83rem', boxSizing: 'border-box' }}
                 >
-                  <option value="">All Types</option>
+                  <option value="">All Actions</option>
                   <optgroup label="Bookings">
                     <option value="booking_created">Booking Created</option>
                     <option value="booking_accepted">Booking Accepted</option>
                     <option value="booking_declined">Booking Declined</option>
                     <option value="booking_cancelled">Booking Cancelled</option>
+                    <option value="booking_cancel_requested">Cancel Requested</option>
+                    <option value="booking_reschedule_requested">Reschedule Requested</option>
+                    <option value="booking_on_the_way">On The Way</option>
+                    <option value="booking_in_progress">Work Started</option>
+                    <option value="booking_work_done">Work Done</option>
                     <option value="booking_completed">Booking Completed</option>
+                    <option value="booking_payment_done">Payment Done</option>
                   </optgroup>
                   <optgroup label="Nurse">
+                    <option value="nurse_registered">Nurse Registered</option>
                     <option value="nurse_approved">Nurse Approved</option>
                     <option value="nurse_rejected">Nurse Rejected</option>
                     <option value="nurse_profile_updated">Profile Updated</option>
+                    <option value="nurse_availability_updated">Availability Updated</option>
                   </optgroup>
-                  <optgroup label="Complaints & Leave">
-                    <option value="complaint_raised">Complaint Raised</option>
-                    <option value="complaint_resolved">Complaint Resolved</option>
+                  <optgroup label="Leave">
                     <option value="leave_requested">Leave Requested</option>
                     <option value="leave_approved">Leave Approved</option>
+                    <option value="leave_rejected">Leave Rejected</option>
+                  </optgroup>
+                  <optgroup label="Complaints">
+                    <option value="complaint_raised">Complaint Raised</option>
+                    <option value="complaint_resolved">Complaint Resolved</option>
+                    <option value="complaint_rejected">Complaint Rejected</option>
                   </optgroup>
                   <optgroup label="Payments">
                     <option value="payment_received">Payment Received</option>
-                    <option value="payment_reminder_sent">Payment Reminder</option>
+                    <option value="booking_payment_done">Payment Done</option>
                   </optgroup>
                   <optgroup label="Admin">
                     <option value="admin_settings_changed">Settings Changed</option>
+                    <option value="homepage_settings_changed">Homepage Changed</option>
                     <option value="hospital_approved">Hospital Approved</option>
                     <option value="agreement_signed">Agreement Signed</option>
+                    <option value="agreement_created">Agreement Created</option>
                   </optgroup>
                 </select>
               </div>
 
-              {/* Date filter */}
+              {/* Date From */}
               <div>
-                <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: 'var(--muted)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                  Date
-                </label>
+                <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: 'var(--muted)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Date From</label>
                 <input
                   type="date"
-                  name="date"
-                  defaultValue={dateF}
-                  style={{
-                    width: '100%', padding: '8px 12px', borderRadius: 9,
-                    border: '1px solid var(--border)', background: 'var(--card)',
-                    color: 'var(--ink)', fontSize: '0.83rem', boxSizing: 'border-box',
-                  }}
+                  name="date_from"
+                  defaultValue={dateFrom}
+                  style={{ width: '100%', padding: '8px 12px', borderRadius: 9, border: '1px solid var(--border)', background: 'var(--card)', color: 'var(--ink)', fontSize: '0.83rem', boxSizing: 'border-box' }}
+                />
+              </div>
+
+              {/* Date To */}
+              <div>
+                <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: 'var(--muted)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Date To</label>
+                <input
+                  type="date"
+                  name="date_to"
+                  defaultValue={dateTo}
+                  style={{ width: '100%', padding: '8px 12px', borderRadius: 9, border: '1px solid var(--border)', background: 'var(--card)', color: 'var(--ink)', fontSize: '0.83rem', boxSizing: 'border-box' }}
                 />
               </div>
 
@@ -300,7 +355,7 @@ export default async function AdminActivityPage({ searchParams }: Props) {
             <div style={{ fontSize: '3rem', marginBottom: 12 }}>📊</div>
             <div style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--ink)', marginBottom: 6 }}>No activity found</div>
             <div style={{ fontSize: '0.85rem', color: 'var(--muted)' }}>
-              {isFiltered ? 'Try adjusting your filters.' : 'Activity will appear here once users start taking actions.'}
+              {isFiltered ? 'Try adjusting your filters.' : 'Activity will appear here once users start taking actions on the platform.'}
             </div>
           </div>
         ) : (
@@ -310,7 +365,7 @@ export default async function AdminActivityPage({ searchParams }: Props) {
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
                 <thead>
                   <tr style={{ background: 'var(--cream)', borderBottom: '1px solid var(--border)' }}>
-                    {['#', 'Actor', 'Role', 'Action', 'Description', 'Time'].map(h => (
+                    {['#', 'Actor', 'Role', 'Module', 'Action', 'Description', 'Time'].map(h => (
                       <th key={h} style={{ padding: '8px 14px', textAlign: 'left', fontWeight: 700, fontSize: '0.67rem', color: 'var(--muted)', whiteSpace: 'nowrap', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                         {h}
                       </th>
@@ -320,7 +375,9 @@ export default async function AdminActivityPage({ searchParams }: Props) {
                 <tbody>
                   {logs.map((log: any, i: number) => {
                     const icon = ACTION_ICON[log.action] ?? '📌'
-                    const rc = ROLE_COLOR[log.actor_role] ?? ROLE_COLOR.admin
+                    const rc   = ROLE_COLOR[log.actor_role] ?? ROLE_COLOR.admin
+                    const mod  = getModule(log)
+                    const modIcon = MODULE_ICON[mod] ?? '📌'
                     return (
                       <tr key={log.id} style={{ borderBottom: i < logs.length - 1 ? '1px solid var(--border)' : 'none', background: i % 2 === 0 ? 'var(--card)' : 'rgba(14,123,140,0.012)' }}>
                         <td style={{ padding: '10px 14px', verticalAlign: 'middle' }}>
@@ -330,9 +387,17 @@ export default async function AdminActivityPage({ searchParams }: Props) {
                           <span style={{ fontWeight: 700, fontSize: '0.82rem', color: 'var(--ink)' }}>{log.actor_name ?? 'System'}</span>
                         </td>
                         <td style={{ padding: '10px 14px', verticalAlign: 'middle' }}>
-                          <span style={{ background: rc.bg, color: rc.color, fontSize: '0.65rem', fontWeight: 700, padding: '3px 8px', borderRadius: 50, textTransform: 'capitalize' }}>
+                          <span style={{ background: rc.bg, color: rc.color, fontSize: '0.65rem', fontWeight: 700, padding: '3px 8px', borderRadius: 50, textTransform: 'capitalize', whiteSpace: 'nowrap' }}>
                             {log.actor_role}
                           </span>
+                        </td>
+                        <td style={{ padding: '10px 14px', verticalAlign: 'middle' }}>
+                          {mod && (
+                            <span style={{ fontSize: '0.72rem', color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}>
+                              <span>{modIcon}</span>
+                              <span style={{ textTransform: 'capitalize' }}>{mod}</span>
+                            </span>
+                          )}
                         </td>
                         <td style={{ padding: '10px 14px', verticalAlign: 'middle' }}>
                           <span style={{ display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}>
@@ -342,15 +407,13 @@ export default async function AdminActivityPage({ searchParams }: Props) {
                             </span>
                           </span>
                         </td>
-                        <td style={{ padding: '10px 14px', verticalAlign: 'middle', maxWidth: 320 }}>
+                        <td style={{ padding: '10px 14px', verticalAlign: 'middle', maxWidth: 300 }}>
                           <span style={{ fontSize: '0.78rem', color: 'var(--muted)', lineHeight: 1.4 }}>
                             {log.description}
                           </span>
                         </td>
                         <td style={{ padding: '10px 14px', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
-                          <div style={{ fontSize: '0.72rem', color: 'var(--ink)', fontWeight: 600 }}>
-                            {timeAgo(log.created_at)}
-                          </div>
+                          <div style={{ fontSize: '0.72rem', color: 'var(--ink)', fontWeight: 600 }}>{timeAgo(log.created_at)}</div>
                           <div style={{ fontSize: '0.65rem', color: 'var(--muted)', marginTop: 1 }}>
                             {new Date(log.created_at).toLocaleString('en-SA', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
                           </div>
@@ -366,33 +429,32 @@ export default async function AdminActivityPage({ searchParams }: Props) {
             <div className="activity-mobile">
               {logs.map((log: any) => {
                 const icon = ACTION_ICON[log.action] ?? '📌'
-                const rc = ROLE_COLOR[log.actor_role] ?? ROLE_COLOR.admin
+                const rc   = ROLE_COLOR[log.actor_role] ?? ROLE_COLOR.admin
+                const mod  = getModule(log)
+                const modIcon = MODULE_ICON[mod] ?? '📌'
                 return (
                   <div key={log.id} style={{ padding: '14px 16px', borderBottom: '1px solid var(--border)', display: 'flex', gap: 12 }}>
                     <div style={{
-                      width: 38, height: 38, borderRadius: 10,
-                      background: rc.bg,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: '1rem', flexShrink: 0,
+                      width: 38, height: 38, borderRadius: 10, background: rc.bg,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', flexShrink: 0,
                     }}>
                       {icon}
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 3 }}>
-                        <span style={{ fontWeight: 700, fontSize: '0.82rem', color: 'var(--ink)' }}>
-                          {log.actor_name ?? 'System'}
-                        </span>
-                        <span style={{ fontSize: '0.65rem', color: 'var(--muted)', whiteSpace: 'nowrap' }}>
-                          {timeAgo(log.created_at)}
-                        </span>
+                        <span style={{ fontWeight: 700, fontSize: '0.82rem', color: 'var(--ink)' }}>{log.actor_name ?? 'System'}</span>
+                        <span style={{ fontSize: '0.65rem', color: 'var(--muted)', whiteSpace: 'nowrap' }}>{timeAgo(log.created_at)}</span>
                       </div>
-                      <div style={{ fontSize: '0.78rem', color: 'var(--muted)', marginBottom: 5, lineHeight: 1.4 }}>
-                        {log.description}
-                      </div>
-                      <div style={{ display: 'flex', gap: 6 }}>
+                      <div style={{ fontSize: '0.78rem', color: 'var(--muted)', marginBottom: 5, lineHeight: 1.4 }}>{log.description}</div>
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                         <span style={{ background: rc.bg, color: rc.color, fontSize: '0.6rem', fontWeight: 700, padding: '2px 7px', borderRadius: 50, textTransform: 'capitalize' }}>
                           {log.actor_role}
                         </span>
+                        {mod && (
+                          <span style={{ background: 'var(--cream)', color: 'var(--muted)', fontSize: '0.6rem', fontWeight: 600, padding: '2px 7px', borderRadius: 50 }}>
+                            {modIcon} {mod}
+                          </span>
+                        )}
                         <span style={{ background: 'var(--cream)', color: 'var(--muted)', fontSize: '0.6rem', fontWeight: 600, padding: '2px 7px', borderRadius: 50 }}>
                           {log.action.replace(/_/g, ' ')}
                         </span>

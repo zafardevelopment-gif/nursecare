@@ -2,6 +2,37 @@ import { requireRole } from '@/lib/auth'
 import { createSupabaseServerClient, createSupabaseServiceRoleClient } from '@/lib/supabase-server'
 import Link from 'next/link'
 
+const ACTION_ICON: Record<string, string> = {
+  booking_created:              '📋',
+  booking_accepted:             '✅',
+  booking_declined:             '✕',
+  booking_cancelled:            '❌',
+  booking_cancel_requested:     '⚠️',
+  booking_reschedule_requested: '📅',
+  booking_on_the_way:           '🚗',
+  booking_in_progress:          '🔄',
+  booking_work_done:            '🎉',
+  booking_completed:            '🏁',
+  booking_payment_done:         '💳',
+  nurse_approved:               '👩‍⚕️',
+  nurse_rejected:               '❌',
+  nurse_registered:             '👤',
+  leave_requested:              '🌴',
+  leave_approved:               '✅',
+  leave_rejected:               '✕',
+  complaint_raised:             '⚖️',
+  complaint_resolved:           '✅',
+  admin_settings_changed:       '⚙️',
+  homepage_settings_changed:    '🌐',
+}
+
+const ROLE_COLOR: Record<string, string> = {
+  admin:    'rgba(201,168,76,0.15)',
+  patient:  'rgba(39,168,105,0.12)',
+  provider: 'rgba(10,191,204,0.12)',
+  hospital: 'rgba(155,89,182,0.12)',
+}
+
 export default async function AdminDashboardPage() {
   const user = await requireRole('admin')
   const supabase = await createSupabaseServerClient()
@@ -16,6 +47,8 @@ export default async function AdminDashboardPage() {
     { count: rejectedAgreements },
     { count: openDisputes },
     { data: recentActivity },
+    { data: recentLogs },
+    { data: leaveStats },
   ] = await Promise.all([
     supabase.from('nurses').select('status'),
     serviceSupabase.from('booking_requests').select('status'),
@@ -27,7 +60,19 @@ export default async function AdminDashboardPage() {
       .select('id, patient_name, nurse_name, service_type, status, created_at')
       .order('created_at', { ascending: false })
       .limit(8),
+    serviceSupabase.from('activity_logs')
+      .select('id, actor_name, actor_role, action, description, created_at')
+      .order('created_at', { ascending: false })
+      .limit(8),
+    serviceSupabase.from('leave_requests')
+      .select('status, is_blocked, auto_approved'),
   ])
+
+  // Leave counts
+  const allLeaves        = leaveStats ?? []
+  const pendingLeaves    = allLeaves.filter((l: any) => l.status === 'pending').length
+  const blockedLeaves    = allLeaves.filter((l: any) => l.is_blocked && l.status === 'pending').length
+  const autoApprovedLeaves = allLeaves.filter((l: any) => l.auto_approved).length
 
   // Count nurse statuses in JS — zero extra DB round-trips
   const nurses = nurseStatuses ?? []
@@ -67,50 +112,66 @@ export default async function AdminDashboardPage() {
 
       {/* KPI Row 1 — Bookings */}
       <div className="dash-kpi-row" style={{ marginBottom: '1rem' }}>
-        <div className="dash-kpi">
-          <div className="dash-kpi-icon" style={{ background: '#E8F9F0' }}>📋</div>
-          <div className="dash-kpi-num">{totalBookings ?? 0}</div>
-          <div className="dash-kpi-label">Total Bookings</div>
-        </div>
-        <div className="dash-kpi">
-          <div className="dash-kpi-icon" style={{ background: '#FFF3E0' }}>⏳</div>
-          <div className="dash-kpi-num" style={{ color: (pendingBookings ?? 0) > 0 ? '#F5842A' : 'var(--ink)' }}>{pendingBookings ?? 0}</div>
-          <div className="dash-kpi-label">Awaiting Nurse</div>
-        </div>
-        <div className="dash-kpi">
-          <div className="dash-kpi-icon" style={{ background: 'rgba(39,168,105,0.1)' }}>✅</div>
-          <div className="dash-kpi-num">{activeBookings ?? 0}</div>
-          <div className="dash-kpi-label">Active / Accepted</div>
-        </div>
-        <div className="dash-kpi">
-          <div className="dash-kpi-icon" style={{ background: 'rgba(14,123,140,0.1)' }}>🔄</div>
-          <div className="dash-kpi-num" style={{ color: (inProgressBookings ?? 0) > 0 ? '#0E7B8C' : 'var(--ink)' }}>{inProgressBookings ?? 0}</div>
-          <div className="dash-kpi-label">In Progress</div>
-        </div>
-        <div className="dash-kpi">
-          <div className="dash-kpi-icon" style={{ background: 'rgba(107,63,160,0.1)' }}>🎉</div>
-          <div className="dash-kpi-num" style={{ color: (workDoneBookings ?? 0) > 0 ? '#6B3FA0' : 'var(--ink)' }}>{workDoneBookings ?? 0}</div>
-          <div className="dash-kpi-label">Awaiting Confirmation</div>
-        </div>
-        <div className="dash-kpi">
-          <div className="dash-kpi-icon" style={{ background: '#F0FFF4' }}>🏁</div>
-          <div className="dash-kpi-num">{completedBookings ?? 0}</div>
-          <div className="dash-kpi-label">Completed</div>
-        </div>
+        <Link href="/admin/bookings" style={{ textDecoration: 'none' }}>
+          <div className="dash-kpi" style={{ cursor: 'pointer' }}>
+            <div className="dash-kpi-icon" style={{ background: '#E8F9F0' }}>📋</div>
+            <div className="dash-kpi-num">{totalBookings ?? 0}</div>
+            <div className="dash-kpi-label">Total Bookings</div>
+          </div>
+        </Link>
+        <Link href="/admin/bookings?status=pending" style={{ textDecoration: 'none' }}>
+          <div className="dash-kpi" style={{ cursor: 'pointer', border: (pendingBookings ?? 0) > 0 ? '1px solid rgba(245,132,42,0.3)' : '1px solid var(--border)' }}>
+            <div className="dash-kpi-icon" style={{ background: '#FFF3E0' }}>⏳</div>
+            <div className="dash-kpi-num" style={{ color: (pendingBookings ?? 0) > 0 ? '#F5842A' : 'var(--ink)' }}>{pendingBookings ?? 0}</div>
+            <div className="dash-kpi-label">Awaiting Nurse</div>
+          </div>
+        </Link>
+        <Link href="/admin/bookings?status=accepted" style={{ textDecoration: 'none' }}>
+          <div className="dash-kpi" style={{ cursor: 'pointer' }}>
+            <div className="dash-kpi-icon" style={{ background: 'rgba(39,168,105,0.1)' }}>✅</div>
+            <div className="dash-kpi-num">{activeBookings ?? 0}</div>
+            <div className="dash-kpi-label">Active / Accepted</div>
+          </div>
+        </Link>
+        <Link href="/admin/bookings?status=in_progress" style={{ textDecoration: 'none' }}>
+          <div className="dash-kpi" style={{ cursor: 'pointer', border: (inProgressBookings ?? 0) > 0 ? '1px solid rgba(14,123,140,0.3)' : '1px solid var(--border)' }}>
+            <div className="dash-kpi-icon" style={{ background: 'rgba(14,123,140,0.1)' }}>🔄</div>
+            <div className="dash-kpi-num" style={{ color: (inProgressBookings ?? 0) > 0 ? '#0E7B8C' : 'var(--ink)' }}>{inProgressBookings ?? 0}</div>
+            <div className="dash-kpi-label">In Progress</div>
+          </div>
+        </Link>
+        <Link href="/admin/bookings?status=work_done" style={{ textDecoration: 'none' }}>
+          <div className="dash-kpi" style={{ cursor: 'pointer', border: (workDoneBookings ?? 0) > 0 ? '1px solid rgba(107,63,160,0.3)' : '1px solid var(--border)' }}>
+            <div className="dash-kpi-icon" style={{ background: 'rgba(107,63,160,0.1)' }}>🎉</div>
+            <div className="dash-kpi-num" style={{ color: (workDoneBookings ?? 0) > 0 ? '#6B3FA0' : 'var(--ink)' }}>{workDoneBookings ?? 0}</div>
+            <div className="dash-kpi-label">Awaiting Confirmation</div>
+          </div>
+        </Link>
+        <Link href="/admin/bookings?status=completed" style={{ textDecoration: 'none' }}>
+          <div className="dash-kpi" style={{ cursor: 'pointer' }}>
+            <div className="dash-kpi-icon" style={{ background: '#F0FFF4' }}>🏁</div>
+            <div className="dash-kpi-num">{completedBookings ?? 0}</div>
+            <div className="dash-kpi-label">Completed</div>
+          </div>
+        </Link>
       </div>
 
       {/* KPI Row 1b — Users & Nurses */}
       <div className="dash-kpi-row" style={{ marginBottom: '1rem' }}>
-        <div className="dash-kpi">
-          <div className="dash-kpi-icon" style={{ background: '#EEF2FF' }}>👥</div>
-          <div className="dash-kpi-num">{totalUsers ?? 0}</div>
-          <div className="dash-kpi-label">Total Users</div>
-        </div>
-        <div className="dash-kpi">
-          <div className="dash-kpi-icon" style={{ background: '#E8F4FD' }}>👩‍⚕️</div>
-          <div className="dash-kpi-num">{approvedNurses ?? 0}<span style={{ fontSize: '0.85rem', color: 'var(--muted)', fontFamily: 'inherit' }}> / {totalNurses ?? 0}</span></div>
-          <div className="dash-kpi-label">Approved Nurses</div>
-        </div>
+        <Link href="/admin/users" style={{ textDecoration: 'none' }}>
+          <div className="dash-kpi" style={{ cursor: 'pointer' }}>
+            <div className="dash-kpi-icon" style={{ background: '#EEF2FF' }}>👥</div>
+            <div className="dash-kpi-num">{totalUsers ?? 0}</div>
+            <div className="dash-kpi-label">Total Users</div>
+          </div>
+        </Link>
+        <Link href="/admin/nurses?status=approved" style={{ textDecoration: 'none' }}>
+          <div className="dash-kpi" style={{ cursor: 'pointer' }}>
+            <div className="dash-kpi-icon" style={{ background: '#E8F4FD' }}>👩‍⚕️</div>
+            <div className="dash-kpi-num">{approvedNurses ?? 0}<span style={{ fontSize: '0.85rem', color: 'var(--muted)', fontFamily: 'inherit' }}> / {totalNurses ?? 0}</span></div>
+            <div className="dash-kpi-label">Approved Nurses</div>
+          </div>
+        </Link>
       </div>
 
       {/* KPI Row 2 — Pending Actions */}
@@ -150,6 +211,20 @@ export default async function AdminDashboardPage() {
             <div className="dash-kpi-label">Open Disputes</div>
           </div>
         </Link>
+        <Link href="/admin/leave?status=pending" style={{ textDecoration: 'none' }}>
+          <div className="dash-kpi" style={{ border: pendingLeaves > 0 ? '1px solid rgba(107,63,160,0.3)' : '1px solid var(--border)', cursor: 'pointer' }}>
+            <div className="dash-kpi-icon" style={{ background: pendingLeaves > 0 ? 'rgba(107,63,160,0.1)' : 'rgba(107,63,160,0.05)' }}>🌴</div>
+            <div className="dash-kpi-num" style={{ color: pendingLeaves > 0 ? '#6B3FA0' : 'var(--ink)' }}>{pendingLeaves}</div>
+            <div className="dash-kpi-label">Pending Leaves</div>
+          </div>
+        </Link>
+        <Link href="/admin/leave?blocked=1" style={{ textDecoration: 'none' }}>
+          <div className="dash-kpi" style={{ border: blockedLeaves > 0 ? '1px solid rgba(224,74,74,0.3)' : '1px solid var(--border)', cursor: 'pointer' }}>
+            <div className="dash-kpi-icon" style={{ background: blockedLeaves > 0 ? 'rgba(224,74,74,0.1)' : 'rgba(224,74,74,0.05)' }}>🚫</div>
+            <div className="dash-kpi-num" style={{ color: blockedLeaves > 0 ? '#E04A4A' : 'var(--ink)' }}>{blockedLeaves}</div>
+            <div className="dash-kpi-label">Blocked Leaves</div>
+          </div>
+        </Link>
       </div>
 
       {/* Quick Links */}
@@ -182,7 +257,7 @@ export default async function AdminDashboardPage() {
         </div>
       </div>
 
-      {/* Recent Activity */}
+      {/* Recent Booking Activity */}
       {(recentActivity ?? []).length > 0 && (
         <div className="dash-card" style={{ marginTop: '1.5rem' }}>
           <div className="dash-card-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -224,6 +299,54 @@ export default async function AdminDashboardPage() {
                     <span style={{ fontSize: '0.7rem', color: 'var(--teal)', fontWeight: 700 }}>→</span>
                   </div>
                 </Link>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Latest Activity Log */}
+      {(recentLogs ?? []).length > 0 && (
+        <div className="dash-card" style={{ marginTop: '1.5rem' }}>
+          <div className="dash-card-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span className="dash-card-title">Latest Platform Activity</span>
+            <Link href="/admin/activity" style={{ fontSize: '0.78rem', color: 'var(--teal)', textDecoration: 'none', fontWeight: 600 }}>Full log →</Link>
+          </div>
+          <div style={{ padding: 0 }}>
+            {(recentLogs ?? []).map((log: any, i: number) => {
+              const icon = ACTION_ICON[log.action] ?? '📌'
+              const roleBg = ROLE_COLOR[log.actor_role] ?? 'rgba(14,123,140,0.08)'
+              const timeAgoStr = (() => {
+                const diff = Date.now() - new Date(log.created_at).getTime()
+                const m = Math.floor(diff / 60000)
+                if (m < 1) return 'just now'
+                if (m < 60) return `${m}m ago`
+                const h = Math.floor(m / 60)
+                if (h < 24) return `${h}h ago`
+                return `${Math.floor(h / 24)}d ago`
+              })()
+              return (
+                <div key={log.id} style={{
+                  display: 'flex', alignItems: 'center', gap: 12,
+                  padding: '10px 20px',
+                  borderBottom: i < (recentLogs ?? []).length - 1 ? '1px solid var(--border)' : 'none',
+                }}>
+                  <div style={{ width: 32, height: 32, borderRadius: 8, background: roleBg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.9rem', flexShrink: 0 }}>
+                    {icon}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--ink)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {log.actor_name ?? 'System'}
+                    </div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--muted)', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {log.description}
+                    </div>
+                  </div>
+                  <div style={{ flexShrink: 0, textAlign: 'right' }}>
+                    <div style={{ fontSize: '0.65rem', color: 'var(--muted)', fontWeight: 600 }}>{timeAgoStr}</div>
+                    <div style={{ fontSize: '0.62rem', color: 'var(--muted)', marginTop: 1, textTransform: 'capitalize' }}>{log.actor_role}</div>
+                  </div>
+                </div>
               )
             })}
           </div>
