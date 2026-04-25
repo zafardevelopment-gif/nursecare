@@ -603,6 +603,11 @@ body {
     overflow-x: auto;
   }
 
+  /* Activity list cards — no horizontal scroll, clip cleanly */
+  .dash-card-list {
+    overflow-x: hidden !important;
+  }
+
   /* Auth card: tighter on very small screens */
   .auth-card {
     padding: 2rem 1.4rem;
@@ -617,6 +622,13 @@ body {
   /* Activity log — switch to card view on mobile */
   .activity-desktop { display: none !important; }
   .activity-mobile  { display: block !important; }
+
+  /* Dashboard activity rows: tighter padding, hide date+arrow on small screens */
+  .activity-row-link {
+    padding: 10px 12px !important;
+  }
+  .activity-row-date { display: none !important; }
+  .activity-row-arrow { display: none !important; }
 
   /* Title size */
   .dash-title {

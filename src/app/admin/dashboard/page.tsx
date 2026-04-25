@@ -259,7 +259,7 @@ export default async function AdminDashboardPage() {
 
       {/* Recent Booking Activity */}
       {(recentActivity ?? []).length > 0 && (
-        <div className="dash-card" style={{ marginTop: '1.5rem' }}>
+        <div className="dash-card dash-card-list" style={{ marginTop: '1.5rem' }}>
           <div className="dash-card-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <span className="dash-card-title">Recent Booking Activity</span>
             <Link href="/admin/bookings" style={{ fontSize: '0.78rem', color: 'var(--teal)', textDecoration: 'none', fontWeight: 600 }}>View all →</Link>
@@ -295,8 +295,8 @@ export default async function AdminDashboardPage() {
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
                     <span style={{ background: s.bg, color: s.color, fontSize: '0.65rem', fontWeight: 700, padding: '3px 9px', borderRadius: 50, whiteSpace: 'nowrap' }}>{s.label}</span>
-                    <span style={{ fontSize: '0.68rem', color: 'var(--muted)', whiteSpace: 'nowrap' }}>{new Date(b.created_at).toLocaleDateString('en-SA', { day: '2-digit', month: 'short' })}</span>
-                    <span style={{ fontSize: '0.7rem', color: 'var(--teal)', fontWeight: 700 }}>→</span>
+                    <span className="activity-row-date" style={{ fontSize: '0.68rem', color: 'var(--muted)', whiteSpace: 'nowrap' }}>{new Date(b.created_at).toLocaleDateString('en-SA', { day: '2-digit', month: 'short' })}</span>
+                    <span className="activity-row-arrow" style={{ fontSize: '0.7rem', color: 'var(--teal)', fontWeight: 700 }}>→</span>
                   </div>
                 </Link>
               )
@@ -307,7 +307,7 @@ export default async function AdminDashboardPage() {
 
       {/* Latest Activity Log */}
       {(recentLogs ?? []).length > 0 && (
-        <div className="dash-card" style={{ marginTop: '1.5rem' }}>
+        <div className="dash-card dash-card-list" style={{ marginTop: '1.5rem' }}>
           <div className="dash-card-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <span className="dash-card-title">Latest Platform Activity</span>
             <Link href="/admin/activity" style={{ fontSize: '0.78rem', color: 'var(--teal)', textDecoration: 'none', fontWeight: 600 }}>Full log →</Link>
@@ -326,7 +326,7 @@ export default async function AdminDashboardPage() {
                 return `${Math.floor(h / 24)}d ago`
               })()
               return (
-                <div key={log.id} style={{
+                <div key={log.id} className="activity-row-link" style={{
                   display: 'flex', alignItems: 'center', gap: 12,
                   padding: '10px 20px',
                   borderBottom: i < (recentLogs ?? []).length - 1 ? '1px solid var(--border)' : 'none',
