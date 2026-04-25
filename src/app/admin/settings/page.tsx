@@ -1,8 +1,12 @@
 import { requireRole } from '@/lib/auth'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
+import { getAllDeveloperSettings } from '@/lib/developer-settings'
 import SettingsForm from './SettingsForm'
 import CommissionForm from './CommissionForm'
 import PromoManager from './PromoManager'
+import DeveloperSettingsTab from './DeveloperSettingsTab'
+
+export const dynamic = 'force-dynamic'
 
 export default async function AdminSettingsPage() {
   await requireRole('admin')
@@ -12,10 +16,12 @@ export default async function AdminSettingsPage() {
     { data: settings },
     { data: professions },
     { data: promos },
+    devSettings,
   ] = await Promise.all([
     supabase.from('platform_settings').select('*').limit(1).single(),
     supabase.from('profession_commissions').select('*').order('profession'),
     supabase.from('promo_codes').select('*').order('created_at', { ascending: false }),
+    getAllDeveloperSettings(),
   ])
 
   return (
@@ -35,7 +41,10 @@ export default async function AdminSettingsPage() {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', alignItems: 'start' }}>
         {/* Left column */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-          <SettingsForm settings={settings} />
+          <SettingsForm
+            settings={settings}
+            developerTabContent={<DeveloperSettingsTab devSettings={devSettings} />}
+          />
         </div>
 
         {/* Right column */}

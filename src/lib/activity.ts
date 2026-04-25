@@ -53,6 +53,7 @@ export type ActivityAction =
   | 'payment_reminder_sent'
   // Admin / System
   | 'admin_settings_changed'
+  | 'developer_settings_changed'
   | 'homepage_settings_changed'
   | 'user_created'
   | 'user_updated'

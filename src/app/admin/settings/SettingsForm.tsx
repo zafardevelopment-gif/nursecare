@@ -33,20 +33,34 @@ interface Settings {
   complaint_window_hours?: number
 }
 
-type Tab = 'general' | 'provider' | 'patient' | 'hospital' | 'disputes'
+type Tab = 'general' | 'provider' | 'patient' | 'hospital' | 'disputes' | 'developer'
 
 const TABS: { key: Tab; label: string; icon: string }[] = [
-  { key: 'general',  label: 'General',  icon: '⚙️' },
-  { key: 'provider', label: 'Provider', icon: '👩‍⚕️' },
-  { key: 'patient',  label: 'Patient',  icon: '🏥' },
-  { key: 'hospital', label: 'Hospital', icon: '🏨' },
-  { key: 'disputes', label: 'Disputes', icon: '⚖️' },
+  { key: 'general',   label: 'General',   icon: '⚙️'  },
+  { key: 'provider',  label: 'Provider',  icon: '👩‍⚕️' },
+  { key: 'patient',   label: 'Patient',   icon: '🏥'  },
+  { key: 'hospital',  label: 'Hospital',  icon: '🏨'  },
+  { key: 'disputes',  label: 'Disputes',  icon: '⚖️'  },
+  { key: 'developer', label: 'Developer', icon: '🔐'  },
 ]
 
-export default function SettingsForm({ settings }: { settings: Settings | null }) {
+export default function SettingsForm({
+  settings,
+  onTabChange,
+  developerTabContent,
+}: {
+  settings: Settings | null
+  onTabChange?: (tab: Tab) => void
+  developerTabContent?: React.ReactNode
+}) {
   const [pending, startTransition] = useTransition()
   const [saved, setSaved] = useState(false)
   const [activeTab, setActiveTab] = useState<Tab>('general')
+
+  function handleTabClick(tab: Tab) {
+    setActiveTab(tab)
+    onTabChange?.(tab)
+  }
 
   const [emergencyBookings, setEmergencyBookings] = useState(settings?.allow_emergency_bookings ?? true)
   const [requireWorkStart, setRequireWorkStart]   = useState(settings?.require_work_start_confirmation ?? true)
@@ -101,6 +115,11 @@ export default function SettingsForm({ settings }: { settings: Settings | null }
   const [logoUploading, setLogoUploading] = useState(false)
   const [logoError, setLogoError]         = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const formRef      = useRef<HTMLFormElement>(null)
+
+  function handleSubmitClick() {
+    formRef.current?.requestSubmit()
+  }
 
   // Refs for numeric inputs — read at submit time regardless of active tab
   const refPlatformName            = useRef<HTMLInputElement>(null)
@@ -179,14 +198,14 @@ export default function SettingsForm({ settings }: { settings: Settings | null }
   }
 
   return (
-    <form onSubmit={handleSubmit}>
-      {/* Tab bar */}
+    <div>
+      {/* Tab bar — outside <form> so developer sub-forms don't nest inside it */}
       <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
         {TABS.map(tab => (
           <button
             key={tab.key}
             type="button"
-            onClick={() => setActiveTab(tab.key)}
+            onClick={() => handleTabClick(tab.key)}
             style={{
               padding: '9px 18px', borderRadius: 10, border: activeTab === tab.key ? 'none' : '1px solid var(--border)',
               background: activeTab === tab.key ? 'var(--teal)' : 'var(--cream)',
@@ -199,22 +218,31 @@ export default function SettingsForm({ settings }: { settings: Settings | null }
             {tab.icon} {tab.label}
           </button>
         ))}
-        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
-          {saved && <span style={{ fontSize: '0.78rem', color: '#27A869', fontWeight: 700 }}>✓ Saved successfully</span>}
-          <button
-            type="submit"
-            disabled={pending}
-            style={{
-              background: 'var(--teal)', color: '#fff', border: 'none',
-              padding: '9px 24px', borderRadius: 9, fontSize: '0.85rem',
-              fontWeight: 700, cursor: pending ? 'not-allowed' : 'pointer',
-              fontFamily: 'inherit', opacity: pending ? 0.7 : 1,
-            }}
-          >
-            {pending ? 'Saving…' : '💾 Save Settings'}
-          </button>
-        </div>
+        {activeTab !== 'developer' && (
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
+            {saved && <span style={{ fontSize: '0.78rem', color: '#27A869', fontWeight: 700 }}>✓ Saved successfully</span>}
+            <button
+              type="button"
+              onClick={handleSubmitClick}
+              disabled={pending}
+              style={{
+                background: 'var(--teal)', color: '#fff', border: 'none',
+                padding: '9px 24px', borderRadius: 9, fontSize: '0.85rem',
+                fontWeight: 700, cursor: pending ? 'not-allowed' : 'pointer',
+                fontFamily: 'inherit', opacity: pending ? 0.7 : 1,
+              }}
+            >
+              {pending ? 'Saving…' : '💾 Save Settings'}
+            </button>
+          </div>
+        )}
       </div>
+
+      {/* Developer tab renders its own forms — no wrapping <form> needed */}
+      {activeTab === 'developer' && developerTabContent}
+
+      {/* All other tabs share one <form> */}
+      {activeTab !== 'developer' && <form onSubmit={handleSubmit} ref={formRef}>
 
       {/* ── GENERAL TAB ── */}
       {activeTab === 'general' && (
@@ -642,7 +670,8 @@ export default function SettingsForm({ settings }: { settings: Settings | null }
         </div>
       )}
 
-    </form>
+      </form>}
+    </div>
   )
 }
 
