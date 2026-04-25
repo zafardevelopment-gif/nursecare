@@ -159,7 +159,7 @@ export default async function AdminBookingsPage({ searchParams }: Props) {
       </div>
 
       {/* Type toggle — Patient / Hospital */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: '1.5rem' }}>
+      <div style={{ display: 'flex', gap: 8, marginBottom: '1.5rem', flexWrap: 'wrap' }}>
         <Link href={typeUrl('patient')} style={{
           padding: '10px 24px', borderRadius: 10, fontWeight: 700, fontSize: '0.88rem',
           textDecoration: 'none',
@@ -240,6 +240,7 @@ export default async function AdminBookingsPage({ searchParams }: Props) {
                 <input type="hidden" name="type" value="patient" />
                 {filterStatus && <input type="hidden" name="status" value={filterStatus} />}
                 <input type="text" name="q" defaultValue={search} placeholder="Search patient, nurse, city…"
+                  className="bookings-search-input"
                   style={{ padding: '6px 10px', borderRadius: 7, border: '1px solid var(--border)', fontSize: '0.8rem', fontFamily: 'inherit', background: 'var(--cream)', width: 220 }} />
                 <button type="submit" style={{ padding: '6px 12px', borderRadius: 7, border: 'none', background: 'var(--teal)', color: '#fff', fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Search</button>
                 {search && <Link href={filterUrl(filterStatus)} style={{ padding: '6px 10px', borderRadius: 7, border: '1px solid var(--border)', background: 'var(--cream)', color: 'var(--muted)', fontSize: '0.8rem', textDecoration: 'none', display: 'flex', alignItems: 'center' }}>✕</Link>}

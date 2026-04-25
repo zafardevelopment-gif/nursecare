@@ -617,6 +617,45 @@ body {
   /* Activity log — switch to card view on mobile */
   .activity-desktop { display: none !important; }
   .activity-mobile  { display: block !important; }
+
+  /* Title size */
+  .dash-title {
+    font-size: 1.3rem;
+  }
+
+  /* Search inputs: fluid width */
+  .search-input-fluid {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  /* Bookings: type toggle + search row wrap */
+  .bookings-type-toggle {
+    flex-wrap: wrap;
+  }
+  .bookings-search-row {
+    flex-direction: column;
+    align-items: stretch !important;
+  }
+  .bookings-search-row form {
+    flex-wrap: wrap;
+  }
+  .bookings-search-input {
+    width: auto !important;
+    flex: 1;
+    min-width: 0;
+  }
+
+  /* Nurse filters row */
+  .nurse-filters-row {
+    flex-direction: column;
+    align-items: stretch !important;
+  }
+
+  /* Provider dashboard: stats grid wraps */
+  .provider-stats-grid {
+    grid-template-columns: 1fr 1fr !important;
+  }
 }
 
 @media (max-width: 480px) {
@@ -650,6 +689,18 @@ body {
 @media (max-width: 768px) {
   .grid-2col {
     grid-template-columns: 1fr;
+  }
+}
+
+/* Form two-column grid — stacks on mobile (for inline style replacement) */
+.form-grid-2col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+@media (max-width: 600px) {
+  .form-grid-2col {
+    grid-template-columns: 1fr !important;
   }
 }
 

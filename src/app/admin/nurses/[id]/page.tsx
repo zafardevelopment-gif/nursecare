@@ -105,7 +105,7 @@ export default async function AdminNurseDetailPage({ params }: Props) {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.2rem' }}>
+      <div className="grid-2col" style={{ gap: '1.2rem' }}>
 
         {/* ── Left column ── */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
@@ -157,7 +157,7 @@ export default async function AdminNurseDetailPage({ params }: Props) {
           <div className="dash-card">
             <div className="dash-card-header"><span className="dash-card-title">Pricing</span></div>
             <div className="dash-card-body">
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '1rem' }}>
+              <div className="form-grid-2col" style={{ marginBottom: '1rem' }}>
                 {nurse.hourly_rate && (
                   <PriceBox label="Hourly" nurseRate={nurse.hourly_rate} commission={commission} final={nurse.final_hourly_price ?? previewHourly} />
                 )}

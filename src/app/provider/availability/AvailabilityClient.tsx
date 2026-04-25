@@ -586,7 +586,7 @@ export default function AvailabilityClient({ saved }: { saved: SavedSchedule }) 
                   </div>
 
                   {/* Date pickers */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '1rem' }}>
+                  <div className="form-grid-2col" style={{ gap: '0.75rem', marginBottom: '1rem' }}>
                     <div>
                       <div style={{ fontSize: '0.67rem', fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>📅 Start Date</div>
                       <input type="date" value={range.startDate} min={todayStr}

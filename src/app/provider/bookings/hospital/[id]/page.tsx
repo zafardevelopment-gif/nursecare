@@ -275,7 +275,7 @@ export default async function ProviderHospitalBookingDetailPage({
       </div>
 
       {/* 2-col: Booking Details + Shifts */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
+      <div className="grid-2col" style={{ gap: '1rem', marginBottom: '1.5rem' }}>
         <div className="dash-card">
           <div className="dash-card-header"><span className="dash-card-title">📋 Booking Details</span></div>
           <div className="dash-card-body">

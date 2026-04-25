@@ -60,7 +60,7 @@ export default function OnboardingForm({ isPending: isAlreadyPending }: { isPend
         Personal Information
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+      <div className="form-grid-2col">
         <div className={grp}>
           <label className="form-label">Gender</label>
           <select name="gender" required className={inp}>
@@ -78,7 +78,7 @@ export default function OnboardingForm({ isPending: isAlreadyPending }: { isPend
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+      <div className="form-grid-2col">
         <div className={grp}>
           <label className="form-label">Phone Number</label>
           <input type="tel" name="phone" required className={inp} placeholder="+966 5X XXX XXXX" />
@@ -92,7 +92,7 @@ export default function OnboardingForm({ isPending: isAlreadyPending }: { isPend
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+      <div className="form-grid-2col">
         <div className={grp}>
           <label className="form-label">Years of Experience</label>
           <input type="number" name="experience" required min="0" max="50" className={inp} placeholder="e.g. 5" />
@@ -103,7 +103,7 @@ export default function OnboardingForm({ isPending: isAlreadyPending }: { isPend
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+      <div className="form-grid-2col">
         <div className={grp}>
           <label className="form-label">SCHS License Number</label>
           <input type="text" name="license_no" required className={inp} placeholder="SCHS-1234567" />
@@ -127,7 +127,7 @@ export default function OnboardingForm({ isPending: isAlreadyPending }: { isPend
       </div>
 
       {idType && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+        <div className="form-grid-2col">
           <div className={grp}>
             <label className="form-label">{ID_TYPES.find(t => t.value === idType)?.label} Number</label>
             <input type="text" name="id_number" required className={inp} placeholder="Enter ID number" />
@@ -151,7 +151,7 @@ export default function OnboardingForm({ isPending: isAlreadyPending }: { isPend
       <p style={{ fontSize: '0.78rem', color: 'var(--muted)', marginBottom: '0.8rem' }}>
         Set your rates. Admin will review and add platform commission before publishing.
       </p>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+      <div className="form-grid-2col">
         <div className={grp}>
           <label className="form-label">Hourly Patient Rate (SAR)</label>
           <input type="number" name="hourly_rate" min="0" step="0.01" className={inp} placeholder="e.g. 100" />

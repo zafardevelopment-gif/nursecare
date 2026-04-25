@@ -111,7 +111,7 @@ export default function VerifyClient({
                   </div>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem', borderTop: '1px solid #E8EFF3', paddingTop: '1rem' }}>
+                <div className="form-grid-2col" style={{ gap: '0.8rem', borderTop: '1px solid #E8EFF3', paddingTop: '1rem' }}>
                   {[
                     { label: 'ID Code',    value: result.uniqueIdCode },
                     { label: 'Status',     value: result.effectiveStatus.toUpperCase(), color: sc.color },

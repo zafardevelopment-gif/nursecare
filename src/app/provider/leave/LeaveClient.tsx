@@ -159,7 +159,7 @@ export default function LeaveClient({ leaves, isPaused, pauseUntil }: Props) {
             ) : (
               <form onSubmit={handleSubmit}>
                 {/* Date range */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
+                <div className="form-grid-2col" style={{ gap: 12, marginBottom: 14 }}>
                   <div>
                     <label style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--muted)', display: 'block', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                       Start Date <span style={{ color: '#E04A4A' }}>*</span>

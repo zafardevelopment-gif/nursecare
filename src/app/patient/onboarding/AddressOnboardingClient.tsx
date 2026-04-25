@@ -275,7 +275,7 @@ export default function AddressOnboardingClient({ userName, apiKey }: { userName
               <span style={{ fontSize: '1.3rem', flexShrink: 0 }}>📍</span>
               <div style={{ flex: 1 }}>
                 <div style={{ fontWeight: 700, fontSize: '0.9rem', marginBottom: 6 }}>{addr.full_address}</div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '3px 12px' }}>
+                <div className="form-grid-2col" style={{ gap: '3px 12px' }}>
                   {[
                     { l: 'Building', v: addr.building }, { l: 'Street', v: addr.street },
                     { l: 'Area', v: addr.area }, { l: 'City', v: addr.city },
@@ -303,7 +303,7 @@ export default function AddressOnboardingClient({ userName, apiKey }: { userName
               <summary style={{ cursor: 'pointer', fontSize: '0.8rem', color: 'var(--teal)', fontWeight: 600, padding: '6px 0', userSelect: 'none' }}>
                 ✏️ Edit address details manually
               </summary>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 14px', marginTop: 10 }}>
+              <div className="form-grid-2col" style={{ gap: '10px 14px', marginTop: 10 }}>
                 {([
                   ['building', 'Building / House No'], ['street', 'Street'], ['area', 'Area'],
                   ['city', 'City'], ['state', 'State'], ['country', 'Country'], ['postal_code', 'Postal Code'],
@@ -356,7 +356,7 @@ export default function AddressOnboardingClient({ userName, apiKey }: { userName
       {step === 3 && (
         <div style={S.card}>
           <StepHeader icon="👤" title="Contact Person Details" sub="Who should the nurse contact at this address?" />
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px 16px' }}>
+          <div className="form-grid-2col" style={{ gap: '14px 16px' }}>
             <div style={{ gridColumn: '1/-1' }}>
               <label style={S.fieldLbl}>Person Name *</label>
               <input value={personName} onChange={e => setPersonName(e.target.value)} placeholder="Full name" style={S.inp} />

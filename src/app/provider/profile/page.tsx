@@ -234,7 +234,7 @@ function EditForm({ nurse }: { nurse: any }) {
 
           <SectionLabel>Personal Information — saved immediately</SectionLabel>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+          <div className="form-grid-2col">
             <div className="form-group">
               <label className="form-label">Gender</label>
               <select name="gender" className="form-input" defaultValue={nurse?.gender ?? ''}>
@@ -252,7 +252,7 @@ function EditForm({ nurse }: { nurse: any }) {
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+          <div className="form-grid-2col">
             <div className="form-group">
               <label className="form-label">Phone Number</label>
               <input type="tel" name="phone" className="form-input" defaultValue={nurse?.phone ?? ''} placeholder="+966 5X XXX XXXX" />
@@ -290,7 +290,7 @@ function EditForm({ nurse }: { nurse: any }) {
 
           <SectionLabel sensitive>Professional Details — requires admin approval</SectionLabel>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+          <div className="form-grid-2col">
             <div className="form-group">
               <label className="form-label">Years of Experience</label>
               <input type="number" name="experience_years" className="form-input" defaultValue={nurse?.experience_years ?? ''} min="0" max="50" />
@@ -301,7 +301,7 @@ function EditForm({ nurse }: { nurse: any }) {
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+          <div className="form-grid-2col">
             <div className="form-group">
               <label className="form-label">SCHS License Number</label>
               <input type="text" name="license_no" className="form-input" defaultValue={nurse?.license_no ?? ''} placeholder="SCHS-1234567" />
@@ -320,7 +320,7 @@ function EditForm({ nurse }: { nurse: any }) {
             </select>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+          <div className="form-grid-2col">
             <div className="form-group">
               <label className="form-label">ID Number</label>
               <input type="text" name="id_number" className="form-input" defaultValue={nurse?.id_number ?? ''} placeholder="Enter ID number" />
@@ -336,7 +336,7 @@ function EditForm({ nurse }: { nurse: any }) {
             Your current approved rates stay active until admin approves the change.
           </p>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+          <div className="form-grid-2col">
             <div className="form-group">
               <label className="form-label">Hourly Patient Rate (SAR)</label>
               <input type="number" name="hourly_rate" className="form-input" defaultValue={nurse?.hourly_rate ?? ''} min="0" step="0.01" placeholder="e.g. 100" />

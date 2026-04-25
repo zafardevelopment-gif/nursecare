@@ -84,7 +84,7 @@ export default function HospitalAgreementEditForm({
           <span style={{ fontWeight: 700, fontSize: '0.92rem', color: 'var(--ink)' }}>Agreement Validity</span>
         </div>
         <div style={{ padding: '1.25rem 1.5rem' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+          <div className="form-grid-2col">
             <div className="form-group">
               <label className="form-label">Start Date <span style={{ color: '#E04A4A' }}>*</span></label>
               <input type="date" name="start_date" required className="form-input" defaultValue={agreement.start_date} />
@@ -142,7 +142,7 @@ export default function HospitalAgreementEditForm({
           {paymentType === 'advance' && (
             <div style={{ background: 'rgba(14,123,140,0.04)', border: '1px solid rgba(14,123,140,0.14)', borderRadius: 10, padding: 18 }}>
               <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--teal)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 14 }}>Advance Rules</div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+              <div className="form-grid-2col">
                 <div className="form-group">
                   <label className="form-label">Deadline Before Job</label>
                   <div style={{ display: 'flex', border: '1.5px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>

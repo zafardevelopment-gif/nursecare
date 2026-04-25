@@ -233,7 +233,7 @@ export default async function AdminAgreementDetailPage({ params, searchParams }:
 
           {/* Signatures */}
           <DocSection title="Signatures">
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 6 }}>
+            <div className="form-grid-2col" style={{ gap: 16, marginTop: 6 }}>
               {/* Admin sig */}
               <SigBox
                 party="Party A — NurseCare+"

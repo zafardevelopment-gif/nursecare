@@ -99,7 +99,7 @@ export default function BookingForm({ error }: { error?: string }) {
           <input type="date" name="start_date" required min={minDate} className="form-input" />
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+        <div className="form-grid-2col">
           <div className="form-group">
             <label className="form-label">Start Date</label>
             <input type="date" name="start_date" required min={minDate} className="form-input" />
@@ -155,7 +155,7 @@ export default function BookingForm({ error }: { error?: string }) {
       )}
 
       {/* Shift + Duration */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+      <div className="form-grid-2col">
         <div className="form-group">
           <label className="form-label">Shift</label>
           <select name="shift" required className="form-input">
