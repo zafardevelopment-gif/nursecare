@@ -6,6 +6,7 @@ import SidebarMenu from '@/components/SidebarMenu'
 import MobileSidebar from '@/components/MobileSidebar'
 import NotificationBell from '@/components/NotificationBell'
 import ThemeToggle from '@/components/ThemeToggle'
+import BottomNav from '@/components/BottomNav'
 import Link from 'next/link'
 
 export default async function HospitalLayout({ children }: { children: React.ReactNode }) {
@@ -76,7 +77,10 @@ export default async function HospitalLayout({ children }: { children: React.Rea
       </MobileSidebar>
 
       <main className="app-main" style={{ marginLeft: 260, flex: 1, background: 'var(--shell-bg)', minHeight: '100vh' }}>
-        {children}
+        <div className="page-with-bottom-nav">
+          {children}
+        </div>
+        <BottomNav role="hospital" />
       </main>
     </div>
   )

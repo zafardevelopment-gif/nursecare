@@ -223,7 +223,7 @@ export default async function AdminIssuesPage({ searchParams }: Props) {
                 <div style={{ fontWeight: 700 }}>No disputes found</div>
               </div>
             ) : (
-              <div style={{ overflowX: 'auto' }}>
+              <div className="table-scroll-wrapper">
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
                   <thead>
                     <tr style={{ background: 'var(--shell-bg)', borderBottom: '1px solid var(--border)' }}>
@@ -343,7 +343,7 @@ export default async function AdminIssuesPage({ searchParams }: Props) {
                 <div style={{ fontWeight: 700 }}>No complaints found</div>
               </div>
             ) : (
-              <div style={{ overflowX: 'auto' }}>
+              <div className="table-scroll-wrapper">
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
                   <thead>
                     <tr style={{ background: 'var(--shell-bg)', borderBottom: '1px solid var(--border)' }}>

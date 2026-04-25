@@ -187,22 +187,7 @@ export default function NotificationBell({ role }: Props) {
       {open && (
         <div
           ref={panelRef}
-          style={{
-            position: 'fixed',
-            top: 60,
-            right: 12,
-            width: 340,
-            maxWidth: 'calc(100vw - 24px)',
-            maxHeight: '80vh',
-            background: '#fff',
-            borderRadius: 14,
-            border: '1px solid #E5EDF0',
-            boxShadow: '0 8px 40px rgba(0,0,0,0.18)',
-            display: 'flex',
-            flexDirection: 'column',
-            zIndex: 9999,
-            overflow: 'hidden',
-          }}
+          className="notif-panel"
         >
           {/* Panel header */}
           <div style={{

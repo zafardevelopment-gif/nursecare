@@ -101,7 +101,7 @@ export default function CityReportClient({ cityData, totalBookings }: Props) {
 
       {/* Full table */}
       <div className="dash-card">
-        <div style={{ overflowX: 'auto' }}>
+        <div className="table-scroll-wrapper">
           <table className="report-table">
             <thead>
               <tr>

@@ -200,7 +200,7 @@ export default function ReportShell({
             <div style={{ fontSize: '0.83rem', color: 'var(--muted)' }}>{emptyMessage ?? 'Try adjusting your filters.'}</div>
           </div>
         ) : (
-          <div style={{ overflowX: 'auto' }}>
+          <div className="table-scroll-wrapper">
             <table className="report-table">
               <thead>
                 <tr>

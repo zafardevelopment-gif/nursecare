@@ -128,7 +128,7 @@ export default async function AdminLeaveDetailPage({
           <div style={{ fontSize: '0.82rem', color: '#b85e00', marginBottom: 14, lineHeight: 1.5 }}>
             All bookings below must be <strong>reassigned to another nurse</strong> or <strong>cancelled</strong> before this leave can be approved.
           </div>
-          <div style={{ overflowX: 'auto' }}>
+          <div className="table-scroll-wrapper">
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid rgba(224,74,74,0.2)' }}>

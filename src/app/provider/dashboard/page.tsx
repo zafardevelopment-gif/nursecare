@@ -306,7 +306,7 @@ export default async function ProviderDashboardPage({ searchParams }: Props) {
               <Link href="/provider/bookings" style={{ fontSize: '0.78rem', color: 'var(--teal)', textDecoration: 'none', fontWeight: 600 }}>View all →</Link>
             </div>
           </div>
-          <div style={{ overflowX: 'auto' }}>
+          <div className="table-scroll-wrapper">
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
               <thead>
                 <tr style={{ background: 'var(--cream)', borderBottom: '1px solid var(--border)' }}>
@@ -395,7 +395,7 @@ export default async function ProviderDashboardPage({ searchParams }: Props) {
             No bookings found
           </div>
         ) : (
-          <div style={{ overflowX: 'auto' }}>
+          <div className="table-scroll-wrapper">
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
               <thead>
                 <tr style={{ background: 'var(--cream)', borderBottom: '1px solid var(--border)' }}>
@@ -489,7 +489,7 @@ export default async function ProviderDashboardPage({ searchParams }: Props) {
               <Link href="/provider/bookings?type=hospital" style={{ fontSize: '0.78rem', color: 'var(--teal)', textDecoration: 'none', fontWeight: 600 }}>View all →</Link>
             </div>
           </div>
-          <div style={{ overflowX: 'auto' }}>
+          <div className="table-scroll-wrapper">
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
               <thead>
                 <tr style={{ background: 'var(--cream)', borderBottom: '1px solid var(--border)' }}>

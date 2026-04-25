@@ -144,7 +144,7 @@ export default async function AdminHospitalDetailPage({ params }: Props) {
               No agreements yet. Create the first agreement for this hospital.
             </div>
           ) : (
-            <div style={{ overflowX: 'auto' }}>
+            <div className="table-scroll-wrapper">
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
                 <thead>
                   <tr style={{ background: 'var(--cream)', borderBottom: '1px solid var(--border)' }}>

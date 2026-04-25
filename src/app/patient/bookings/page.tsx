@@ -206,8 +206,8 @@ export default async function PatientBookingsPage({ searchParams }: Props) {
               No bookings in this category
             </div>
           ) : (
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+            <div className="table-scroll-wrapper">
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem', minWidth: 700 }}>
                 <thead>
                   <tr style={{ background: 'var(--cream)', borderBottom: '1px solid var(--border)' }}>
                     <Th>#</Th>

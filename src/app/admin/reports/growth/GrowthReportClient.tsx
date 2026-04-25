@@ -117,7 +117,7 @@ export default function GrowthReportClient({ monthlyData, totalBookings, totalUs
 
       {/* Monthly data table */}
       <div className="dash-card">
-        <div style={{ overflowX: 'auto' }}>
+        <div className="table-scroll-wrapper">
           <table className="report-table">
             <thead>
               <tr>

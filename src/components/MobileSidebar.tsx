@@ -60,19 +60,7 @@ export default function MobileSidebar({ children, logoHref, topbarRight }: Mobil
       />
 
       {/* Sidebar — gets open class on mobile */}
-      <aside className={`app-sidebar${open ? ' open' : ''}`} style={{
-        width: 260,
-        background: '#05111A',
-        height: '100vh',
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        display: 'flex',
-        flexDirection: 'column',
-        zIndex: 150,
-        overflowY: 'auto',
-        overflowX: 'hidden',
-      }}>
+      <aside className={`app-sidebar${open ? ' open' : ''}`}>
         {children}
       </aside>
     </>

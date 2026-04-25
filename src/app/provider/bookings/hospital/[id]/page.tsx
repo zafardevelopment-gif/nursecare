@@ -217,7 +217,7 @@ export default async function ProviderHospitalBookingDetailPage({
           <span className="dash-card-title">👩‍⚕️ My Assignment{mySelections.length > 1 ? 's' : ''}</span>
           <span style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>{mySelections.length} role{mySelections.length !== 1 ? 's' : ''}</span>
         </div>
-        <div style={{ overflowX: 'auto' }}>
+        <div className="table-scroll-wrapper">
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
             <thead>
               <tr style={{ background: 'var(--shell-bg)', borderBottom: '1px solid var(--border)' }}>
@@ -371,7 +371,7 @@ export default async function ProviderHospitalBookingDetailPage({
       {deptBreakdown.length > 0 && (
         <div className="dash-card">
           <div className="dash-card-header"><span className="dash-card-title">🏢 Department Breakdown</span></div>
-          <div style={{ overflowX: 'auto' }}>
+          <div className="table-scroll-wrapper">
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.83rem' }}>
               <thead>
                 <tr style={{ background: 'var(--shell-bg)', borderBottom: '1px solid var(--border)' }}>

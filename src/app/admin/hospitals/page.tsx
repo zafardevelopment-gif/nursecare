@@ -143,7 +143,7 @@ export default async function AdminHospitalsPage({ searchParams }: Props) {
         {!(hospitals ?? []).length ? (
           <div style={{ textAlign: 'center', color: 'var(--muted)', padding: '2.5rem', fontSize: '0.9rem' }}>No hospitals found</div>
         ) : (
-          <div style={{ overflowX: 'auto' }}>
+          <div className="table-scroll-wrapper">
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
               <thead>
                 <tr style={{ background: 'var(--cream)', borderBottom: '1px solid var(--border)' }}>

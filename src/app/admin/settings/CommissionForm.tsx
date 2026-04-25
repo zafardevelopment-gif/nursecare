@@ -34,7 +34,7 @@ export default function CommissionForm({ professions }: { professions: Professio
 
       {showAdd && <AddProfessionRow onAdded={() => setShowAdd(false)} />}
 
-      <div style={{ overflowX: 'auto' }}>
+      <div className="table-scroll-wrapper">
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
           <thead>
             <tr style={{ borderBottom: '2px solid var(--border)', background: 'var(--cream)' }}>

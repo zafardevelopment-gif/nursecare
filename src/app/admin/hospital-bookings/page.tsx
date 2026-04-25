@@ -111,7 +111,7 @@ export default async function AdminHospitalBookingsPage({ searchParams }: Props)
 
       {/* Table */}
       <div className="dash-card" style={{ overflow: 'hidden' }}>
-        <div style={{ overflowX: 'auto' }}>
+        <div className="table-scroll-wrapper">
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.83rem' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)', background: 'var(--shell-bg)' }}>

@@ -407,7 +407,7 @@ export default async function HospitalBookingDetailPage({
           <div className="dash-card-header">
             <span className="dash-card-title">🏢 Department Breakdown</span>
           </div>
-          <div style={{ overflowX: 'auto' }}>
+          <div className="table-scroll-wrapper">
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.83rem' }}>
               <thead>
                 <tr style={{ background: 'var(--shell-bg)', borderBottom: '1px solid var(--border)' }}>
@@ -479,7 +479,7 @@ export default async function HospitalBookingDetailPage({
             />
           </div>
           {/* Per-nurse breakdown — active (non-rejected) only */}
-          <div style={{ overflowX: 'auto' }}>
+          <div className="table-scroll-wrapper">
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
               <thead>
                 <tr style={{ background: 'var(--shell-bg)', borderBottom: '1px solid var(--border)' }}>
@@ -551,7 +551,7 @@ export default async function HospitalBookingDetailPage({
             <span className="dash-card-title">🩺 Service Ledger</span>
             <span style={{ fontSize: '0.72rem', color: 'var(--muted)' }}>Pricing snapshot at booking time</span>
           </div>
-          <div style={{ overflowX: 'auto' }}>
+          <div className="table-scroll-wrapper">
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.83rem' }}>
               <thead>
                 <tr style={{ background: 'var(--shell-bg)', borderBottom: '1px solid var(--border)' }}>
@@ -608,7 +608,7 @@ export default async function HospitalBookingDetailPage({
             <div style={{ fontSize: '0.78rem', color: 'var(--muted)', marginTop: 4 }}>Nurses will appear here once selected during booking</div>
           </div>
         ) : (
-          <div style={{ overflowX: 'auto' }}>
+          <div className="table-scroll-wrapper">
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.83rem' }}>
               <thead>
                 <tr style={{ background: 'var(--shell-bg)', borderBottom: '1px solid var(--border)' }}>

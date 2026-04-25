@@ -272,7 +272,7 @@ export default function ServiceMasterClient({ initialCategories, initialServices
             </button>
           </div>
 
-          <div style={{ overflowX: 'auto' }}>
+          <div className="table-scroll-wrapper">
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.84rem' }}>
               <thead>
                 <tr style={{ borderBottom: '2px solid var(--border)', background: 'var(--cream)' }}>
@@ -360,7 +360,7 @@ export default function ServiceMasterClient({ initialCategories, initialServices
             </button>
           </div>
 
-          <div style={{ overflowX: 'auto' }}>
+          <div className="table-scroll-wrapper">
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.84rem' }}>
               <thead>
                 <tr style={{ borderBottom: '2px solid var(--border)', background: 'var(--cream)' }}>
