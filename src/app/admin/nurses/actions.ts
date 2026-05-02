@@ -4,6 +4,7 @@ import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { requireRole } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
 import { logActivity } from '@/lib/activity'
+import { wa } from '@/lib/whatsapp'
 
 export async function approveNurse(formData: FormData) {
   const admin = await requireRole('admin')
@@ -71,13 +72,24 @@ export async function rejectNurse(formData: FormData) {
     })
     .eq('id', nurseId)
 
-  const { data: nurse } = await supabase.from('nurses').select('full_name').eq('id', nurseId).single()
+  const { data: nurse } = await supabase.from('nurses').select('full_name, user_id').eq('id', nurseId).single()
   await logActivity({
     actorId: admin.id, actorName: admin.full_name, actorRole: 'admin',
     action: 'nurse_rejected', entityType: 'nurse', entityId: nurseId,
     description: `Admin rejected nurse: ${nurse?.full_name ?? nurseId}${reason ? ' — Reason: ' + reason : ''}`,
     meta: { nurseId, reason },
   })
+
+  // WhatsApp: notify nurse of rejection
+  if (nurse?.user_id) {
+    const { data: userRow } = await supabase.from('users').select('phone').eq('id', nurse.user_id).single()
+    if (userRow?.phone) {
+      void wa.nurseRejected(userRow.phone, {
+        nurseName: nurse.full_name ?? 'Nurse',
+        reason:    reason || 'Please contact support for details.',
+      })
+    }
+  }
 
   revalidatePath('/admin/nurses')
 }

@@ -4,6 +4,7 @@ import { createSupabaseServiceRoleClient } from '@/lib/supabase-server'
 import { requireRole } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
 import { sendNotifications } from '@/lib/notifications'
+import { wa } from '@/lib/whatsapp'
 
 async function getAdminUserIds(supabase: ReturnType<typeof createSupabaseServiceRoleClient>): Promise<string[]> {
   const { data } = await supabase.from('users').select('id').eq('role', 'admin')
@@ -137,6 +138,21 @@ export async function submitHospitalBookingAction(formData: FormData) {
       }))
     )
   }
+
+  // WhatsApp: confirm request received to the hospital contact (fire-and-forget)
+  void (async () => {
+    const { data: userRow } = await supabase.from('users').select('phone, full_name').eq('id', user.id).single()
+    if (userRow?.phone) {
+      void wa.hospitalRequestConfirmed(userRow.phone, {
+        contactName:     userRow.full_name ?? 'Contact',
+        service:         service_name ?? 'Nursing Support',
+        nursesRequired:  String(total_nurses),
+        startDate:       start_date,
+        endDate:         end_date,
+        requestId:       bookingId ?? '',
+      })
+    }
+  })()
 
   revalidatePath('/hospital/booking')
   revalidatePath('/hospital/dashboard')

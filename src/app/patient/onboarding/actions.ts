@@ -3,6 +3,7 @@
 import { createSupabaseServerClient, createSupabaseServiceRoleClient } from '@/lib/supabase-server'
 import { requireRoleAction } from '@/lib/auth'
 import { redirect } from 'next/navigation'
+import { validatePhone } from '@/lib/phone'
 
 export interface AddressPayload {
   // Step 1 — location
@@ -33,8 +34,16 @@ export async function savePatientAddress(payload: AddressPayload): Promise<{ err
   if (!payload.full_address?.trim()) return { error: 'Address is required' }
   if (!payload.label) return { error: 'Please select an address label' }
   if (!payload.person_name?.trim()) return { error: 'Contact person name is required' }
-  if (!payload.mobile?.trim()) return { error: 'Mobile number is required' }
   if (payload.label === 'other' && !payload.custom_label?.trim()) return { error: 'Please enter a custom label' }
+
+  const mobileResult = validatePhone(payload.mobile, 'Mobile number')
+  if (!mobileResult.ok) return { error: mobileResult.error! }
+  const normalizedMobile = mobileResult.normalized!
+
+  const altMobileResult = payload.alternate_mobile?.trim()
+    ? validatePhone(payload.alternate_mobile, 'Alternate mobile')
+    : { ok: true, normalized: payload.alternate_mobile || null, error: null }
+  if (!altMobileResult.ok) return { error: altMobileResult.error! }
 
   // Insert address (first address is always default)
   const { data: existingAddresses } = await serviceClient
@@ -52,8 +61,8 @@ export async function savePatientAddress(payload: AddressPayload): Promise<{ err
       label:            payload.label,
       custom_label:     payload.custom_label || null,
       person_name:      payload.person_name,
-      mobile:           payload.mobile,
-      alternate_mobile: payload.alternate_mobile || null,
+      mobile:           normalizedMobile,
+      alternate_mobile: altMobileResult.normalized || null,
       relationship:     payload.relationship || null,
       latitude:         payload.latitude,
       longitude:        payload.longitude,

@@ -3,6 +3,7 @@
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { requireRole } from '@/lib/auth'
 import { redirect } from 'next/navigation'
+import { validatePhone } from '@/lib/phone'
 
 const DOC_FIELDS: Record<string, string> = {
   doc_biodata:             'biodata',
@@ -45,6 +46,10 @@ export async function onboardingAction(formData: FormData): Promise<{ error?: st
     return { error: 'Please enter at least one pricing option (hourly or daily)' }
   }
 
+  const phoneResult = validatePhone(phone, 'Phone number')
+  if (!phoneResult.ok) return { error: phoneResult.error! }
+  const normalizedPhone = phoneResult.normalized!
+
   // Validate file types and sizes before saving anything
   for (const [fieldName] of Object.entries(DOC_FIELDS)) {
     const file = formData.get(fieldName) as File | null
@@ -64,7 +69,7 @@ export async function onboardingAction(formData: FormData): Promise<{ error?: st
       user_id:          user.id,
       full_name:        user.full_name,
       email:            user.email,
-      phone,
+      phone:            normalizedPhone,
       gender,
       nationality,
       city,
@@ -121,6 +126,9 @@ export async function onboardingAction(formData: FormData): Promise<{ error?: st
   if (uploadErrors.length > 0) {
     return { error: `Profile saved but some files failed: ${uploadErrors.join(', ')}` }
   }
+
+  // Keep users.phone in sync for WhatsApp delivery
+  await supabase.from('users').update({ phone: normalizedPhone }).eq('id', user.id)
 
   redirect('/provider/dashboard?message=Profile+submitted+for+review')
 }

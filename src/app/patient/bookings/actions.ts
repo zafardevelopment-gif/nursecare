@@ -4,6 +4,7 @@ import { createSupabaseServerClient, createSupabaseServiceRoleClient } from '@/l
 import { revalidatePath } from 'next/cache'
 import { sendNotifications } from '@/lib/notifications'
 import { logActivity } from '@/lib/activity'
+import { wa } from '@/lib/whatsapp'
 
 const REVALIDATE = () => {
   revalidatePath('/patient/bookings')
@@ -104,6 +105,33 @@ export async function cancelBooking(requestId: string): Promise<{ error?: string
 
   await sendNotifications(notifs)
 
+  // WhatsApp: cancellation alerts (fire-and-forget)
+  void (async () => {
+    const [{ data: patientRow }, { data: nurseRow }] = await Promise.all([
+      supabase.from('users').select('phone').eq('id', user.id).single(),
+      booking.nurse_id
+        ? supabase.from('users').select('phone').eq('id', booking.nurse_id).single()
+        : Promise.resolve({ data: null }),
+    ])
+    if (patientRow?.phone) {
+      void wa.bookingCancelledPatient(patientRow.phone, {
+        patientName: booking.patient_name ?? 'Patient',
+        bookingId:   requestId,
+        service:     booking.service_type ?? 'nursing care',
+        date:        booking.start_date ?? '',
+      })
+    }
+    if (nurseRow?.phone) {
+      void wa.bookingCancelledNurse(nurseRow.phone, {
+        nurseName:   booking.nurse_name ?? 'Nurse',
+        patientName: booking.patient_name ?? 'Patient',
+        service:     booking.service_type ?? 'nursing care',
+        date:        booking.start_date ?? '',
+        bookingId:   requestId,
+      })
+    }
+  })()
+
   void logActivity({
     actorId: user.id, actorName: booking.patient_name ?? 'Patient', actorRole: 'patient',
     action: 'booking_cancelled', module: 'booking',
@@ -124,7 +152,7 @@ export async function markPaymentDone(requestId: string) {
 
   const { data: booking } = await supabase
     .from('booking_requests')
-    .select('patient_name, service_type, start_date')
+    .select('patient_name, service_type, start_date, shift, nurse_id, nurse_name')
     .eq('id', requestId)
     .single()
 
@@ -143,6 +171,21 @@ export async function markPaymentDone(requestId: string) {
       description: `Payment marked done for ${booking.service_type ?? 'booking'} on ${booking.start_date}`,
       meta: { service_type: booking.service_type, start_date: booking.start_date },
     })
+
+    // WhatsApp: payment confirmed
+    void (async () => {
+      const { data: userRow } = await supabase.from('users').select('phone').eq('id', user.id).single()
+      if (userRow?.phone) {
+        void wa.paymentConfirmedPatient(userRow.phone, {
+          patientName: booking.patient_name ?? 'Patient',
+          bookingId:   requestId,
+          service:     booking.service_type ?? 'nursing care',
+          nurseName:   booking.nurse_name ?? 'TBD',
+          date:        booking.start_date ?? '',
+          shift:       booking.shift ?? '',
+        })
+      }
+    })()
   }
 
   REVALIDATE()

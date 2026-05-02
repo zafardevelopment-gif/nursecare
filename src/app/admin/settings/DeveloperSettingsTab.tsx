@@ -178,6 +178,19 @@ function SaveBar({ pending, saved, error }: { pending: boolean; saved: boolean; 
 
 /* ── Section forms ───────────────────────────────────────────────────── */
 
+const WA_TEMPLATES: { key: string; label: string; description: string }[] = [
+  { key: 'nurse_new_booking_alert',    label: 'Nurse: New Booking Alert',        description: 'Sent to nurse when a patient submits a booking' },
+  { key: 'payment_deadline_reminder',  label: 'Patient: Payment Deadline',       description: 'Sent to patient when payment deadline is near' },
+  { key: 'booking_cancelled_patient',  label: 'Patient: Booking Cancelled',      description: 'Sent to patient when their booking is cancelled' },
+  { key: 'patient_welcome',            label: 'Patient: Welcome',                description: 'Sent when a new patient account is created' },
+  { key: 'payment_confirmed_patient',  label: 'Patient: Payment Confirmed',      description: 'Sent to patient when payment is received and booking confirmed' },
+  { key: 'booking_submitted',          label: 'Patient: Booking Submitted',      description: 'Sent to patient after booking is placed (awaiting payment)' },
+  { key: 'booking_cancelled_nurse',    label: 'Nurse: Booking Cancelled',        description: 'Sent to nurse when a patient cancels their booking' },
+  { key: 'nurse_rejected',             label: 'Nurse: Application Rejected',     description: 'Sent to nurse when admin rejects their application' },
+  { key: 'hospital_request_confirmed', label: 'Hospital: Request Confirmed',     description: 'Sent to hospital when staffing request is received' },
+  { key: 'hospital_nurses_assigned',   label: 'Hospital: Nurses Assigned',       description: 'Sent to hospital when nurses are assigned to their request' },
+]
+
 function WhatsAppForm({ map }: { map: DeveloperSettingsMap }) {
   const cat = 'whatsapp'
   const [pending, startTransition] = useTransition()
@@ -231,9 +244,55 @@ function WhatsAppForm({ map }: { map: DeveloperSettingsMap }) {
         </Field>
       </FieldGrid>
 
-      <div style={{ padding: '0 1.4rem 0.5rem', display: 'flex', alignItems: 'center', gap: 12 }}>
+      {/* Global enable toggle */}
+      <div style={{ padding: '0 1.4rem 0.75rem', display: 'flex', alignItems: 'center', gap: 12 }}>
         <span style={{ fontWeight: 600, fontSize: '0.82rem' }}>Enable WhatsApp Notifications</span>
         <Toggle2 name="enabled" defaultChecked={getVal(map, cat, 'enabled') === 'true'} />
+      </div>
+
+      {/* Per-template toggles */}
+      <div style={{
+        margin: '0 1.4rem 1rem',
+        border: '1px solid var(--border)',
+        borderRadius: 10,
+        overflow: 'hidden',
+      }}>
+        <div style={{
+          padding: '8px 14px',
+          background: 'rgba(14,123,140,0.04)',
+          borderBottom: '1px solid var(--border)',
+          fontWeight: 700,
+          fontSize: '0.78rem',
+          color: 'var(--ink)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+        }}>
+          💬 Message Templates — Individual On/Off
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))' }}>
+          {WA_TEMPLATES.map((tpl, idx) => {
+            const key = `template_${tpl.key}_enabled`
+            const isOn = getVal(map, cat, key) !== 'false' // default on
+            const isLast = idx === WA_TEMPLATES.length - 1
+            return (
+              <div key={tpl.key} style={{
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: 10,
+                padding: '10px 14px',
+                borderBottom: isLast ? 'none' : '1px solid var(--border)',
+                background: 'var(--cream)',
+              }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 600, fontSize: '0.78rem', color: 'var(--ink)' }}>{tpl.label}</div>
+                  <div style={{ fontSize: '0.68rem', color: 'var(--muted)', marginTop: 2 }}>{tpl.description}</div>
+                </div>
+                <Toggle2 name={key} defaultChecked={isOn} />
+              </div>
+            )
+          })}
+        </div>
       </div>
 
       <SaveBar pending={pending} saved={saved} error={error} />

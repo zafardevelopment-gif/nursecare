@@ -81,7 +81,8 @@ export default function OnboardingForm({ isPending: isAlreadyPending }: { isPend
       <div className="form-grid-2col">
         <div className={grp}>
           <label className="form-label">Phone Number</label>
-          <input type="tel" name="phone" required className={inp} placeholder="+966 5X XXX XXXX" />
+          <input type="tel" name="phone" required className={inp} placeholder="+966 5X XXX XXXX or 05X XXX XXXX" />
+          <div style={{ fontSize: '0.7rem', color: 'var(--muted)', marginTop: 3 }}>Accepts: +966 5X XXX XXXX · 05X XXX XXXX · 5XXXXXXXX</div>
         </div>
         <div className={grp}>
           <label className="form-label">City</label>

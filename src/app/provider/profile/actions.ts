@@ -3,6 +3,7 @@
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { requireRole } from '@/lib/auth'
 import { redirect } from 'next/navigation'
+import { validatePhone } from '@/lib/phone'
 
 // Fields that require admin approval when changed
 const SENSITIVE_FIELDS = [
@@ -33,8 +34,12 @@ export async function updateProfileAction(formData: FormData) {
   }
 
   // Parse submitted values
+  const rawPhone = formData.get('phone') as string
+  const phoneResult = validatePhone(rawPhone, 'Phone number')
+  if (!phoneResult.ok) redirect(`/provider/profile?error=${encodeURIComponent(phoneResult.error!)}`)
+
   const submitted: Record<string, any> = {
-    phone:            formData.get('phone') as string,
+    phone:            phoneResult.normalized!,
     city:             formData.get('city') as string,
     bio:              formData.get('bio') as string,
     nationality:      formData.get('nationality') as string,
@@ -104,6 +109,9 @@ export async function updateProfileAction(formData: FormData) {
   if (updateError) {
     redirect(`/provider/profile?error=${encodeURIComponent(updateError.message)}`)
   }
+
+  // Keep users.phone in sync so WhatsApp messages reach the right number
+  await supabase.from('users').update({ phone: submitted.phone }).eq('id', user.id)
 
   redirect('/provider/profile?message=Profile+updated+successfully')
 }

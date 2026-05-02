@@ -81,8 +81,9 @@ export default function HospitalOnboardingForm() {
             <span style={{ padding: '0 12px', background: 'var(--cream)', color: 'var(--muted)', fontSize: '0.82rem', fontWeight: 600, display: 'flex', alignItems: 'center', borderRight: '1px solid var(--border)', whiteSpace: 'nowrap' }}>+966</span>
             <input type="tel" name="phone" required
               style={{ flex: 1, border: 'none', outline: 'none', padding: '10px 12px', fontSize: '0.88rem', fontFamily: 'inherit', color: 'var(--ink)', background: 'transparent' }}
-              placeholder="50 234 5678" />
+              placeholder="5X XXX XXXX" />
           </div>
+          <div style={{ fontSize: '0.7rem', color: 'var(--muted)', marginTop: 3 }}>Also accepts: +966 5X XXX XXXX or 05X XXX XXXX</div>
         </div>
       </div>
 

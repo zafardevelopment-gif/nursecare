@@ -188,7 +188,8 @@ export default function AddressOnboardingClient({ userName, apiKey }: { userName
     if (step === 3) {
       if (!personName.trim()) return 'Contact person name is required'
       if (!mobile.trim()) return 'Mobile number is required'
-      if (mobile.trim().length < 9) return 'Please enter a valid mobile number'
+      const digits = mobile.replace(/\D/g, '')
+      if (digits.length < 9 || digits.length > 15) return 'Enter a valid mobile number (e.g. +966 5X XXX XXXX or 05X XXX XXXX)'
     }
     return null
   }

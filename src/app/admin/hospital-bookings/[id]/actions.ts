@@ -3,6 +3,7 @@
 import { createSupabaseServiceRoleClient } from '@/lib/supabase-server'
 import { requireRole } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
+import { wa } from '@/lib/whatsapp'
 
 export async function updateBookingStatusAction(formData: FormData): Promise<void> {
   await requireRole('admin')
@@ -62,6 +63,35 @@ export async function updateNurseApprovalAction(formData: FormData): Promise<voi
       updated_at: new Date().toISOString(),
     })
     .eq('id', bookingId)
+
+  // WhatsApp: when all decisions made and at least one approved, notify hospital
+  if (allDecided && anyApproved) {
+    void (async () => {
+      const { data: fullBooking } = await supabase
+        .from('hospital_booking_requests')
+        .select('hospital_id, requested_by_user_id, start_date, total_nurses')
+        .eq('id', bookingId)
+        .single()
+      if (!fullBooking) return
+
+      const approvedCount = selections.filter(s => s.status === 'approved').length
+
+      const [{ data: userRow }, { data: hospitalRow }] = await Promise.all([
+        supabase.from('users').select('phone, full_name').eq('id', fullBooking.requested_by_user_id).single(),
+        supabase.from('hospitals').select('hospital_name').eq('id', fullBooking.hospital_id).single(),
+      ])
+
+      if (userRow?.phone) {
+        void wa.hospitalNursesAssigned(userRow.phone, {
+          contactName:     userRow.full_name ?? hospitalRow?.hospital_name ?? 'Contact',
+          requestId:       bookingId,
+          service:         'Nursing Support',
+          nursesAssigned:  String(approvedCount),
+          startDate:       fullBooking.start_date ?? '',
+        })
+      }
+    })()
+  }
 
   revalidatePath(`/admin/hospital-bookings/${bookingId}`)
   revalidatePath('/admin/hospital-bookings')

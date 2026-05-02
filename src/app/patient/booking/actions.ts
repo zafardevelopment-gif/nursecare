@@ -5,6 +5,7 @@ import { recalcShiftAvailability } from '@/app/provider/availability/actions'
 import type { ShiftKey } from '@/app/provider/availability/shiftConstants'
 import { sendNotifications } from '@/lib/notifications'
 import { logActivity } from '@/lib/activity'
+import { wa } from '@/lib/whatsapp'
 
 async function getAdminUserIds(supabase: ReturnType<typeof createSupabaseServiceRoleClient>): Promise<string[]> {
   const { data } = await supabase.from('users').select('id').eq('role', 'admin')
@@ -292,6 +293,37 @@ export async function submitBookingAction(formData: FormData): Promise<{ booking
   }
 
   await sendNotifications(notifPayloads)
+
+  // WhatsApp: patient booking submitted + nurse new booking alert (fire-and-forget)
+  void (async () => {
+    const [{ data: patientRow }, { data: nurseRow }] = await Promise.all([
+      supabase.from('users').select('phone').eq('id', userId).single(),
+      nurse_user_id
+        ? supabase.from('users').select('phone').eq('id', nurse_user_id).single()
+        : Promise.resolve({ data: null }),
+    ])
+    if (patientRow?.phone) {
+      void wa.bookingSubmitted(patientRow.phone, {
+        patientName:  userName,
+        service:      service_type,
+        nurseName:    nurse_name || 'TBD',
+        date:         start_date,
+        shift,
+        bookingId:    request.id,
+        paymentHours: String(paymentDeadlineHours),
+      })
+    }
+    if (nurseRow?.phone) {
+      void wa.nurseNewBookingAlert(nurseRow.phone, {
+        nurseName:   nurse_name,
+        patientName: userName,
+        service:     service_type,
+        date:        start_date,
+        shift,
+        bookingId:   request.id,
+      })
+    }
+  })()
 
   void logActivity({
     actorId: userId, actorName: userName, actorRole: 'patient',
