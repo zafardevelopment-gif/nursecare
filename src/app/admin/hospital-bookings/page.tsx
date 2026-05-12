@@ -49,19 +49,20 @@ export default async function AdminHospitalBookingsPage({ searchParams }: Props)
 
   if (filterStatus) query = query.eq('status', filterStatus)
 
-  const { data: bookings, count } = await query
+  const [{ data: bookings, count }, { data: statRows }] = await Promise.all([
+    query,
+    // GROUP BY in DB — one round-trip, no full-table transfer
+    supabase.rpc('count_hosp_bookings_by_status'),
+  ])
 
   const totalPages = Math.ceil((count ?? 0) / PAGE_SIZE)
 
-  // Stats
-  const { data: stats } = await supabase
-    .from('hospital_booking_requests')
-    .select('status')
-
-  const allStats = stats ?? []
-  const pendingCount   = allStats.filter(s => s.status === 'pending').length
-  const reviewingCount = allStats.filter(s => s.status === 'reviewing').length
-  const confirmedCount = allStats.filter(s => s.status === 'confirmed').length
+  type StatRow = { status: string; count: number }
+  const stats = (statRows ?? []) as StatRow[]
+  const hStat = (st: string) => stats.find(r => r.status === st)?.count ?? 0
+  const pendingCount   = hStat('pending')
+  const reviewingCount = hStat('reviewing')
+  const confirmedCount = hStat('confirmed')
 
   const buildUrl = (overrides: Record<string, string>) => {
     const p = { status: filterStatus, page: String(page), ...overrides }

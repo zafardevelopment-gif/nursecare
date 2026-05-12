@@ -86,8 +86,8 @@ export default async function AdminBookingsPage({ searchParams }: Props) {
   const [
     { data: patientBookings, count: patientCount },
     { data: hospBookings,    count: hospCount },
-    { data: allPatient },
-    { data: allHosp },
+    { data: patientCountRows },
+    { data: hospCountRows },
     { data: hospitals },
   ] = await Promise.all([
     bookingType === 'patient'
@@ -96,33 +96,41 @@ export default async function AdminBookingsPage({ searchParams }: Props) {
     bookingType === 'hospital'
       ? hospQuery.order('created_at', { ascending: false }).range(offset, offset + PAGE_SIZE - 1)
       : Promise.resolve({ data: [], count: 0 }),
-    supabase.from('booking_requests').select('status, payment_status'),
-    supabase.from('hospital_booking_requests').select('status'),
+    // Single DB GROUP BY instead of full-table fetch + 8 JS .filter() passes
+    supabase.rpc('count_bookings_by_status'),
+    supabase.rpc('count_hosp_bookings_by_status'),
     supabase.from('hospitals').select('id, hospital_name'),
   ])
 
-  const allPatientRows = (allPatient ?? []) as any[]
-  const allHospRows    = (allHosp ?? []) as any[]
-  const hospitalMap    = Object.fromEntries((hospitals ?? []).map((h: any) => [h.id, h.hospital_name]))
+  const hospitalMap = Object.fromEntries((hospitals ?? []).map((h: any) => [h.id, h.hospital_name]))
+
+  // RPC returns [{ status, payment_status, count }]
+  type BookingCountRow = { status: string; payment_status: string; count: number }
+  const pbRows = (patientCountRows ?? []) as BookingCountRow[]
+  const sum = (fn: (r: BookingCountRow) => boolean) => pbRows.filter(fn).reduce((a, r) => a + r.count, 0)
 
   const patientCounts = {
-    total:       allPatientRows.length,
-    pending:     allPatientRows.filter(b => b.status === 'pending').length,
-    active:      allPatientRows.filter(b => b.status === 'accepted' || b.status === 'confirmed').length,
-    in_progress: allPatientRows.filter(b => b.status === 'in_progress').length,
-    work_done:   allPatientRows.filter(b => b.status === 'work_done').length,
-    completed:   allPatientRows.filter(b => b.status === 'completed').length,
-    paid:        allPatientRows.filter(b => b.payment_status === 'paid').length,
-    unpaid:      allPatientRows.filter(b => b.payment_status !== 'paid' && !['pending','declined','cancelled'].includes(b.status)).length,
+    total:       pbRows.reduce((a, r) => a + r.count, 0),
+    pending:     sum(r => r.status === 'pending'),
+    active:      sum(r => r.status === 'accepted' || r.status === 'confirmed'),
+    in_progress: sum(r => r.status === 'in_progress'),
+    work_done:   sum(r => r.status === 'work_done'),
+    completed:   sum(r => r.status === 'completed'),
+    paid:        sum(r => r.payment_status === 'paid'),
+    unpaid:      sum(r => r.payment_status !== 'paid' && !['pending','declined','cancelled'].includes(r.status)),
   }
 
+  type HospCountRow = { status: string; count: number }
+  const hbRows = (hospCountRows ?? []) as HospCountRow[]
+  const hSum = (st: string) => hbRows.filter(r => r.status === st).reduce((a, r) => a + r.count, 0)
+
   const hospCounts = {
-    total:     allHospRows.length,
-    pending:   allHospRows.filter(b => b.status === 'pending').length,
-    reviewing: allHospRows.filter(b => b.status === 'reviewing').length,
-    matched:   allHospRows.filter(b => b.status === 'matched').length,
-    confirmed: allHospRows.filter(b => b.status === 'confirmed').length,
-    cancelled: allHospRows.filter(b => b.status === 'cancelled').length,
+    total:     hbRows.reduce((a, r) => a + r.count, 0),
+    pending:   hSum('pending'),
+    reviewing: hSum('reviewing'),
+    matched:   hSum('matched'),
+    confirmed: hSum('confirmed'),
+    cancelled: hSum('cancelled'),
   }
 
   const totalCount = bookingType === 'patient' ? (patientCount ?? 0) : (hospCount ?? 0)

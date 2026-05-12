@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { saveDeveloperSettings } from './developerActions'
+import { saveDeveloperSettings, sendTestSmtpEmail } from './developerActions'
 import type { DeveloperSettingsMap } from '@/lib/developer-settings'
 
 /* ── Types ──────────────────────────────────────────────────────────── */
@@ -402,11 +402,63 @@ function SmsForm({ map }: { map: DeveloperSettingsMap }) {
   )
 }
 
+function SmtpEncryptionRadio({ defaultValue }: { defaultValue: string }) {
+  const options = [
+    { value: 'starttls', label: 'STARTTLS (:587)', sub: 'Recommended', port: '587' },
+    { value: 'ssl',      label: 'SSL/TLS (:465)',  sub: 'Legacy',       port: '465' },
+    { value: 'none',     label: 'None (:25)',       sub: 'Insecure',     port: '25'  },
+  ]
+  const [selected, setSelected] = useState(defaultValue || 'starttls')
+
+  return (
+    <div>
+      <input type="hidden" name="encryption" value={selected} />
+      <input type="hidden" name="port" value={options.find(o => o.value === selected)?.port ?? '587'} />
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+        {options.map(opt => (
+          <label
+            key={opt.value}
+            onClick={() => setSelected(opt.value)}
+            style={{
+              flex: 1, minWidth: 140, cursor: 'pointer',
+              border: `2px solid ${selected === opt.value ? '#0E7B8C' : 'var(--border)'}`,
+              borderRadius: 10,
+              padding: '10px 14px',
+              background: selected === opt.value ? 'rgba(14,123,140,0.07)' : 'var(--surface)',
+              display: 'flex', alignItems: 'center', gap: 10,
+              transition: 'all 0.15s',
+            }}
+          >
+            <div style={{
+              width: 16, height: 16, borderRadius: '50%',
+              border: `2px solid ${selected === opt.value ? '#0E7B8C' : '#CBD5E0'}`,
+              background: selected === opt.value ? '#0E7B8C' : 'transparent',
+              flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              {selected === opt.value && (
+                <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#fff' }} />
+              )}
+            </div>
+            <div>
+              <div style={{ fontWeight: 600, fontSize: '0.82rem', color: 'var(--ink)' }}>{opt.label}</div>
+              <div style={{ fontSize: '0.68rem', color: 'var(--muted)' }}>{opt.sub}</div>
+            </div>
+          </label>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function SmtpForm({ map }: { map: DeveloperSettingsMap }) {
   const cat = 'smtp'
   const [pending, startTransition] = useTransition()
   const [saved, setSaved]   = useState(false)
   const [error, setError]   = useState<string | null>(null)
+
+  const [testEmail,    setTestEmail]    = useState('')
+  const [testPending,  setTestPending]  = useState(false)
+  const [testResult,   setTestResult]   = useState<{ ok?: boolean; msg?: string } | null>(null)
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -422,42 +474,176 @@ function SmtpForm({ map }: { map: DeveloperSettingsMap }) {
     })
   }
 
+  async function handleSendTest() {
+    if (!testEmail) return
+    setTestPending(true)
+    setTestResult(null)
+    const res = await sendTestSmtpEmail(testEmail)
+    setTestPending(false)
+    if (res.error) setTestResult({ ok: false, msg: res.error })
+    else setTestResult({ ok: true, msg: 'Test email sent successfully!' })
+  }
+
+  const smtpCard: React.CSSProperties = {
+    border: '1px solid var(--border)', borderRadius: 12,
+    overflow: 'hidden', marginBottom: 16,
+  }
+  const smtpCardHeader: React.CSSProperties = {
+    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+    padding: '10px 16px',
+    background: 'rgba(14,123,140,0.04)',
+    borderBottom: '1px solid var(--border)',
+  }
+  const smtpSection: React.CSSProperties = { padding: '14px 16px' }
+  const smtpLabel: React.CSSProperties = { fontWeight: 700, fontSize: '0.85rem', color: 'var(--ink)', display: 'flex', alignItems: 'center', gap: 6 }
+  const smtpMeta: React.CSSProperties = { fontSize: '0.7rem', color: 'var(--muted)' }
+
   return (
     <form onSubmit={handleSubmit}>
       <SectionDivider icon="📧" title="Email SMTP" sub="Outbound email server configuration" />
-      <FieldGrid>
-        <Field label="SMTP Host" description="Hostname of your mail server" required>
-          <input name="host" type="text" defaultValue={getVal(map, cat, 'host')} placeholder="smtp.sendgrid.net" style={fieldStyle} />
-        </Field>
-        <Field label="Port" description="587 (STARTTLS) · 465 (SSL) · 25 (plain)">
-          <input name="port" type="number" defaultValue={getVal(map, cat, 'port', '587')} placeholder="587" style={{ ...fieldStyle, width: '100px' }} />
-        </Field>
-        <Field label="Username" description="SMTP authentication username or email">
-          <input name="username" type="text" defaultValue={getVal(map, cat, 'username')} placeholder="apikey or email@domain.com" style={fieldStyle} />
-        </Field>
-        <Field label="Password / API Key" description="SMTP password or API key" required>
-          <SecretInput name="password" defaultValue={getVal(map, cat, 'password')} />
-        </Field>
-        <Field label="From Name" description="Display name shown in recipient's inbox">
-          <input name="from_name" type="text" defaultValue={getVal(map, cat, 'from_name', 'NurseCare+')} placeholder="NurseCare+" style={fieldStyle} />
-        </Field>
-        <Field label="From Email" description="Sender email address" required>
-          <input name="from_email" type="email" defaultValue={getVal(map, cat, 'from_email')} placeholder="no-reply@nursecare.sa" style={fieldStyle} />
-        </Field>
-      </FieldGrid>
 
-      <div style={{ padding: '0 1.4rem', display: 'flex', flexWrap: 'wrap', gap: '1.5rem', marginBottom: '0.5rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ fontWeight: 600, fontSize: '0.82rem' }}>Use SSL/TLS</span>
-          <Toggle2 name="use_ssl" defaultChecked={getVal(map, cat, 'use_ssl', 'true') === 'true'} />
+      <div style={{ padding: '1rem 1.4rem', display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+        {/* SMTP Server */}
+        <div style={smtpCard}>
+          <div style={smtpCardHeader}>
+            <span style={smtpLabel}>🔌 SMTP Server</span>
+            <span style={smtpMeta}>Connection details for your outgoing mail server</span>
+          </div>
+          <div style={smtpSection}>
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+              <div style={{ flex: 1, minWidth: 200 }}>
+                <FieldLabel label="SMTP Host" required />
+                <input name="host" type="text" defaultValue={getVal(map, cat, 'host')} placeholder="mail.example.com" style={fieldStyle} />
+              </div>
+              <div style={{ width: 100 }}>
+                <FieldLabel label="Port" />
+                <input name="_port_display" type="text" readOnly value={getVal(map, cat, 'port', '587')} style={{ ...fieldStyle, background: 'var(--cream)', color: 'var(--muted)' }} tabIndex={-1} />
+              </div>
+            </div>
+          </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ fontWeight: 600, fontSize: '0.82rem' }}>Enable Email via SMTP</span>
-          <Toggle2 name="enabled" defaultChecked={getVal(map, cat, 'enabled') === 'true'} />
+
+        {/* Encryption */}
+        <div style={smtpCard}>
+          <div style={smtpCardHeader}>
+            <span style={smtpLabel}>🔒 Encryption</span>
+          </div>
+          <div style={smtpSection}>
+            <SmtpEncryptionRadio defaultValue={getVal(map, cat, 'encryption', 'starttls')} />
+          </div>
         </div>
+
+        {/* Authentication */}
+        <div style={smtpCard}>
+          <div style={smtpCardHeader}>
+            <span style={smtpLabel}>🔑 Authentication</span>
+            <span style={smtpMeta}>SMTP login credentials</span>
+          </div>
+          <div style={smtpSection}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div>
+                <FieldLabel label="Username / Email" />
+                <input name="username" type="text" defaultValue={getVal(map, cat, 'username')} placeholder="info@example.com" style={fieldStyle} />
+              </div>
+              <div>
+                <FieldLabel label="Password / App Password" />
+                <SecretInput name="password" defaultValue={getVal(map, cat, 'password')} />
+                <div style={{ fontSize: '0.68rem', color: 'var(--muted)', marginTop: 4 }}>
+                  For Gmail, use an <strong>App Password</strong> (requires 2FA enabled). Falls back to <code>SMTP_PASSWORD</code> env var.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Sender Identity */}
+        <div style={smtpCard}>
+          <div style={smtpCardHeader}>
+            <span style={smtpLabel}>✉️ Sender Identity</span>
+            <span style={smtpMeta}>How recipients will see the &quot;From&quot; field</span>
+          </div>
+          <div style={smtpSection}>
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+              <div style={{ flex: 1, minWidth: 160 }}>
+                <FieldLabel label="From Name" />
+                <input name="from_name" type="text" defaultValue={getVal(map, cat, 'from_name', 'NurseCare+')} placeholder="NurseCare+" style={fieldStyle} />
+              </div>
+              <div style={{ flex: 1, minWidth: 200 }}>
+                <FieldLabel label="From Email" required />
+                <input name="from_email" type="email" defaultValue={getVal(map, cat, 'from_email')} placeholder="no-reply@nursecare.sa" style={fieldStyle} />
+              </div>
+            </div>
+          </div>
+        </div>
+
       </div>
 
-      <SaveBar pending={pending} saved={saved} error={error} />
+      {/* Save button */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 12,
+        padding: '0.5rem 1.4rem 1.2rem',
+      }}>
+        {error && <span style={{ fontSize: '0.78rem', color: '#E04A4A', fontWeight: 700 }}>✗ {error}</span>}
+        {saved && !error && <span style={{ fontSize: '0.78rem', color: '#27A869', fontWeight: 700 }}>✓ Saved successfully</span>}
+        <button
+          type="submit"
+          disabled={pending}
+          style={{
+            background: '#0E7B8C', color: '#fff', border: 'none',
+            padding: '9px 22px', borderRadius: 9, fontSize: '0.84rem',
+            fontWeight: 700, cursor: pending ? 'not-allowed' : 'pointer',
+            fontFamily: 'inherit', opacity: pending ? 0.7 : 1,
+          }}
+        >
+          {pending ? 'Saving…' : 'Save SMTP Configuration'}
+        </button>
+      </div>
+
+      {/* Send Test Email */}
+      <div style={{
+        margin: '0 1.4rem 1.4rem',
+        border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden',
+      }}>
+        <div style={smtpCardHeader}>
+          <span style={smtpLabel}>📨 Send Test Email</span>
+          <span style={smtpMeta}>Verify the current SMTP settings by sending a test message</span>
+        </div>
+        <div style={{ padding: '14px 16px' }}>
+          <FieldLabel label="Recipient Email" />
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+            <input
+              type="email"
+              value={testEmail}
+              onChange={e => setTestEmail(e.target.value)}
+              placeholder="admin@example.com"
+              style={{ ...fieldStyle, flex: 1, minWidth: 200 }}
+            />
+            <button
+              type="button"
+              disabled={testPending || !testEmail}
+              onClick={handleSendTest}
+              style={{
+                background: testPending ? '#CBD5E0' : '#0E7B8C',
+                color: '#fff', border: 'none', padding: '8px 18px',
+                borderRadius: 9, fontSize: '0.83rem', fontWeight: 700,
+                cursor: testPending || !testEmail ? 'not-allowed' : 'pointer',
+                fontFamily: 'inherit', whiteSpace: 'nowrap',
+              }}
+            >
+              {testPending ? 'Sending…' : '📨 Send Test'}
+            </button>
+          </div>
+          {testResult && (
+            <div style={{
+              marginTop: 8, fontSize: '0.78rem', fontWeight: 700,
+              color: testResult.ok ? '#27A869' : '#E04A4A',
+            }}>
+              {testResult.ok ? '✓' : '✗'} {testResult.msg}
+            </div>
+          )}
+        </div>
+      </div>
     </form>
   )
 }

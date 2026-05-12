@@ -38,20 +38,21 @@ export default async function AdminDashboardPage() {
   const supabase = await createSupabaseServerClient()
   const serviceSupabase = createSupabaseServiceRoleClient()
 
-  // Fetch all booking statuses in one query, then count in JS — 1 round-trip instead of 6
+  // All counts via DB GROUP BY RPCs — no full-table transfers, no JS iteration
   const [
-    { data: nurseStatuses },
-    { data: bookingStatuses },
+    { data: nurseCountRows },
+    { data: bookingCountRows },
+    { data: leaveCountRows },
     { count: totalUsers },
     { count: pendingUpdateRequests },
     { count: rejectedAgreements },
     { count: openDisputes },
     { data: recentActivity },
     { data: recentLogs },
-    { data: leaveStats },
   ] = await Promise.all([
-    supabase.from('nurses').select('status'),
-    serviceSupabase.from('booking_requests').select('status'),
+    supabase.rpc('count_nurses_by_status'),
+    serviceSupabase.rpc('count_bookings_by_status'),
+    serviceSupabase.rpc('count_leaves_by_status'),
     supabase.from('users').select('*', { count: 'exact', head: true }),
     supabase.from('nurse_update_requests').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
     supabase.from('agreements').select('*', { count: 'exact', head: true }).eq('status', 'rejected'),
@@ -64,31 +65,34 @@ export default async function AdminDashboardPage() {
       .select('id, actor_name, actor_role, action, description, created_at')
       .order('created_at', { ascending: false })
       .limit(8),
-    serviceSupabase.from('leave_requests')
-      .select('status, is_blocked, auto_approved'),
   ])
 
-  // Leave counts
-  const allLeaves        = leaveStats ?? []
-  const pendingLeaves    = allLeaves.filter((l: any) => l.status === 'pending').length
-  const blockedLeaves    = allLeaves.filter((l: any) => l.is_blocked && l.status === 'pending').length
-  const autoApprovedLeaves = allLeaves.filter((l: any) => l.auto_approved).length
+  // Nurse counts from RPC [{ status, count }]
+  type StatusCount = { status: string; count: number }
+  const nurseRows = (nurseCountRows ?? []) as StatusCount[]
+  const nCount = (st: string) => nurseRows.find(r => r.status === st)?.count ?? 0
+  const pendingNurses       = nCount('pending')
+  const updatePendingNurses = nCount('update_pending')
+  const totalNurses         = nurseRows.reduce((a, r) => a + r.count, 0)
+  const approvedNurses      = nCount('approved')
 
-  // Count nurse statuses in JS — zero extra DB round-trips
-  const nurses = nurseStatuses ?? []
-  const pendingNurses      = nurses.filter(n => n.status === 'pending').length
-  const updatePendingNurses = nurses.filter(n => n.status === 'update_pending').length
-  const totalNurses        = nurses.length
-  const approvedNurses     = nurses.filter(n => n.status === 'approved').length
+  // Booking counts from RPC [{ status, payment_status, count }]
+  type BookingCount = { status: string; payment_status: string; count: number }
+  const bRows = (bookingCountRows ?? []) as BookingCount[]
+  const bSum = (fn: (r: BookingCount) => boolean) => bRows.filter(fn).reduce((a, r) => a + r.count, 0)
+  const totalBookings      = bRows.reduce((a, r) => a + r.count, 0)
+  const pendingBookings    = bSum(r => r.status === 'pending')
+  const activeBookings     = bSum(r => r.status === 'accepted' || r.status === 'confirmed')
+  const inProgressBookings = bSum(r => r.status === 'in_progress')
+  const workDoneBookings   = bSum(r => r.status === 'work_done')
+  const completedBookings  = bSum(r => r.status === 'completed')
 
-  // Count booking statuses in JS
-  const bookings = bookingStatuses ?? []
-  const totalBookings      = bookings.length
-  const pendingBookings    = bookings.filter(b => b.status === 'pending').length
-  const activeBookings     = bookings.filter(b => b.status === 'accepted' || b.status === 'confirmed').length
-  const inProgressBookings = bookings.filter(b => b.status === 'in_progress').length
-  const workDoneBookings   = bookings.filter(b => b.status === 'work_done').length
-  const completedBookings  = bookings.filter(b => b.status === 'completed').length
+  // Leave counts from RPC [{ status, is_blocked, auto_approved, count }]
+  type LeaveCount = { status: string; is_blocked: boolean; auto_approved: boolean; count: number }
+  const lRows = (leaveCountRows ?? []) as LeaveCount[]
+  const pendingLeaves      = lRows.filter(r => r.status === 'pending').reduce((a, r) => a + r.count, 0)
+  const blockedLeaves      = lRows.filter(r => r.is_blocked && r.status === 'pending').reduce((a, r) => a + r.count, 0)
+  const autoApprovedLeaves = lRows.filter(r => r.auto_approved).reduce((a, r) => a + r.count, 0)
 
   const totalPendingActions = (pendingNurses ?? 0) + (updatePendingNurses ?? 0) + (pendingUpdateRequests ?? 0) + (rejectedAgreements ?? 0)
 

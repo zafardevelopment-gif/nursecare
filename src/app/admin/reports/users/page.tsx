@@ -35,29 +35,23 @@ export default async function AdminUsersReportPage({ searchParams }: Props) {
   if (active === 'true')  query = query.gte('last_sign_in_at', thirtyDaysAgo)
   if (active === 'false') query = query.or(`last_sign_in_at.is.null,last_sign_in_at.lt.${thirtyDaysAgo}`)
 
-  const { data, count } = await query.range(offset, offset + PAGE_SIZE - 1)
+  const [{ data, count }, { data: summaryRow }] = await Promise.all([
+    query.range(offset, offset + PAGE_SIZE - 1),
+    // Single RPC replaces 5 separate count queries — one DB round-trip
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (supabase as any).rpc('user_summary_counts', { active_since: thirtyDaysAgo }),
+  ])
   const rows = data ?? []
 
-  const [
-    { count: totalUsers },
-    { count: totalPatients },
-    { count: totalNurses },
-    { count: totalHospitals },
-    { count: activeUsers },
-  ] = await Promise.all([
-    supabase.from('users').select('*', { count: 'exact', head: true }),
-    supabase.from('users').select('*', { count: 'exact', head: true }).eq('role', 'patient'),
-    supabase.from('users').select('*', { count: 'exact', head: true }).eq('role', 'provider'),
-    supabase.from('users').select('*', { count: 'exact', head: true }).eq('role', 'hospital'),
-    supabase.from('users').select('*', { count: 'exact', head: true }).gte('last_sign_in_at', thirtyDaysAgo),
-  ])
+  type SummaryRow = { total_users: number; total_patients: number; total_nurses: number; total_hospitals: number; active_users: number }
+  const s = (summaryRow as unknown as SummaryRow[] | null)?.[0] ?? { total_users: 0, total_patients: 0, total_nurses: 0, total_hospitals: 0, active_users: 0 }
 
   return (
     <UsersReportClient
       initialData={rows}
       initialCount={count ?? 0}
       initialPage={page}
-      summary={{ totalUsers: totalUsers ?? 0, totalPatients: totalPatients ?? 0, totalNurses: totalNurses ?? 0, totalHospitals: totalHospitals ?? 0, activeUsers: activeUsers ?? 0 }}
+      summary={{ totalUsers: s.total_users, totalPatients: s.total_patients, totalNurses: s.total_nurses, totalHospitals: s.total_hospitals, activeUsers: s.active_users }}
       initialFilters={{ role, q, active, city }}
     />
   )

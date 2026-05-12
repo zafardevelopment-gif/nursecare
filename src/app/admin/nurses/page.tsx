@@ -62,27 +62,29 @@ export default async function AdminNursesPage({ searchParams }: Props) {
     )
   }
 
-  const [{ data: nurses }, { count: totalCount }] = await Promise.all([query, countQuery])
+  const [
+    { data: nurses },
+    { count: totalCount },
+    { data: specRows },
+    { data: countRows },
+  ] = await Promise.all([
+    query,
+    countQuery,
+    // DISTINCT specializations — no full row fetch, index-only scan on specialization col
+    supabase.from('nurses').select('specialization').not('specialization', 'is', null).order('specialization'),
+    // Status counts via DB GROUP BY using RPC — one round-trip, no JS iteration
+    supabase.rpc('count_nurses_by_status'),
+  ])
+
   const total = totalCount ?? 0
 
-  // Unique specializations for filter dropdown
-  const { data: allNurses } = await supabase
-    .from('nurses')
-    .select('specialization')
-    .not('specialization', 'is', null)
-
   const specializations = [...new Set(
-    (allNurses ?? []).map(n => n.specialization).filter(Boolean)
+    (specRows ?? []).map((n: { specialization: string }) => n.specialization).filter(Boolean)
   )].sort() as string[]
 
-  // Status counts — fetch all (not paged) for badge accuracy
-  const { data: allForCounts } = await supabase
-    .from('nurses')
-    .select('status')
-  const counts = (allForCounts ?? []).reduce<Record<string, number>>((acc, n) => {
-    acc[n.status] = (acc[n.status] ?? 0) + 1
-    return acc
-  }, {})
+  // countRows is [{ status, count }] from the RPC
+  const counts = ((countRows ?? []) as { status: string; count: number }[])
+    .reduce<Record<string, number>>((acc, r) => { acc[r.status] = r.count; return acc }, {})
 
   return (
     <div className="dash-shell">

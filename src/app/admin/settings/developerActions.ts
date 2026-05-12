@@ -4,6 +4,7 @@ import { createSupabaseServiceRoleClient } from '@/lib/supabase-server'
 import { requireRole } from '@/lib/auth'
 import { logActivity } from '@/lib/activity'
 import { revalidatePath } from 'next/cache'
+import nodemailer from 'nodemailer'
 
 export interface SaveDeveloperSettingsInput {
   category: string
@@ -98,6 +99,54 @@ export async function toggleDeveloperSetting(
     category,
     fields: { [key_name]: value ? 'true' : 'false' },
   })
+}
+
+export async function sendTestSmtpEmail(
+  recipientEmail: string
+): Promise<{ error?: string; success?: boolean }> {
+  await requireRole('admin')
+  const supabase = createSupabaseServiceRoleClient()
+
+  const { data: rows } = await supabase
+    .from('developer_settings')
+    .select('key_name, key_value')
+    .eq('category', 'smtp')
+
+  const settings: Record<string, string> = {}
+  for (const row of rows ?? []) settings[row.key_name] = row.key_value ?? ''
+
+  const host      = settings['host']
+  const port      = parseInt(settings['port'] || '587', 10)
+  const username  = settings['username']
+  const password  = settings['password']
+  const fromName  = settings['from_name'] || 'NurseCare+'
+  const fromEmail = settings['from_email']
+  const useSsl    = settings['use_ssl'] === 'true'
+  const encryption = settings['encryption'] || 'starttls'
+
+  if (!host || !fromEmail) return { error: 'SMTP not fully configured. Please save settings first.' }
+
+  try {
+    const transporter = nodemailer.createTransport({
+      host,
+      port,
+      secure: encryption === 'ssl',
+      requireTLS: encryption === 'starttls',
+      auth: username && password ? { user: username, pass: password } : undefined,
+    })
+
+    await transporter.sendMail({
+      from: `"${fromName}" <${fromEmail}>`,
+      to: recipientEmail,
+      subject: 'NurseCare+ SMTP Test Email',
+      html: `<p>This is a test email from <strong>NurseCare+</strong> to verify your SMTP configuration.</p><p>If you received this, your SMTP settings are working correctly.</p>`,
+    })
+
+    return { success: true }
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err)
+    return { error: msg }
+  }
 }
 
 export async function getDeveloperSettingsHistory(
