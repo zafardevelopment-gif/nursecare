@@ -1,15 +1,10 @@
 'use server'
 
-import { createSupabaseServiceRoleClient, createSupabaseServerClient } from '@/lib/supabase-server'
+import { createSupabaseServiceRoleClient } from '@/lib/supabase-server'
 import { revalidatePath } from 'next/cache'
 import { sendNotifications } from '@/lib/notifications'
 import { logActivity } from '@/lib/activity'
-
-async function getAuthUser() {
-  const supabase = await createSupabaseServerClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  return user
-}
+import { requireRoleAction } from '@/lib/auth'
 
 async function getAdminUserIds(): Promise<string[]> {
   const supabase = createSupabaseServiceRoleClient()
@@ -40,8 +35,8 @@ async function getConflictingBookings(nurseUserId: string, startDate: string, en
 /* ── Submit leave request (nurse) ───────────────────────────── */
 
 export async function submitLeaveRequest(formData: FormData): Promise<{ error?: string }> {
-  const user = await getAuthUser()
-  if (!user) return { error: 'Not authenticated' }
+  let user: { id: string }
+  try { user = await requireRoleAction('provider') } catch { return { error: 'Not authorized' } }
 
   const supabase     = createSupabaseServiceRoleClient()
   const start_date   = (formData.get('start_date') as string)?.trim()
@@ -185,8 +180,8 @@ export async function submitLeaveRequest(formData: FormData): Promise<{ error?: 
 /* ── Approve leave request (admin) ──────────────────────────── */
 
 export async function approveLeaveRequest(formData: FormData): Promise<{ error?: string }> {
-  const user = await getAuthUser()
-  if (!user) return { error: 'Not authenticated' }
+  let user: { id: string }
+  try { user = await requireRoleAction('admin') } catch { return { error: 'Not authorized' } }
 
   const supabase  = createSupabaseServiceRoleClient()
   const leaveId   = (formData.get('leave_id') as string)?.trim()
@@ -260,8 +255,8 @@ export async function approveLeaveRequest(formData: FormData): Promise<{ error?:
 /* ── Reject leave request (admin) ───────────────────────────── */
 
 export async function rejectLeaveRequest(formData: FormData): Promise<{ error?: string }> {
-  const user = await getAuthUser()
-  if (!user) return { error: 'Not authenticated' }
+  let user: { id: string }
+  try { user = await requireRoleAction('admin') } catch { return { error: 'Not authorized' } }
 
   const supabase  = createSupabaseServiceRoleClient()
   const leaveId   = (formData.get('leave_id') as string)?.trim()

@@ -1,16 +1,11 @@
 'use server'
 
-import { createSupabaseServiceRoleClient, createSupabaseServerClient } from '@/lib/supabase-server'
+import { createSupabaseServiceRoleClient } from '@/lib/supabase-server'
 import { revalidatePath } from 'next/cache'
 import { sendNotifications } from '@/lib/notifications'
 import { logActivity } from '@/lib/activity'
 import { getDisputeComplaintSettings } from '@/lib/platform-settings'
-
-async function getAuthUser() {
-  const supabase = await createSupabaseServerClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  return user
-}
+import { getCurrentUser, requireRoleAction } from '@/lib/auth'
 
 async function getAdminUserIds(): Promise<string[]> {
   const supabase = createSupabaseServiceRoleClient()
@@ -31,21 +26,23 @@ const VALID_ROLES = ['patient','provider','hospital']
 /* ── Submit complaint ────────────────────────────────────────── */
 
 export async function submitComplaint(formData: FormData): Promise<{ error?: string; id?: string }> {
-  const user = await getAuthUser()
-  if (!user) return { error: 'Not authenticated' }
+  const authed = await getCurrentUser()
+  if (!authed) return { error: 'Not authenticated' }
+  // Derive role from server-validated session, never from form input
+  if (!VALID_ROLES.includes(authed.role)) return { error: 'Your role cannot submit complaints' }
+  const user = { id: authed.id }
+  const reporter_role = authed.role
 
   const supabase        = createSupabaseServiceRoleClient()
   const complaint_type  = (formData.get('complaint_type')  as string)?.trim()
   const description     = (formData.get('description')      as string)?.trim()
   const booking_id      = (formData.get('booking_id')       as string)?.trim() || null
-  const reporter_role   = (formData.get('reporter_role')    as string)?.trim()
   const image_url       = (formData.get('image_url')        as string)?.trim() || null
 
   if (!complaint_type)               return { error: 'Complaint type is required' }
   if (!description)                  return { error: 'Description is required' }
   if (description.length < 20)       return { error: 'Please provide more detail (at least 20 characters)' }
   if (!VALID_TYPES.includes(complaint_type)) return { error: 'Invalid complaint type' }
-  if (!VALID_ROLES.includes(reporter_role))  return { error: 'Invalid reporter role' }
 
   // Get platform settings (complaints enabled + window)
   const settings = await getDisputeComplaintSettings()
@@ -202,8 +199,8 @@ export async function submitComplaint(formData: FormData): Promise<{ error?: str
 /* ── Update complaint status (admin) ─────────────────────────── */
 
 export async function updateComplaintStatus(formData: FormData): Promise<{ error?: string }> {
-  const user = await getAuthUser()
-  if (!user) return { error: 'Not authenticated' }
+  let user: { id: string }
+  try { user = await requireRoleAction('admin') } catch { return { error: 'Not authorized' } }
 
   const supabase   = createSupabaseServiceRoleClient()
   const id         = (formData.get('complaint_id') as string)?.trim()

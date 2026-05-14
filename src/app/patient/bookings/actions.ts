@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache'
 import { sendNotifications } from '@/lib/notifications'
 import { logActivity } from '@/lib/activity'
 import { wa } from '@/lib/whatsapp'
+import { requireRoleAction } from '@/lib/auth'
 
 const REVALIDATE = () => {
   revalidatePath('/patient/bookings')
@@ -147,23 +148,30 @@ export async function cancelBooking(requestId: string): Promise<{ error?: string
 /* ── Mark payment done (simulated) ─────────────────────────── */
 
 export async function markPaymentDone(requestId: string) {
-  const user = await getAuthUser()
+  let user: { id: string }
+  try { user = await requireRoleAction('patient') } catch { return }
+
   const supabase = createSupabaseServiceRoleClient()
 
+  // Verify ownership before mutating payment state
   const { data: booking } = await supabase
     .from('booking_requests')
-    .select('patient_name, service_type, start_date, shift, nurse_id, nurse_name')
+    .select('patient_name, service_type, start_date, shift, nurse_id, nurse_name, patient_id')
     .eq('id', requestId)
+    .eq('patient_id', user.id)
     .single()
+
+  if (!booking) return
 
   const { error } = await supabase
     .from('booking_requests')
     .update({ payment_status: 'paid' })
     .eq('id', requestId)
+    .eq('patient_id', user.id)
 
   if (error) console.error('[markPaymentDone]', error.message)
 
-  if (user && booking) {
+  if (booking) {
     void logActivity({
       actorId: user.id, actorName: booking.patient_name ?? 'Patient', actorRole: 'patient',
       action: 'booking_payment_done', module: 'payment',

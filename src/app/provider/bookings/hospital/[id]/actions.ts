@@ -1,15 +1,15 @@
 'use server'
 
-import { createSupabaseServiceRoleClient, createSupabaseServerClient } from '@/lib/supabase-server'
+import { createSupabaseServiceRoleClient } from '@/lib/supabase-server'
 import { revalidatePath } from 'next/cache'
+import { requireRoleAction } from '@/lib/auth'
 
 export async function respondToHospitalBooking(
   bookingId: string,
   response: 'accepted' | 'rejected'
 ): Promise<void> {
-  const supabase_user = await createSupabaseServerClient()
-  const { data: { user } } = await supabase_user.auth.getUser()
-  if (!user) return
+  let user: { id: string }
+  try { user = await requireRoleAction('provider') } catch { return }
 
   const supabase = createSupabaseServiceRoleClient()
 

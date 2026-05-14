@@ -79,6 +79,7 @@ export default function SettingsForm({
   const [complaintsEnabled, setComplaintsEnabled] = useState(settings?.complaints_enabled ?? true)
 
   // Sync all boolean toggles when settings prop changes (server revalidation after save)
+  /* eslint-disable react-hooks/set-state-in-effect -- intentional: server-revalidated settings must update form toggles */
   useEffect(() => {
     if (settings?.allow_emergency_bookings !== undefined)             setEmergencyBookings(settings.allow_emergency_bookings)
     if (settings?.require_work_start_confirmation !== undefined)     setRequireWorkStart(settings.require_work_start_confirmation)
@@ -110,6 +111,7 @@ export default function SettingsForm({
     settings?.disputes_enabled,
     settings?.complaints_enabled,
   ])
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const [logoUrl, setLogoUrl]             = useState<string | null>(settings?.logo_url ?? null)
   const [logoUploading, setLogoUploading] = useState(false)

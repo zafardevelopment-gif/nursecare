@@ -36,6 +36,7 @@ export default function CalendarView() {
     setLoading(false)
   }, [year, month])
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- load() sets loading/days state to mirror remote fetch
   useEffect(() => { load() }, [load])
 
   function prevMonth() {

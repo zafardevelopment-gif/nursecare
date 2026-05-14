@@ -1,18 +1,11 @@
 'use server'
 
-import { createSupabaseServiceRoleClient, createSupabaseServerClient } from '@/lib/supabase-server'
+import { createSupabaseServiceRoleClient } from '@/lib/supabase-server'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { logActivity } from '@/lib/activity'
 import { getDisputeComplaintSettings } from '@/lib/platform-settings'
-
-async function getCurrentUserId(): Promise<string | null> {
-  try {
-    const supabase = await createSupabaseServerClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    return user?.id ?? null
-  } catch { return null }
-}
+import { requireRoleAction } from '@/lib/auth'
 
 async function getUserName(userId: string): Promise<string> {
   try {
@@ -35,8 +28,11 @@ function revalidateBookingPaths(bookingId: string) {
 
 // ─── Patient reports nurse didn't show up ─────────────────────────────────────
 export async function reportProviderNoShow(formData: FormData): Promise<{ error?: string }> {
-  const userId = await getCurrentUserId()
-  if (!userId) return { error: 'Not authenticated' }
+  let userId: string
+  try {
+    const u = await requireRoleAction('patient')
+    userId = u.id
+  } catch { return { error: 'Not authorized' } }
 
   const bookingId = formData.get('booking_id') as string
   const reason    = (formData.get('reason') as string)?.trim() || 'Provider did not show up'
@@ -94,8 +90,11 @@ export async function reportProviderNoShow(formData: FormData): Promise<{ error?
 
 // ─── Provider reports patient absent / access denied ─────────────────────────
 export async function reportPatientIssue(formData: FormData): Promise<{ error?: string }> {
-  const userId   = await getCurrentUserId()
-  if (!userId) return { error: 'Not authenticated' }
+  let userId: string
+  try {
+    const u = await requireRoleAction('provider')
+    userId = u.id
+  } catch { return { error: 'Not authorized' } }
 
   const bookingId  = formData.get('booking_id') as string
   const issueType  = (formData.get('issue_type') as string) || 'patient_absent'
@@ -156,12 +155,17 @@ export async function reportPatientIssue(formData: FormData): Promise<{ error?: 
 
 // ─── Admin: update dispute status (under_review / resolved) ──────────────────
 export async function updateDisputeStatus(formData: FormData) {
+  // Admin-only: this action grants resolutions and writes admin-role audit logs
+  let userId: string
+  try {
+    const u = await requireRoleAction('admin')
+    userId = u.id
+  } catch { return }
+
   const bookingId       = formData.get('booking_id') as string
   const disputeStatus   = formData.get('dispute_status') as string
   const resolution      = (formData.get('resolution') as string)?.trim() || null
   const bookingStatus   = formData.get('booking_status') as string
-  const userId          = await getCurrentUserId()
-  if (!userId) return
 
   const validDisputeStatuses = ['open', 'under_review', 'resolved']
   const validBookingStatuses = ['no_show', 'disputed', 'cancelled', 'completed', 'in_progress', 'accepted', 'confirmed']

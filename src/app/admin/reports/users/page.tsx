@@ -22,6 +22,7 @@ export default async function AdminUsersReportPage({ searchParams }: Props) {
   const active = params.active ?? ''
   const city   = params.city?.trim() ?? ''
 
+  // eslint-disable-next-line react-hooks/purity -- server component, computing "30 days ago" cutoff
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
 
   let query = supabase

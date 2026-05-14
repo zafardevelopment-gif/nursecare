@@ -10,11 +10,20 @@ export async function acceptAgreementAction(formData: FormData) {
 
   const agreementId = formData.get('agreement_id') as string
 
-  // Get the agreement to verify ownership and get hospital_id
+  // Resolve the caller's hospital row first — this is the tenant boundary
+  const { data: myHospital } = await supabase
+    .from('hospitals')
+    .select('id')
+    .eq('user_id', user.id)
+    .single()
+  if (!myHospital) redirect('/hospital/agreements')
+
+  // Get the agreement and require it belongs to the caller's hospital
   const { data: agreement } = await supabase
     .from('hospital_agreements')
     .select('id, hospital_id, ref_number')
     .eq('id', agreementId)
+    .eq('hospital_id', myHospital.id)
     .single()
 
   if (!agreement) redirect('/hospital/agreements')
@@ -54,10 +63,18 @@ export async function rejectAgreementAction(formData: FormData) {
   const agreementId = formData.get('agreement_id') as string
   const reason      = formData.get('reason') as string
 
+  const { data: myHospital } = await supabase
+    .from('hospitals')
+    .select('id')
+    .eq('user_id', user.id)
+    .single()
+  if (!myHospital) redirect('/hospital/agreements')
+
   const { data: agreement } = await supabase
     .from('hospital_agreements')
     .select('id, hospital_id, ref_number')
     .eq('id', agreementId)
+    .eq('hospital_id', myHospital.id)
     .single()
 
   if (!agreement) redirect('/hospital/agreements')

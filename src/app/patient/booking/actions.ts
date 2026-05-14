@@ -6,6 +6,7 @@ import type { ShiftKey } from '@/app/provider/availability/shiftConstants'
 import { sendNotifications } from '@/lib/notifications'
 import { logActivity } from '@/lib/activity'
 import { wa } from '@/lib/whatsapp'
+import { requireRoleAction } from '@/lib/auth'
 
 async function getAdminUserIds(supabase: ReturnType<typeof createSupabaseServiceRoleClient>): Promise<string[]> {
   const { data } = await supabase.from('users').select('id').eq('role', 'admin')
@@ -52,14 +53,13 @@ function generateDates(
 
 export async function submitBookingAction(formData: FormData): Promise<{ bookingRef?: string; sessions?: number; error?: string }> {
   try {
-  // User info passed from client component (already authenticated at page load)
-  const userId    = (formData.get('user_id')    as string) || ''
-  const userName  = (formData.get('user_name')  as string) || ''
-  const userEmail = (formData.get('user_email') as string) || ''
-
-  if (!userId) {
-    return { error: 'Missing user information. Please refresh the page.' }
-  }
+  // Derive identity from the validated session — never trust client-supplied user_id
+  let authed
+  try { authed = await requireRoleAction('patient') }
+  catch { return { error: 'You must be signed in as a patient to book.' } }
+  const userId    = authed.id
+  const userName  = authed.full_name ?? ''
+  const userEmail = authed.email ?? ''
 
   const supabase = createSupabaseServiceRoleClient()
 

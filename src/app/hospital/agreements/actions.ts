@@ -12,11 +12,19 @@ export async function approveAgreementAsHospital(formData: FormData) {
   const agreement_id = formData.get('agreement_id') as string
   if (!agreement_id) return { error: 'Missing agreement ID' }
 
+  // Resolve caller's hospital row — hospital_id on agreements refers to hospitals.id, not user.id
+  const { data: myHospital } = await supabase
+    .from('hospitals')
+    .select('id')
+    .eq('user_id', user.id)
+    .single()
+  if (!myHospital) return { error: 'Hospital profile not found' }
+
   const { data: agreement } = await supabase
     .from('agreements')
     .select('*')
     .eq('id', agreement_id)
-    .eq('hospital_id', user.id)
+    .eq('hospital_id', myHospital.id)
     .single()
   if (!agreement) return { error: 'Agreement not found' }
   if (agreement.hospital_approved_at) return { error: 'Already approved by you' }

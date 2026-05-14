@@ -167,6 +167,7 @@ export default async function AdminAnalyticsPage({ searchParams }: Props) {
     { count: adminLogs },
   ] = await Promise.all([
     supabase.from('activity_logs').select('*', { count: 'exact', head: true }),
+    // eslint-disable-next-line react-hooks/purity -- server component, Date.now() is fine here
     supabase.from('activity_logs').select('*', { count: 'exact', head: true }).gte('created_at', new Date(Date.now() - 86400000).toISOString()),
     supabase.from('activity_logs').select('*', { count: 'exact', head: true }).ilike('action', 'booking%'),
     supabase.from('activity_logs').select('*', { count: 'exact', head: true }).eq('actor_role', 'admin'),

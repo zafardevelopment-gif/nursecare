@@ -43,7 +43,7 @@ function allDaySlots(): string[] {
 function calcHoursCustom(startTime: string, endTime: string): number {
   const [sh, sm] = startTime.split(':').map(Number)
   const [eh, em] = endTime.split(':').map(Number)
-  let startMins = sh * 60 + sm
+  const startMins = sh * 60 + sm
   let endMins   = eh * 60 + em
   if (endMins === 0) endMins = 24 * 60
   if (endMins <= startMins) return 0
@@ -187,7 +187,7 @@ export default function HospitalBookingClient({
       setLoadingAvail(false)
     }
     loadAll()
-  }, [step, startDate])
+  }, [step, startDate, nurses])
 
   function toggleShift(s: string) {
     setSelectedShifts(prev => { const n = new Set(prev); n.has(s) ? n.delete(s) : n.add(s); return n })

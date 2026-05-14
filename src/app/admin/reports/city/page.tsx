@@ -8,34 +8,24 @@ export default async function AdminCityReportPage() {
   await requireRole('admin')
   const supabase = createSupabaseServiceRoleClient()
 
+  // Single RPC does GROUP BY city in Postgres — replaces 2 full-table scans + JS aggregation
   const [
-    { data: bookingCities },
-    { data: nurseCities },
+    { data: cityRows },
     { count: totalBookings },
   ] = await Promise.all([
-    supabase.from('booking_requests').select('city, status, total_amount, payment_status'),
-    supabase.from('nurses').select('city, status'),
+    supabase.rpc('city_aggregates'),
     supabase.from('booking_requests').select('*', { count: 'exact', head: true }),
   ])
 
-  // Aggregate by city
-  const cityMap: Record<string, { city: string; bookings: number; completed: number; revenue: number; nurses: number }> = {}
-
-  ;(bookingCities ?? []).forEach((r: any) => {
-    const c = r.city ?? 'Unknown'
-    if (!cityMap[c]) cityMap[c] = { city: c, bookings: 0, completed: 0, revenue: 0, nurses: 0 }
-    cityMap[c].bookings++
-    if (r.status === 'completed') cityMap[c].completed++
-    if (r.payment_status === 'paid') cityMap[c].revenue += parseFloat(r.total_amount) || 0
-  })
-
-  ;(nurseCities ?? []).forEach((r: any) => {
-    const c = r.city ?? 'Unknown'
-    if (!cityMap[c]) cityMap[c] = { city: c, bookings: 0, completed: 0, revenue: 0, nurses: 0 }
-    if (r.status === 'approved') cityMap[c].nurses++
-  })
-
-  const cityData = Object.values(cityMap).sort((a, b) => b.bookings - a.bookings)
+  const cityData = ((cityRows ?? []) as Array<{
+    city: string; bookings: number; completed: number; revenue: number; nurses: number
+  }>).map(r => ({
+    city: r.city,
+    bookings: Number(r.bookings),
+    completed: Number(r.completed),
+    revenue: Number(r.revenue),
+    nurses: Number(r.nurses),
+  }))
 
   return (
     <CityReportClient

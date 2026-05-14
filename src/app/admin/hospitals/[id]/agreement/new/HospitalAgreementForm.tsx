@@ -28,6 +28,8 @@ export default function HospitalAgreementForm({
   hospitalId: string
 }) {
   const [paymentType, setPaymentType] = useState<PaymentType>('monthly')
+  const [defaultStartDate] = useState(() => new Date().toISOString().split('T')[0])
+  const [defaultEndDate] = useState(() => new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0])
   const [missedAction, setMissedAction] = useState<MissedAction>('pause')
   const [reminderHrs, setReminderHrs]   = useState<number[]>([48, 24, 6])
   const [newReminder, setNewReminder]   = useState('')
@@ -76,12 +78,12 @@ export default function HospitalAgreementForm({
             <div className="form-group">
               <label className="form-label">Start Date <span style={{ color: '#E04A4A' }}>*</span></label>
               <input type="date" name="start_date" required className="form-input"
-                defaultValue={new Date().toISOString().split('T')[0]} />
+                defaultValue={defaultStartDate} />
             </div>
             <div className="form-group">
               <label className="form-label">End Date <span style={{ color: '#E04A4A' }}>*</span></label>
               <input type="date" name="end_date" required className="form-input"
-                defaultValue={new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]} />
+                defaultValue={defaultEndDate} />
             </div>
           </div>
           <div className="form-group">

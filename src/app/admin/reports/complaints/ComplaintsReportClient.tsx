@@ -1,7 +1,7 @@
 'use client'
 
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
-import { useCallback } from 'react'
+import { useCallback, useMemo } from 'react'
 import ReportShell, { StatusBadge, type ColDef, type SummaryCard } from '@/app/components/ReportShell'
 import { formatDate } from '@/lib/export'
 import Link from 'next/link'
@@ -41,24 +41,24 @@ export default function ComplaintsReportClient({ initialData, initialCount, init
   const pathname = usePathname()
   const sp       = useSearchParams()
 
-  function navigate(overrides: Record<string, string>) {
+  const navigate = useCallback((overrides: Record<string, string>) => {
     const params = new URLSearchParams(sp.toString())
     Object.entries({ ...initialFilters, ...overrides }).forEach(([k, v]) => {
       if (v) params.set(k, v); else params.delete(k)
     })
     router.push(`${pathname}?${params.toString()}`)
-  }
+  }, [sp, initialFilters, router, pathname])
 
   const handleFilter = useCallback((values: Record<string, string>) => {
     navigate({ ...values, page: '1' })
-  }, [sp])
+  }, [navigate])
 
-  const summaryCards: SummaryCard[] = [
+  const summaryCards: SummaryCard[] = useMemo(() => [
     { label: 'Total',    value: summary.total,    icon: '⚖️', bg: 'rgba(14,123,140,0.1)',  color: '#0E7B8C' },
     { label: 'Open',     value: summary.open,     icon: '🔴', bg: 'rgba(224,74,74,0.1)',   color: '#E04A4A' },
     { label: 'Resolved', value: summary.resolved, icon: '✅', bg: 'rgba(39,168,105,0.1)',  color: '#27A869' },
     { label: 'Rejected', value: summary.rejected, icon: '✕',  bg: 'rgba(138,155,170,0.1)', color: '#8A9BAA' },
-  ]
+  ], [summary])
 
   const columns: ColDef[] = [
     { key: 'complaint_type', header: 'Type', sortable: true,

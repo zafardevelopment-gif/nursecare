@@ -86,6 +86,7 @@ export default function AddressOnboardingClient({ userName, apiKey }: { userName
   // ── Load Google Maps SDK ──────────────────────────────────
   useEffect(() => {
     if (typeof window === 'undefined') return
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- SDK loader: must sync external "loaded" state to React
     if (window.google?.maps) { setMapReady(true); return }
 
     window.initMap = () => setMapReady(true)

@@ -59,7 +59,7 @@ const SHIFT_BOUNDS: Record<string, { startH: number; endH: number }> = {
 function calcHours(startTime: string, endTime: string, shift: string): number {
   const [sh, sm] = startTime.split(':').map(Number)
   const [eh, em] = endTime.split(':').map(Number)
-  let startMins = sh * 60 + sm
+  const startMins = sh * 60 + sm
   let endMins   = eh * 60 + em
   if (shift === 'evening' && endMins === 0) endMins = 24 * 60  // midnight = end of evening
   if (endMins <= startMins) return 0
@@ -94,7 +94,7 @@ function allDaySlots(): string[] {
 function calcHoursCustom(startTime: string, endTime: string): number {
   const [sh, sm] = startTime.split(':').map(Number)
   const [eh, em] = endTime.split(':').map(Number)
-  let startMins = sh * 60 + sm
+  const startMins = sh * 60 + sm
   let endMins   = eh * 60 + em
   if (endMins === 0) endMins = 24 * 60  // midnight = end of day
   if (endMins <= startMins) return 0
@@ -161,6 +161,7 @@ export default function PatientBookingClient({
   const [step,    setStep]    = useState(1)
   const [isPending, startT]   = useTransition()
   const [success, setSuccess] = useState(false)
+  const [deadlineAt, setDeadlineAt] = useState<number | null>(null)
   const [bookingRef, setBookingRef] = useState('')
   const [error,   setError]   = useState('')
   const [toast,   setToast]   = useState('')
@@ -249,12 +250,13 @@ export default function PatientBookingClient({
   }
 
   // Fetch shift availability when a nurse + date are selected (Browse mode)
+  const selectedNurseId = selectedNurse?.id
   useEffect(() => {
-    if (!selectedNurse || !browseStart) return
-    getShiftAvailability(selectedNurse.id, browseStart, browseEnd || browseStart)
+    if (!selectedNurseId || !browseStart) return
+    getShiftAvailability(selectedNurseId, browseStart, browseEnd || browseStart)
       .then(data => setShiftAvail(data))
       .catch(() => setShiftAvail({}))
-  }, [selectedNurse?.id, browseStart, browseEnd])
+  }, [selectedNurseId, browseStart, browseEnd])
 
   // Smart duration = days between start and end (0 = same day = 1 session)
   const smartDays = Math.round((new Date(smartEnd).getTime() - new Date(smartStart).getTime()) / 86400000)
@@ -319,7 +321,12 @@ export default function PatientBookingClient({
         try {
           const result = await submitBookingAction(formData) as any
           if (result?.error) setError(result.error)
-          else { setBookingRef(result?.bookingRef ?? ''); setSessions(result?.sessions ?? 1); setSuccess(true) }
+          else {
+            setBookingRef(result?.bookingRef ?? '')
+            setSessions(result?.sessions ?? 1)
+            if (paymentDeadlineHours > 0) setDeadlineAt(Date.now() + paymentDeadlineHours * 60 * 60 * 1000)
+            setSuccess(true)
+          }
         } catch (e: any) {
           setError(e?.message ?? 'Something went wrong. Please try again.')
         }
@@ -335,6 +342,8 @@ export default function PatientBookingClient({
     setChatInput('')
     setChatMsgs(p => [...p, { role: 'user', text: msg }])
     setAiTyping(true)
+    // eslint-disable-next-line react-hooks/purity -- Math.random in event-handler setTimeout arg, not render
+    const aiDelay = 900 + Math.random() * 500
     setTimeout(() => {
       setAiTyping(false)
       const lower = msg.toLowerCase()
@@ -344,7 +353,7 @@ export default function PatientBookingClient({
         const femaleFirst = allNurses.filter(n => n.gender === 'female')
         setAiSuggestion(femaleFirst[0] ?? allNurses[0])
       }
-    }, 900 + Math.random() * 500)
+    }, aiDelay)
   }
 
   // ── Colors ───────────────────────────────────────────────────────────────
@@ -366,9 +375,9 @@ export default function PatientBookingClient({
 
   // ── SUCCESS ───────────────────────────────────────────────────────────────
   if (success) {
-    const deadlineEnabled = paymentDeadlineHours > 0
+    const deadlineEnabled = paymentDeadlineHours > 0 && deadlineAt !== null
     const deadlineTime = deadlineEnabled
-      ? new Date(Date.now() + paymentDeadlineHours * 60 * 60 * 1000).toLocaleString('en-GB', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' })
+      ? new Date(deadlineAt).toLocaleString('en-GB', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' })
       : null
 
     return (

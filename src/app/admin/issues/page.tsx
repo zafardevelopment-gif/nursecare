@@ -92,6 +92,7 @@ export default async function AdminIssuesPage({ searchParams }: Props) {
   const allDisputes = disputesRaw ?? []
 
   const windowMs = settings.dispute_window_hours * 60 * 60 * 1000
+  // eslint-disable-next-line react-hooks/purity -- server component, computing expiry from request time
   const nowMs    = Date.now()
   const disputes = allDisputes.map(d => ({
     ...d,

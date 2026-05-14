@@ -212,7 +212,7 @@ export default function ServiceMasterBookingClient({
   }
 
   /* ── Render helpers ── */
-  function StepIndicator() {
+  const stepIndicator = (() => {
     const steps = ['Category','Service','Nurse','Details','Confirm']
     return (
       <div style={{ display: 'flex', alignItems: 'center', gap: 0, marginBottom: '1.5rem', overflowX: 'auto', paddingBottom: 4 }}>
@@ -249,7 +249,7 @@ export default function ServiceMasterBookingClient({
         })}
       </div>
     )
-  }
+  })()
 
   /* ══ STEP 6: SUCCESS ══ */
   if (step === 6) {
@@ -285,7 +285,7 @@ export default function ServiceMasterBookingClient({
         </div>
       </div>
 
-      <StepIndicator />
+      {stepIndicator}
 
       {error && (
         <div style={{ background: 'rgba(224,74,74,0.08)', border: '1px solid rgba(224,74,74,0.3)', borderRadius: 10, padding: '10px 16px', marginBottom: '1rem', color: '#c0392b', fontSize: '0.84rem', fontWeight: 600 }}>

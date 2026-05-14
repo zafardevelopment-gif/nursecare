@@ -72,10 +72,13 @@ export default async function ProviderDashboardPage({ searchParams }: Props) {
   const requireNurseApproval  = (settings as any)?.require_nurse_approval ?? true
   const nurseStatus = nurse?.status ?? null
 
+  // Narrow column list to what the dashboard renders
+  const BOOKING_COLS = 'id, patient_name, service_type, start_date, end_date, shift, duration_hours, city, status, payment_status, auto_confirm_at, created_at'
+
   // Build my bookings query
   let myBookingsQuery = serviceSupabase
     .from('booking_requests')
-    .select('*', { count: 'exact' })
+    .select(BOOKING_COLS, { count: 'exact' })
     .eq('nurse_id', user.id)
 
   if (filterTab) {
@@ -89,10 +92,7 @@ export default async function ProviderDashboardPage({ searchParams }: Props) {
   }
 
   const [
-    { count: acceptedCount },
-    { count: inProgressCount },
-    { count: workDoneCount },
-    { count: completedCount },
+    { data: statusCountRows },
     { data: pendingAgreements },
     { data: pendingRequests },
     { data: myBookings, count: myBookingsTotal },
@@ -100,14 +100,8 @@ export default async function ProviderDashboardPage({ searchParams }: Props) {
     { data: myComplaints },
     { data: recentBookingsActivity },
   ] = await Promise.all([
-    serviceSupabase.from('booking_requests').select('*', { count: 'exact', head: true })
-      .eq('nurse_id', user.id).in('status', ['accepted', 'confirmed']),
-    serviceSupabase.from('booking_requests').select('*', { count: 'exact', head: true })
-      .eq('nurse_id', user.id).eq('status', 'in_progress'),
-    serviceSupabase.from('booking_requests').select('*', { count: 'exact', head: true })
-      .eq('nurse_id', user.id).eq('status', 'work_done'),
-    serviceSupabase.from('booking_requests').select('*', { count: 'exact', head: true })
-      .eq('nurse_id', user.id).eq('status', 'completed'),
+    // Single RPC replaces 4 separate COUNT round-trips
+    serviceSupabase.rpc('count_provider_bookings_by_status', { p_nurse_id: user.id }),
     nurse?.id
       ? supabase.from('agreements').select('id, title, status, generated_at')
           .eq('nurse_id', nurse.id).in('status', ['admin_approved', 'pending'])
@@ -135,6 +129,14 @@ export default async function ProviderDashboardPage({ searchParams }: Props) {
       .order('created_at', { ascending: false })
       .limit(5),
   ])
+
+  // Derive status counts from RPC result
+  const statusCounts = ((statusCountRows ?? []) as { status: string; count: number }[])
+    .reduce<Record<string, number>>((acc, r) => { acc[r.status] = Number(r.count); return acc }, {})
+  const acceptedCount   = (statusCounts.accepted ?? 0) + (statusCounts.confirmed ?? 0)
+  const inProgressCount = statusCounts.in_progress ?? 0
+  const workDoneCount   = statusCounts.work_done ?? 0
+  const completedCount  = statusCounts.completed ?? 0
 
   const myHospBookings = allHospBookingsRaw ?? []
   const hospBookingCount = myHospBookings.length

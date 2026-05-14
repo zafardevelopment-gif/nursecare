@@ -14,6 +14,7 @@ export default function MobileSidebar({ children, logoHref, topbarRight }: Mobil
   const pathname = usePathname()
 
   // Close sidebar on route change
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- pathname is external; closing on nav is the desired side-effect
   useEffect(() => { setOpen(false) }, [pathname])
 
   // Lock body scroll when open

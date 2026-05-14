@@ -60,7 +60,9 @@ export default async function AdminBookingsPage({ searchParams }: Props) {
   const offset       = (page - 1) * PAGE_SIZE
 
   // ── Patient bookings ──────────────────────────────────────────────────────
-  let patientQuery = supabase.from('booking_requests').select('*', { count: 'exact' })
+  // Narrow column list — only what the table renders
+  const PATIENT_COLS = 'id, patient_name, patient_email, service_type, nurse_id, nurse_name, start_date, end_date, shift, duration_hours, booking_type, city, status, payment_status, created_at'
+  let patientQuery = supabase.from('booking_requests').select(PATIENT_COLS, { count: 'exact' })
   if (filterStatus && bookingType === 'patient') {
     if (filterStatus === 'accepted') {
       patientQuery = patientQuery.in('status', ['accepted', 'confirmed'])
@@ -99,7 +101,10 @@ export default async function AdminBookingsPage({ searchParams }: Props) {
     // Single DB GROUP BY instead of full-table fetch + 8 JS .filter() passes
     supabase.rpc('count_bookings_by_status'),
     supabase.rpc('count_hosp_bookings_by_status'),
-    supabase.from('hospitals').select('id, hospital_name'),
+    // Only need hospital names on the hospital tab
+    bookingType === 'hospital'
+      ? supabase.from('hospitals').select('id, hospital_name')
+      : Promise.resolve({ data: [] }),
   ])
 
   const hospitalMap = Object.fromEntries((hospitals ?? []).map((h: any) => [h.id, h.hospital_name]))

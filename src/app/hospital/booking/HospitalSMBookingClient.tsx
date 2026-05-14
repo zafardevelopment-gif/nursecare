@@ -180,7 +180,7 @@ export default function HospitalSMBookingClient({
       setLoadingAvail(false)
     }
     loadAll()
-  }, [step, startDate])
+  }, [step, startDate, nurses])
 
   /* ── Helpers ── */
   function toggleShift(s: string) { setSelectedShifts(prev => { const n = new Set(prev); n.has(s) ? n.delete(s) : n.add(s); return n }) }

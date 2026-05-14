@@ -24,9 +24,12 @@ export default async function AdminBookingsReportPage({ searchParams }: Props) {
   const dateFrom = params.date_from ?? ''
   const dateTo   = params.date_to ?? ''
 
+  // Narrow column list — only what the report grid renders
+  const REPORT_COLS = 'id, patient_name, nurse_name, service_type, start_date, city, status, payment_status, total_amount, created_at'
+
   let query = supabase
     .from('booking_requests')
-    .select('*', { count: 'exact' })
+    .select(REPORT_COLS, { count: 'exact' })
     .order('created_at', { ascending: false })
 
   if (status)   query = query.eq('status', status)
@@ -36,32 +39,30 @@ export default async function AdminBookingsReportPage({ searchParams }: Props) {
   if (dateTo)   query = query.lte('start_date', dateTo)
   if (q)        query = query.or(`patient_name.ilike.%${q}%,nurse_name.ilike.%${q}%,service_type.ilike.%${q}%`)
 
-  const { data, count } = await query.range(offset, offset + PAGE_SIZE - 1)
-  const rows = data ?? []
-
-  // Summary counts (unfiltered for top cards)
+  // Parallelize page query + unfiltered summary RPC (single round-trip instead of 4 COUNT + 1 SUM-in-JS)
   const [
-    { count: total },
-    { count: completed },
-    { count: pending },
-    { count: cancelled },
-    { data: paidRows },
+    { data, count },
+    { data: summaryRows },
   ] = await Promise.all([
-    supabase.from('booking_requests').select('*', { count: 'exact', head: true }),
-    supabase.from('booking_requests').select('*', { count: 'exact', head: true }).eq('status', 'completed'),
-    supabase.from('booking_requests').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
-    supabase.from('booking_requests').select('*', { count: 'exact', head: true }).in('status', ['cancelled', 'declined']),
-    supabase.from('booking_requests').select('total_amount').eq('payment_status', 'paid'),
+    query.range(offset, offset + PAGE_SIZE - 1),
+    supabase.rpc('booking_report_summary'),
   ])
 
-  const totalRevenue = (paidRows ?? []).reduce((s, r: any) => s + (parseFloat(r.total_amount) || 0), 0)
+  const rows = data ?? []
+  const sum = (summaryRows ?? [])[0] as { total: number; completed: number; pending: number; cancelled: number; total_revenue: number } | undefined
 
   return (
     <BookingsReportClient
       initialData={rows}
       initialCount={count ?? 0}
       initialPage={page}
-      summary={{ total: total ?? 0, completed: completed ?? 0, pending: pending ?? 0, cancelled: cancelled ?? 0, totalRevenue }}
+      summary={{
+        total:        Number(sum?.total ?? 0),
+        completed:    Number(sum?.completed ?? 0),
+        pending:      Number(sum?.pending ?? 0),
+        cancelled:    Number(sum?.cancelled ?? 0),
+        totalRevenue: Number(sum?.total_revenue ?? 0),
+      }}
       initialFilters={{ status, payment, q, city, date_from: dateFrom, date_to: dateTo }}
     />
   )

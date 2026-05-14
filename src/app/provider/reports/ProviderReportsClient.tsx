@@ -1,7 +1,7 @@
 'use client'
 
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
-import { useCallback } from 'react'
+import { useCallback, useMemo } from 'react'
 import ReportShell, { StatusBadge, BOOKING_STATUS_MAP, PAYMENT_STATUS_MAP, type ColDef, type SummaryCard } from '@/app/components/ReportShell'
 import { formatDate, formatCurrency } from '@/lib/export'
 import Link from 'next/link'
@@ -35,26 +35,26 @@ export default function ProviderReportsClient({ initialData, initialCount, initi
   const pathname = usePathname()
   const sp       = useSearchParams()
 
-  function navigate(overrides: Record<string, string>) {
+  const navigate = useCallback((overrides: Record<string, string>) => {
     const params = new URLSearchParams(sp.toString())
     Object.entries({ ...initialFilters, ...overrides }).forEach(([k, v]) => {
       if (v) params.set(k, v); else params.delete(k)
     })
     router.push(`${pathname}?${params.toString()}`)
-  }
+  }, [sp, initialFilters, router, pathname])
 
   const handleFilter = useCallback((values: Record<string, string>) => {
     navigate({ ...values, page: '1' })
-  }, [sp])
+  }, [navigate])
 
-  const summaryCards: SummaryCard[] = [
+  const summaryCards: SummaryCard[] = useMemo(() => [
     { label: 'Total Jobs',    value: summary.totalJobs,                        icon: '📋', bg: 'rgba(14,123,140,0.1)',  color: '#0E7B8C' },
     { label: 'Completed',     value: summary.completedJobs,                    icon: '✅', bg: 'rgba(39,168,105,0.1)',  color: '#27A869' },
     { label: 'Active',        value: summary.pendingJobs,                      icon: '🔄', bg: 'rgba(245,132,42,0.1)',  color: '#F5842A' },
     { label: 'Total Earned',  value: `SAR ${summary.totalEarned.toFixed(0)}`,  icon: '💰', bg: 'rgba(39,168,105,0.08)', color: '#27A869' },
     { label: 'Pending Pay',   value: `SAR ${summary.pendingPay.toFixed(0)}`,   icon: '⏳', bg: 'rgba(107,63,160,0.1)', color: '#6B3FA0' },
     { label: 'Leave Taken',   value: summary.totalLeave,                       icon: '🌴', bg: 'rgba(14,123,140,0.08)', color: '#0ABFCC' },
-  ]
+  ], [summary])
 
   const columns: ColDef[] = [
     { key: 'patient_name', header: 'Patient', sortable: true,
